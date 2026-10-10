@@ -162,6 +162,8 @@ static void DrawPpuFrameWithPerf() {
   g_renderer_funcs.BeginDraw(g_snes_width * render_scale,
                              g_snes_height * render_scale,
                              &pixel_buffer, &pitch);
+  if (!pixel_buffer)
+    return;  // the renderer couldn't give us a buffer this frame
   if (g_display_perf || g_config.display_perf_title) {
     static float history[64], average;
     static int history_pos;
@@ -215,6 +217,26 @@ static void SDLCALL AudioCallback(void *userdata, Uint8 *stream, int len) {
 static SDL_Renderer *g_renderer;
 static SDL_Texture *g_texture;
 static SDL_Rect g_sdl_renderer_rect;
+static int g_texture_w, g_texture_h;
+static bool g_texture_linear;
+static int g_logical_w, g_logical_h;
+
+// (Re)creates the streaming texture. Called when the needed size or filtering changes,
+// so options can be changed in game without recreating the renderer.
+static bool SdlRenderer_CreateTexture(int width, int height) {
+  if (g_texture)
+    SDL_DestroyTexture(g_texture);
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, g_config.linear_filtering ? "best" : "nearest");
+  g_texture = SDL_CreateTexture(g_renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
+  if (g_texture == NULL) {
+    printf("Failed to create texture: %s\n", SDL_GetError());
+    g_texture_w = g_texture_h = 0;
+    return false;
+  }
+  g_texture_w = width, g_texture_h = height;
+  g_texture_linear = g_config.linear_filtering;
+  return true;
+}
 
 static bool SdlRenderer_Init(SDL_Window *window) {
 
@@ -237,19 +259,12 @@ static bool SdlRenderer_Init(SDL_Window *window) {
     printf("\n");
   }
   g_renderer = renderer;
+  g_logical_w = g_snes_width, g_logical_h = g_snes_height;
   if (!g_config.ignore_aspect_ratio)
     SDL_RenderSetLogicalSize(renderer, g_snes_width, g_snes_height);
-  if (g_config.linear_filtering)
-    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
 
   int tex_mult = (g_ppu_render_flags & kPpuRenderFlags_4x4Mode7) ? 4 : 1;
-  g_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
-                                g_snes_width * tex_mult, g_snes_height * tex_mult);
-  if (g_texture == NULL) {
-    printf("Failed to create texture: %s\n", SDL_GetError());
-    return false;
-  }
-  return true;
+  return SdlRenderer_CreateTexture(g_snes_width * tex_mult, g_snes_height * tex_mult);
 }
 
 static void SdlRenderer_Destroy() {
@@ -258,15 +273,27 @@ static void SdlRenderer_Destroy() {
 }
 
 static void SdlRenderer_BeginDraw(int width, int height, uint8 **pixels, int *pitch) {
+  *pixels = NULL;
+  // Display options (widescreen, HD mode 7, smooth scaling) may change while playing.
+  if (width > g_texture_w || height > g_texture_h || g_texture_linear != g_config.linear_filtering) {
+    if (!SdlRenderer_CreateTexture(IntMax(width, g_texture_w), IntMax(height, g_texture_h)))
+      return;
+  }
+  if (!g_config.ignore_aspect_ratio && (g_logical_w != g_snes_width || g_logical_h != g_snes_height)) {
+    g_logical_w = g_snes_width, g_logical_h = g_snes_height;
+    SDL_RenderSetLogicalSize(g_renderer, g_snes_width, g_snes_height);
+  }
   g_sdl_renderer_rect.w = width;
   g_sdl_renderer_rect.h = height;
   if (SDL_LockTexture(g_texture, &g_sdl_renderer_rect, (void **)pixels, pitch) != 0) {
     printf("Failed to lock texture: %s\n", SDL_GetError());
-    return;
+    *pixels = NULL;
   }
 }
 
 static void SdlRenderer_EndDraw() {
+  if (!g_texture)
+    return;
 
 //  uint64 before = SDL_GetPerformanceCounter();
   SDL_UnlockTexture(g_texture);
@@ -286,6 +313,8 @@ static const struct RendererFuncs kSdlRendererFuncs  = {
 };
 
 void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es);
+
+void InstallCrashHandler();
 
 static bool g_running = true;
 
@@ -313,9 +342,7 @@ static void ApplyDisplaySettings() {
   g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
   g_snes_height = (g_config.extend_y ? 240 : 224);
   g_ppu_render_flags = CalcRenderFlags();
-  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, g_config.linear_filtering ? "best" : "nearest");
-  g_renderer_funcs.Destroy();
-  g_renderer_funcs.Initialize(g_window);
+  // The renderers pick up the new size and filtering on the next frame.
   if (size_changed)
     ChangeWindowScale(0);
 }
@@ -330,6 +357,7 @@ int main(int argc, char** argv) {
   } else {
     SwitchDirectory();
   }
+  InstallCrashHandler();
   ParseConfigFile(config_file);
   LoadAssets();
   LoadLinkGraphics();

@@ -236,6 +236,7 @@
     <ClCompile Include="src\main.c" />
     <ClCompile Include="src\messaging.c" />
     <ClCompile Include="src\misc.c" />
+    <ClCompile Include="src\crash_handler.c" />
     <ClCompile Include="src\mp.c" />
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />

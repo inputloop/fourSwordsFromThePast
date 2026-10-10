@@ -187,6 +187,9 @@
     <ClCompile Include="src\messaging.c">
       <Filter>Zelda</Filter>
     </ClCompile>
+    <ClCompile Include="src\crash_handler.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
     <ClCompile Include="src\mp.c">
       <Filter>Zelda</Filter>
     </ClCompile>
