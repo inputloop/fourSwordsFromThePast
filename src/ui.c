@@ -6,6 +6,7 @@
 #include "config.h"
 #include "features.h"
 #include "mp.h"
+#include "instance.h"
 #include "session.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -365,15 +366,15 @@ static void ScreenMultiplayer() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     char label[48], value[48];
     snprintf(label, sizeof(label), "P%d", p + 1);
-    if (!g_mp.p[p].joined) {
+    if (!Inst_IsJoined(p)) {
       snprintf(value, sizeof(value), "- open -");
     } else {
       bool mine = false;
       for (int i = 0; i < kSessionMaxLocal; i++)
         if (st->local_slot[i] == p)
-          mine = true, snprintf(value, sizeof(value), "you (controller %d)%s", i + 1, g_mp.p[p].downed ? " DOWN" : "");
+          mine = true, snprintf(value, sizeof(value), "you (controller %d)%s", i + 1, Inst_PlayerDowned(p) ? " DOWN" : "");
       if (!mine)
-        snprintf(value, sizeof(value), "%s%s", st->slot_owner[p] == 0 ? "host" : "remote", g_mp.p[p].downed ? " DOWN" : "");
+        snprintf(value, sizeof(value), "%s%s", st->slot_owner[p] == 0 ? "host" : "remote", Inst_PlayerDowned(p) ? " DOWN" : "");
     }
     Label(label);
     snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s", value);
@@ -428,9 +429,18 @@ static void ScreenMultiplayer() {
       Session_SetFriendlyFire(!Session_GetFriendlyFire());
       g_ui.dirty_settings = true;
     }
+    Item("Camera", Session_GetRoamTogether() ? "shared screen" : "free roaming");
+    a = Act();
+    if (a != kAct_None) {
+      Session_SetRoamTogether(!Session_GetRoamTogether());
+      g_ui.dirty_settings = true;
+    }
   } else {
     Label("Friendly fire");
-    snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s (host decides)", OnOff(g_mp.friendly_fire));
+    snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s (host decides)", OnOff(Inst_GetFriendlyFire()));
+    Label("Camera");
+    snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s (host decides)",
+             Inst_GetIndependent() ? "free roaming" : "shared screen");
   }
   Item("Back", NULL);
   if (Act() == kAct_Select)
@@ -851,7 +861,7 @@ void Ui_HandleText(const char *text) {
 // Overlay rendering
 
 static void DrawCornerHud() {
-  if (!Mp_Active() || main_module_index < 6 || main_module_index == 0x14 || main_module_index == 0x1a)
+  if (Inst_NumJoined() < 2 || main_module_index < 6 || main_module_index == 0x14 || main_module_index == 0x1a)
     return;
   int cap = link_health_capacity;
   int hearts = IntMin(IntMax(cap / 8, 1), 20);
@@ -860,7 +870,7 @@ static void DrawCornerHud() {
   int panel_w = 18 + IntMin(hearts, per_row) * 8;
   int panel_h = 2 + rows * 8;
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    if (!g_mp.p[p].joined)
+    if (!Inst_IsJoined(p))
       continue;
     bool right = p & 1, bottom = p >= 2;
     int x = right ? g_cv.width - panel_w - 1 : 1;
@@ -869,14 +879,14 @@ static void DrawCornerHud() {
     char label[4];
     snprintf(label, sizeof(label), "P%d", p + 1);
     DrawText(x + 2, y + 2 + (rows - 1) * 4, label, kPlayerColorRgb[p]);
-    if (g_mp.p[p].downed) {
+    if (Inst_PlayerDowned(p)) {
       DrawText(x + 18, y + 2, "DOWN", 0xffffff);
-      int w = (panel_w - 20) * g_mp.p[p].revive_ctr / kMpReviveFrames;
+      int w = (panel_w - 20) * Inst_PlayerReviveCtr(p) / kMpReviveFrames;
       FillRect(x + 44, y + 4, panel_w - 46, 3, 0x303030);
       FillRect(x + 44, y + 4, IntMin(w, panel_w - 46), 3, kPlayerColorRgb[p]);
       continue;
     }
-    int hp = Mp_PlayerHealth(p);
+    int hp = Inst_PlayerHealth(p);
     for (int i = 0; i < hearts; i++) {
       int fill = hp >= (i + 1) * 8 ? 2 : hp >= i * 8 + 4 ? 1 : 0;
       DrawHeart(x + 16 + (i % per_row) * 8, y + 1 + (i / per_row) * 8, fill, kPlayerColorRgb[p]);
@@ -983,6 +993,7 @@ void Ui_SaveSettings() {
   Bindings_WriteConfig(f);
   fprintf(f, "[Multiplayer]\n");
   fprintf(f, "FriendlyFire = %d\n", Session_GetFriendlyFire());
+  fprintf(f, "SharedScreen = %d\n", Session_GetRoamTogether());
   fprintf(f, "UseUpnp = %d\n", g_ui.use_upnp);
   fprintf(f, "Port = %d\n", g_config.mp_port);
   if (g_config.mp_player_name)

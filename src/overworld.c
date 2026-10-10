@@ -807,7 +807,7 @@ void Module09_00_PlayerControl() {  // 82a53c
     Hud_SuperBombIndicator();
   current_area_of_player = (link_y_coord & 0x1e00) >> 5 | (link_x_coord & 0x1e00) >> 8;
   Graphics_LoadChrHalfSlot();
-  Overworld_OperateCameraScroll();
+  Mp_CameraCatchUp(&Overworld_OperateCameraScroll);
   if (main_module_index != 11) {
     Overworld_UseEntrance();
     Overworld_DwDeathMountainPaletteAnimation();

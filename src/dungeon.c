@@ -6515,7 +6515,7 @@ void Module07_Dungeon() {  // 8287a2
   Dungeon_PushBlock_Handler();
   if (submodule_index) goto skip;
   Graphics_LoadChrHalfSlot();
-  Dungeon_HandleCamera();
+  Mp_CameraCatchUp(&Dungeon_HandleCamera);
   if (submodule_index) goto skip;
   Dungeon_HandleRoomTags();
   if (submodule_index) goto skip;

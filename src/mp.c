@@ -12,6 +12,9 @@
 
 MpState g_mp;
 MpRenderState g_mp_render;
+bool (*g_mp_other_instance_alive)(void);
+void (*g_mp_state_loaded_hook)(void);
+bool g_mp_coop;
 
 // RAM ranges that make up one Link. Everything not listed here is shared.
 typedef struct MpRange {
@@ -61,6 +64,8 @@ static const MpRange kMpPersonalRanges[] = {
   {0xF372, 1},
 };
 
+static bool Mp_IsTravel(uint8 m0, uint8 m1, uint8 s1);
+
 static int Mp_CtxOffset(uint32 addr) {
   int off = 0;
   for (size_t i = 0; i < countof(kMpCtxRanges); i++) {
@@ -91,6 +96,7 @@ void Mp_Reset() {
   g_mp.p[0].joined = 1;
   g_mp.friendly_fire = 0;
   g_mp.group_exits = 1;
+  g_mp.split_request = -1;
   memset(g_mp.ancilla_owner, 0, sizeof(g_mp.ancilla_owner));
 }
 
@@ -225,6 +231,8 @@ void Mp_Leave(int p) {
 // After loading a regular save state, RAM holds a single Link. Treat it as the
 // leader and pull everybody else over to it.
 void Mp_OnStateLoaded() {
+  if (g_mp_state_loaded_hook)
+    g_mp_state_loaded_hook();
   g_mp.resident = g_mp.leader;
   g_mp.area_key = 0xffffffff;
   memcpy(g_mp.ancilla_seen, ancilla_type, 10);
@@ -383,6 +391,22 @@ bool Mp_SuppressCamera() {
   return g_mp.in_other_update != 0;
 }
 
+void Mp_CameraCatchUp(void (*scroll)(void)) {
+  if (!g_mp.independent || !g_mp_coop || g_mp.p[g_mp.leader].downed) {
+    scroll();
+    return;
+  }
+  uint8 vx = link_x_vel, vy = link_y_vel;
+  int sx = (int16)(link_x_coord + 8 - BG2HOFS_copy2), sy = (int16)(link_y_coord + 12 - BG2VOFS_copy2);
+  if (vx == 0 && (sx > 136 || sx < 120))
+    link_x_vel = sx > 136 ? 2 : 0xfe;
+  if (vy == 0 && (sy > 124 || sy < 108))
+    link_y_vel = sy > 124 ? 2 : 0xfe;
+  scroll();
+  link_x_vel = vx;
+  link_y_vel = vy;
+}
+
 // Runs |func| for each standing player, starting with the resident one. The
 // first player for which it returns true stays resident.
 bool Mp_AnyPlayer(int k, MpSpriteCheckFunc *func) {
@@ -429,11 +453,10 @@ void Mp_ClearPerFrameSpriteFlags() {
 }
 
 bool Mp_OnFatalDamage() {
-  if (!Mp_Active())
-    return false;
   int me = g_mp.resident;
+  bool other_alive = g_mp_other_instance_alive && g_mp_other_instance_alive();
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    if (p != me && Mp_IsAlive(p)) {
+    if ((p != me && Mp_IsAlive(p)) || other_alive) {
       g_mp.p[me].downed = 1;
       g_mp.p[me].revive_ctr = 0;
       link_health_current = 0;
@@ -541,7 +564,8 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     g_mp.after_death = 0;
   }
 
-  Mp_LimitLeaderMovement();
+  if (!g_mp.independent)
+    Mp_LimitLeaderMovement();
   uint16 lx = link_x_coord, ly = link_y_coord;
 
   uint8 m = main_module_index, s = submodule_index;
@@ -570,8 +594,18 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     g_mp.in_other_update = 1;
     control();
     g_mp.in_other_update = 0;
-    if (main_module_index == m && submodule_index == s)
-      Mp_LimitMovement(old_x, old_y, lx, ly);
+    if (main_module_index == m && submodule_index == s) {
+      if (!g_mp.independent) {
+        Mp_LimitMovement(old_x, old_y, lx, ly);
+      } else if (g_mp.split_request < 0) {
+        // Heading out of view: this Link gets its own world and camera.
+        int sx = (int16)(link_x_coord - BG2HOFS_copy2), sy = (int16)(link_y_coord - BG2VOFS_copy2);
+        if (sx < 8 || sx > 256 - 24 || sy < 8 || sy > 224 - 40) {
+          g_mp.split_request = p;
+          g_mp.split_travel = 0;
+        }
+      }
+    }
     // Hud_RefillLogic only runs for the leader, so apply pending hearts directly.
     if (link_hearts_filler) {
       int h = link_health_current + link_hearts_filler;
@@ -771,7 +805,7 @@ static void Mp_MakePalette(uint16 *dst, const uint16 *src, int player) {
 
 void Mp_PrepareRender(Ppu *ppu) {
   ppu->numExtraSpriteSets = 0;
-  if (!Mp_Active())
+  if (!Mp_Active() && !g_mp_coop)
     return;
   memcpy(g_mp_saved_cgram, &ppu->cgram[0xf0], sizeof(g_mp_saved_cgram));
   int n = 0;
@@ -794,7 +828,7 @@ void Mp_PrepareRender(Ppu *ppu) {
 }
 
 void Mp_FinishRender(Ppu *ppu) {
-  if (ppu->numExtraSpriteSets || Mp_Active())
+  if (ppu->numExtraSpriteSets || Mp_Active() || g_mp_coop)
     memcpy(&ppu->cgram[0xf0], g_mp_saved_cgram, sizeof(g_mp_saved_cgram));
 }
 
@@ -834,6 +868,15 @@ void Mp_RunRouting(void (*routing)(void)) {
   uint8 m0 = main_module_index, s0 = submodule_index;
   if (g_mp.exit_blocked_timer)
     g_mp.exit_blocked_timer--;
+  if (g_mp.independent && Mp_Active() && (m0 == 7 || m0 == 9) && s0 == 0) {
+    routing();
+    // Someone went through an exit: they continue in a world of their own.
+    if (Mp_IsTravel(m0, main_module_index, submodule_index)) {
+      g_mp.split_request = g_mp.leader;
+      g_mp.split_travel = 1;
+    }
+    return;
+  }
   if (!g_mp.group_exits || !Mp_Active() || !((m0 == 7 || m0 == 9) && s0 == 0)) {
     routing();
     return;
@@ -869,4 +912,73 @@ void Mp_RunRouting(void (*routing)(void)) {
   // Not caused by walking (pits, warps, scripts): let it happen.
   memcpy(g_ram, after, sizeof(after));
   g_mp = mp_after;
+}
+
+// ---------------------------------------------------------------------------
+// World instance support
+
+int Mp_CtxSize() {
+  int n = 0;
+  for (size_t i = 0; i < countof(kMpCtxRanges); i++)
+    n += kMpCtxRanges[i].len;
+  return n;
+}
+
+void Mp_ExportPlayer(int p, uint8 *ctx_out) {
+  if (p == g_mp.resident)
+    Mp_SaveCtx(ctx_out);
+  else
+    memcpy(ctx_out, g_mp.p[p].ctx, Mp_CtxSize());
+}
+
+void Mp_ImportPlayer(int p, const uint8 *ctx, uint8 downed, uint8 revive_ctr) {
+  if (g_mp.p[p].joined)
+    return;
+  memcpy(g_mp.p[p].ctx, ctx, Mp_CtxSize());
+  g_mp.p[p].joined = 1;
+  g_mp.p[p].downed = downed;
+  g_mp.p[p].revive_ctr = revive_ctr;
+  if (p == g_mp.resident) {
+    // Can only happen for an empty slot that was resident; load it.
+    Mp_LoadCtx(ctx);
+  }
+}
+
+// Removes a player from this world instance (they continue elsewhere).
+void Mp_RemovePlayer(int p) {
+  if (!g_mp.p[p].joined)
+    return;
+  if (p == g_mp.leader) {
+    int nl = Mp_FindNewLeader(p);
+    if (nl < 0)
+      return;
+    Mp_SwapTo(nl);
+    g_mp.leader = nl;
+  } else if (p == g_mp.resident) {
+    Mp_SwapTo(g_mp.leader);
+  }
+  g_mp.p[p].joined = 0;
+  for (int i = 0; i < 10; i++)
+    if (g_mp.ancilla_owner[i] == p)
+      g_mp.ancilla_owner[i] = g_mp.leader;
+  for (int i = 0; i < 16; i++)
+    if (g_mp.sprite_owner[i] == p)
+      g_mp.sprite_owner[i] = g_mp.leader;
+  g_mp_render.p[p].count = 0;
+}
+
+void Mp_SetLeader(int p) {
+  if (!g_mp.p[p].joined)
+    return;
+  Mp_SwapTo(p);
+  g_mp.leader = p;
+}
+
+uint32 Mp_AreaKeyPublic() {
+  return player_is_indoors << 16 | (player_is_indoors ? dungeon_room_index : overworld_area_index);
+}
+
+bool Mp_InStableGameplay() {
+  return (main_module_index == 7 || main_module_index == 9) && submodule_index == 0 &&
+         g_mp.area_key != 0xffffffff;
 }

@@ -71,6 +71,9 @@ void Session_LocalLeave(int local_index);
 bool Session_IsLocalJoined(int local_index);
 void Session_SetFriendlyFire(bool on);
 bool Session_GetFriendlyFire();
+// Shared screen with group exits instead of independent roaming (the host decides).
+void Session_SetRoamTogether(bool on);
+bool Session_GetRoamTogether();
 
 bool Session_Host(uint16 port, bool use_upnp);
 bool Session_Join(const char *address);

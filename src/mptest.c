@@ -6,7 +6,12 @@
 //   hold <p> <keys>     keys held by player p (B Y s=select S=start U D L R A X l r, "-" for none)
 //   run <frames>
 //   shot <file.ppm>     render the current frame
+//   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
 //   ff <0|1>            friendly fire
+//   together <0|1>      1: shared screen with group exits, 0: free roaming (default)
+//   expect_instances <n>  fail unless the players are spread over n worlds
+//   expect_same <p> <q> / expect_apart <p> <q>  players in the same / different worlds
+//   view <p>            later commands without a player (shot, peek, expect_module) use p's world
 //   status              print player state
 //   expect_alive <p>    fail unless player p is standing
 //   expect_downed <p>   fail unless player p is down
@@ -36,6 +41,7 @@
 #include "variables.h"
 #include "features.h"
 #include "mp.h"
+#include "instance.h"
 #include "snes/ppu.h"
 #include "sprite.h"
 #include "overworld.h"
@@ -72,19 +78,36 @@ static void WritePpm(const char *file, int width, int height, uint32 *pixels, in
   fclose(f);
 }
 
+static void SwitchToPlayer(int p) {
+  int i = Inst_OfPlayer(p);
+  if (i >= 0)
+    Inst_Switch(i);
+}
+
 static void PrintStatus(int frame) {
   const SessionStatus *st = Session_GetStatus();
+  int r = Inst_Current();
+  for (int i = 0; i < kInstMax; i++) {
+    if (!Inst_IsActive(i))
+      continue;
+    Inst_Switch(i);
+    printf("[frame %d] world %d: module=%d/%d leader=%d room=%d ow=%d indoors=%d cam=%d,%d\n", frame, i, main_module_index,
+           submodule_index, g_mp.leader, dungeon_room_index, overworld_screen_index, player_is_indoors, BG2HOFS_copy2, BG2VOFS_copy2);
+  }
+  Inst_Switch(r);
   printf("[frame %d] module=%d/%d leader=%d resident=%d room=%d ow=%d hash=%08x | session mode=%d state=%d id=%d ping=%d buf=%d resyncs=%d local_slot0=%d msg='%s'\n",
          frame, main_module_index, submodule_index, g_mp.leader, g_mp.resident, dungeon_room_index, overworld_screen_index,
-         ZeldaHashState(), st->mode, st->client_state, st->my_id, st->ping_ms, st->frames_buffered, st->resyncs,
+         Inst_HashState(), st->mode, st->client_state, st->my_id, st->ping_ms, st->frames_buffered, st->resyncs,
          st->local_slot[0], st->message);
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    if (!g_mp.p[p].joined)
+    if (!Inst_IsJoined(p))
       continue;
-    printf("  P%d x=%d y=%d hp=%d downed=%d oam=%d dir=%d bframes=%d oamy=%x state=%d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p),
+    SwitchToPlayer(p);
+    printf("  P%d world=%d x=%d y=%d hp=%d downed=%d oam=%d dir=%d bframes=%d oamy=%x state=%d\n", p + 1, Inst_Current(), Mp_PlayerX(p), Mp_PlayerY(p),
            Mp_PlayerHealth(p), g_mp.p[p].downed, g_mp_render.p[p].count, *Mp_PlayerRam(p, 0x2F),
            *Mp_PlayerRam(p, 0x3C), *Mp_PlayerRam(p, 0x44), *Mp_PlayerRam(p, 0x5D));
   }
+  Inst_Switch(r);
   for (int k = 0; k < 16; k++)
     if (sprite_state[k])
       printf("  sprite %d type=%x state=%d hp=%d x=%d y=%d\n", k, sprite_type[k], sprite_state[k], sprite_health[k],
@@ -98,6 +121,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     return 1;
   }
   uint16 held[kMpMaxPlayers] = { 0 };
+  int view = 0;
   Session_Init("Tester");
   Ui_Init(NULL);
   uint32 *pixels = calloc(width * height * 4 * 16, 1);
@@ -107,29 +131,78 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 }, arg3[64] = { 0 };
     if (sscanf(line, "%31s %199s %63s %63s", cmd, arg1, arg2, arg3) < 1 || cmd[0] == '#')
       continue;
+    // Commands about the game look at the world of the viewed player.
+    SwitchToPlayer(view);
     if (!strcmp(cmd, "load")) {
       SaveLoadSlot(kSaveLoad_Load, 256 + atoi(arg1) - 1);
     } else if (!strcmp(cmd, "join")) {
-      Mp_Join(atoi(arg1) - 1);
+      Inst_Join(atoi(arg1) - 1);
     } else if (!strcmp(cmd, "leave")) {
-      Mp_Leave(atoi(arg1) - 1);
+      Inst_Leave(atoi(arg1) - 1);
     } else if (!strcmp(cmd, "hold")) {
       held[atoi(arg1) - 1] = ParseKeys(arg2);
     } else if (!strcmp(cmd, "ff")) {
-      g_mp.friendly_fire = atoi(arg1);
+      Inst_SetFriendlyFire(atoi(arg1));
+    } else if (!strcmp(cmd, "together")) {
+      Inst_SetIndependent(!atoi(arg1));
+      Session_SetRoamTogether(atoi(arg1));
+    } else if (!strcmp(cmd, "view")) {
+      view = atoi(arg1) - 1;
+    } else if (!strcmp(cmd, "expect_instances")) {
+      if (Inst_Count() != atoi(arg1)) {
+        printf("FAIL: %d worlds, expected %s at frame %d\n", Inst_Count(), arg1, frame);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "expect_same") || !strcmp(cmd, "expect_apart")) {
+      bool same = Inst_OfPlayer(atoi(arg1) - 1) == Inst_OfPlayer(atoi(arg2) - 1);
+      if (same != !strcmp(cmd, "expect_same")) {
+        printf("FAIL: P%s and P%s are %s at frame %d\n", arg1, arg2, same ? "together" : "apart", frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
-        Mp_SetInputs(held);
-        ZeldaRunFrame(held[g_mp.leader]);
+        Inst_RunFrame(held);
       }
     } else if (!strcmp(cmd, "shot")) {
       ZeldaDrawPpuFrame((uint8 *)pixels, width * 4, render_flags);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "wander")) {
+      // wander <frames> <seed>: every player walks around randomly and swings the sword.
+      uint32 seed = atoi(arg2) * 2654435761u + 1;
+      for (int n = atoi(arg1); n > 0; n--, frame++) {
+        if (n % 24 == 0) {
+          for (int p = 0; p < kMpMaxPlayers; p++) {
+            seed = seed * 1103515245 + 12345;
+            held[p] = ParseKeys((const char *[]){ "U", "D", "L", "R", "UL", "UR", "DL", "DR", "B" }[(seed >> 16) % 9]);
+          }
+        }
+        Inst_RunFrame(held);
+        if (n % 600 == 0) {
+          printf("[frame %d] worlds=%d hash=%08x", frame, Inst_Count(), Inst_HashState());
+          for (int p = 0; p < kMpMaxPlayers; p++)
+            printf(" P%d:w%d", p + 1, Inst_OfPlayer(p));
+          printf("\n");
+        }
+      }
+      memset(held, 0, sizeof(held));
+    } else if (!strcmp(cmd, "splitshot")) {
+      int r = Inst_Current();
+      uint32 *wide = calloc(width * 2 * height * 4, 1);
+      for (int v = 0; v < 2; v++) {
+        SwitchToPlayer(atoi(v ? arg3 : arg2) - 1);
+        ZeldaDrawPpuFrame((uint8 *)(wide + v * width), width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7);
+      }
+      Inst_Switch(r);
+      Ui_Draw((uint8 *)wide, width * 2 * 4, width * 2, height, 1);
+      WritePpm(arg1, width * 2, height, wide, width * 2);
+      free(wide);
+      printf("wrote %s\n", arg1);
     } else if (!strcmp(cmd, "status")) {
       PrintStatus(frame);
     } else if (!strcmp(cmd, "spawn")) {
+      SwitchToPlayer(atoi(arg2) - 1);
       for (int j = 15; j >= 0; j--) {
         if (sprite_state[j] == 0) {
           sprite_type[j] = strtol(arg1, NULL, 16);
@@ -145,6 +218,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         }
       }
     } else if (!strcmp(cmd, "hp")) {
+      SwitchToPlayer(atoi(arg1) - 1);
       *Mp_PlayerRam(atoi(arg1) - 1, 0xF36D) = atoi(arg2);
     } else if (!strcmp(cmd, "host")) {
       Session_Host(atoi(arg1), false);
@@ -200,8 +274,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "corrupt")) {
       g_ram[0xF360] ^= 0x55;  // rupees
     } else if (!strcmp(cmd, "expect_players")) {
-      if (Mp_NumJoined() != atoi(arg1)) {
-        printf("FAIL: %d players, expected %s\n", Mp_NumJoined(), arg1);
+      if (Inst_NumJoined() != atoi(arg1)) {
+        printf("FAIL: %d players, expected %s\n", Inst_NumJoined(), arg1);
         failures++;
       }
     } else if (!strcmp(cmd, "expect_resyncs")) {
@@ -251,19 +325,20 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         sprite_state[k] = 0;
     } else if (!strcmp(cmd, "expect_hp")) {
       int p = atoi(arg1) - 1;
+      SwitchToPlayer(p);
       if (Mp_PlayerHealth(p) != atoi(arg2)) {
         printf("FAIL: P%d has %d health, expected %s\n", p + 1, Mp_PlayerHealth(p), arg2);
         failures++;
       }
     } else if (!strcmp(cmd, "expect_downed")) {
       int p = atoi(arg1) - 1;
-      if (!g_mp.p[p].joined || !g_mp.p[p].downed) {
+      if (!Inst_IsJoined(p) || !Inst_PlayerDowned(p)) {
         printf("FAIL: P%d not downed at frame %d\n", p + 1, frame);
         failures++;
       }
     } else if (!strcmp(cmd, "expect_alive")) {
       int p = atoi(arg1) - 1;
-      if (!Mp_IsAlive(p)) {
+      if (!Inst_IsJoined(p) || Inst_PlayerDowned(p)) {
         printf("FAIL: P%d not alive at frame %d\n", p + 1, frame);
         failures++;
       }

@@ -1,4 +1,5 @@
 #include "mp.h"
+#include "instance.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "misc.h"
@@ -281,6 +282,7 @@ void ZeldaInitialize() {
   dma_reset(g_zenv.dma);
   ppu_reset(g_zenv.ppu);
   Mp_Reset();
+  Inst_Init();
 }
 
 static void ZeldaRunPolyLoop() {
@@ -451,6 +453,7 @@ uint32 ZeldaHashState() {
 }
 
 int g_apui00_override = -1;
+bool g_apu_push_enabled = true;
 
 typedef struct StateRecorder {
   uint16 last_inputs;
@@ -789,7 +792,8 @@ bool ZeldaRunFrame(int inputs) {
     g_emu_runframe(inputs, run_what);
   }
 
-  ZeldaPushApuState();
+  if (g_apu_push_enabled)
+    ZeldaPushApuState();
 
   return is_replay;
 }

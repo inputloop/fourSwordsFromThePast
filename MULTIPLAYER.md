@@ -27,6 +27,8 @@ Players can drop in and drop out at any time.
 - **Friendly fire**: toggle it in the Multiplayer screen (the host decides).
   When on, swords, arrows, rods, boomerangs, the hookshot and bombs hurt
   teammates.
+- **Camera**: *free roaming* (the default) or *shared screen*, also in the
+  Multiplayer screen (the host decides).
 
 ## Rules of the shared world
 
@@ -38,19 +40,35 @@ Players can drop in and drop out at any time.
   maximum.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
-- **Shared screen, group exits.** The camera follows the *leader*. Rooms and
+- **Free roaming (default).** Everybody goes wherever they want. Players who
+  are close together share a screen. A player who walks out of view or
+  through a door, stairs or a pit on their own continues in a world of their
+  own with their own camera. When players meet again (same room or screen, in
+  view of each other), they share a screen again. Players on the same
+  computer in different places get a split screen (side by side for two,
+  2x2 for three or four). Netplay players always see their own Link.
+  - Progress is shared between the worlds right away: items, rupees, bombs,
+    arrows, keys, opened chests and doors, defeated bosses, pendants and
+    crystals. Room contents (enemies, pots, switches) are per world until the
+    worlds merge.
+  - A follower (Zelda, the old man, ...) stays with whoever was leading the
+    group.
+  - The sound is from the world of the first player on this computer.
+- **Shared screen** (option). The camera follows the *leader*. Rooms and
   screens only change when every standing player heads the same way: walking
   into a door, stairs or the screen edge alone acts like a wall (with an
   "Everyone has to head that way!" hint). When the group goes through,
   everybody comes along. Pits, warps and scripted scenes aren't blocked.
-  Whoever opens a menu or talks to someone becomes the leader.
-- **Stay together.** Links can't walk more than about a screen apart (a
-  tether to the leader) or off the edge of the screen; that just feels like
-  an invisible wall. Nobody is ever pushed or dragged, so nobody ends up in a
-  wall. Downed ghosts left behind float over to the leader.
+  Links can't walk more than about a screen apart (a tether to the leader)
+  or off the edge of the screen; that just feels like an invisible wall.
+  Nobody is ever pushed or dragged, so nobody ends up in a wall.
+- **The leader.** In a shared screen, whoever opens a menu, talks to someone
+  or takes an exit becomes the leader that the camera, rooms and cutscenes
+  follow. Downed ghosts left behind float over to the leader.
 - **Downed, not dead.** A Link that runs out of hearts becomes a flickering
   ghost. Stand next to them for 1.5 seconds to revive them with half a heart. It
-  is game over only when everyone is down.
+  is game over only when everyone is down. A player who goes down alone in
+  their own world floats over to a teammate who is still standing.
 - **Enemies** go after the nearest Link and can be hurt by anyone.
 
 ## How it works (for modders)
@@ -75,6 +93,29 @@ addresses. `src/mp.c` gives each player a private copy of those RAM ranges
 - Extra Links are drawn into private sprite lists with their own copies of the
   pose-dependent Link tiles; the PPU (`snes/ppu.c`) draws them on top of the
   regular OAM and recolors palette 7 per player.
+
+### World instances (free roaming)
+
+`src/instance.c` lets players be in different places although the game only
+knows one world and one camera. Every group of players gets its own copy of
+the game: RAM, PPU and DMA state, and the co-op state above. Each frame every
+world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
+`g_zenv` between them.
+
+- **Split.** When a player takes an exit alone, the frame's result becomes a
+  new world for that player, and everybody else replays the frame from a
+  snapshot without them. A player walking out of their group's view is
+  copied into a new world without replaying.
+- **Merge.** Two worlds in the same room or overworld screen, with one
+  world's players in view of the other's camera, become one world.
+- **Shared progress.** After every frame, the save file area of RAM
+  (`7EF000-7EF4FF`) is synced: changed bytes are copied to every world, room
+  and overworld flags are combined, and counters (bombs, arrows, magic,
+  rupees, keys) add up the changes of each world. Health, the dungeon key
+  counter in use, refills in progress, light/dark world and the follower
+  stay per world.
+- Snapshots and the netplay state hash cover all worlds, so netplay works
+  unchanged.
 
 ### Netplay
 
@@ -105,10 +146,16 @@ runs the regression tests, including a real host/client pair over UDP.
 
 ## Known limitations
 
-- The camera follows one Link at a time. There's no zoomed-out shared camera.
+- In a shared screen the camera follows one Link at a time. There's no
+  zoomed-out shared camera.
+- Free roaming with up to four worlds costs up to four times the CPU, which
+  is still far below what any PC needs.
+- Room contents in two worlds can differ (for example an enemy killed in one
+  world still lives in the other) until the worlds merge. Then the world
+  that stays keeps its room.
 - The original game has 10 projectile slots and some items allow only one at a
   time (one boomerang, one hookshot). These limits are shared by the team.
-- Followers (Zelda, the old man, ...) follow the leader.
+- Followers (Zelda, the old man, ...) follow the leader of their world.
 - Netplay clients feel one round trip of input latency. There is no rollback
   yet, so it plays best on LAN or under about 80 ms ping.
 - Some cutscenes and bosses were designed for one Link. During them, the

@@ -238,6 +238,7 @@
     <ClCompile Include="src\misc.c" />
     <ClCompile Include="src\crash_handler.c" />
     <ClCompile Include="src\mp.c" />
+    <ClCompile Include="src\instance.c" />
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\session.c" />
@@ -461,6 +462,7 @@
     <ClInclude Include="src\messaging.h" />
     <ClInclude Include="src\misc.h" />
     <ClInclude Include="src\mp.h" />
+    <ClInclude Include="src\instance.h" />
     <ClInclude Include="src\net.h" />
     <ClInclude Include="src\session.h" />
     <ClInclude Include="src\ui.h" />

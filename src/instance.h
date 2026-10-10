@@ -1,0 +1,70 @@
+// World instances: independent roaming for co-op.
+//
+// The original game simulates one world around one camera. To let players go
+// wherever they want, every group of players that is in a different place
+// gets its own copy of the game (RAM, PPU and DMA state plus the co-op state
+// in g_mp). Each frame, every instance is simulated in turn.
+//
+// - Split: a player who goes through a door/exit or walks out of the view of
+//   their group continues in a new instance cloned from the group's world.
+// - Merge: when players of two instances stand in the same room or screen,
+//   within view of each other, the instances become one again.
+// - Shared progress: items, rupees, keys and world/dungeon flags (the save
+//   file area of RAM) are synced between instances after every frame.
+//
+// Everything here is deterministic, so netplay keeps working: the snapshot
+// and the state hash cover every instance.
+#ifndef ZELDA3_INSTANCE_H_
+#define ZELDA3_INSTANCE_H_
+
+#include "types.h"
+
+enum {
+  kInstMax = 4,
+};
+
+typedef struct ByteArray ByteArray;
+
+// Call once after ZeldaInitialize: the current world becomes instance 0.
+void Inst_Init();
+bool Inst_IsActive(int i);
+int Inst_Count();
+int Inst_Current();
+// Makes instance i the one the game code (g_ram, g_zenv, g_mp) works on.
+void Inst_Switch(int i);
+// The instance player p is in, or -1 if p isn't playing.
+int Inst_OfPlayer(int p);
+bool Inst_IsJoined(int p);
+int Inst_NumJoined();
+
+// Drop-in/out. A new player appears next to the lowest numbered player.
+void Inst_Join(int p);
+void Inst_Leave(int p);
+
+// Session settings, applied to all instances.
+void Inst_SetFriendlyFire(bool on);
+bool Inst_GetFriendlyFire();
+// true: players roam independently. false: one shared screen with group exits.
+void Inst_SetIndependent(bool on);
+bool Inst_GetIndependent();
+
+// Simulates one frame of every instance. Returns the replay flag of ZeldaRunFrame.
+bool Inst_RunFrame(const uint16 *inputs);
+// The player whose instance is heard; the camera instance for local display.
+void Inst_SetAudioPlayer(int p);
+
+// Netplay snapshots and state hashing cover every instance.
+void Inst_SaveState(ByteArray *arr);
+bool Inst_LoadState(const uint8 *data, size_t size);
+uint32 Inst_HashState();
+
+// Per player queries that work whatever instance the player is in.
+uint8 Inst_PlayerHealth(int p);
+bool Inst_PlayerDowned(int p);
+uint8 Inst_PlayerReviveCtr(int p);
+// Main module of the instance player p is in (0 if not playing).
+uint8 Inst_PlayerModule(int p);
+// Time left on the "everyone has to head that way" hint in p's instance.
+uint8 Inst_ExitBlockedTimer(int p);
+
+#endif  // ZELDA3_INSTANCE_H_

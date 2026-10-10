@@ -76,6 +76,8 @@ bool ZeldaLoadStateFromBuffer(const uint8 *data, size_t size);
 uint32 ZeldaHashState();
 // When >= 0, replaces the audio thread's "music is playing" flag so netplay stays deterministic.
 extern int g_apui00_override;
+// Only the world instance being viewed sends its sound to the speakers.
+extern bool g_apu_push_enabled;
 bool ZeldaIsMusicPlaying();
 
 typedef void ZeldaRunFrameFunc(uint16 input, int run_what);

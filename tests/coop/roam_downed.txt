@@ -1,0 +1,33 @@
+# Free roaming: P2 walks off and gets their own world. When P2 goes down
+# there, the ghost joins P1's world (no game over) and P1 revives them.
+load 2
+run 30
+join 2
+hold 1 D
+hold 2 D
+run 260
+hold 1 L
+hold 2 R
+run 150
+hold 1 -
+hold 2 -
+run 30
+expect_instances 2
+expect_apart 1 2
+hp 2 2
+spawn 41 2 0
+run 40
+status
+run 40
+status
+expect_downed 2
+expect_alive 1
+expect_instances 1
+expect_same 1 2
+view 1
+expect_module 9
+clearsprites
+run 200
+status
+expect_alive 2
+expect_hp 2 4

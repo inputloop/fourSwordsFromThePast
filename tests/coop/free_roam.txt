@@ -1,0 +1,31 @@
+# Free roaming: a player who walks through a door alone continues in a world
+# of their own; when the others follow, everybody is in one world again.
+load 2
+run 30
+join 2
+join 3
+hold 1 U
+run 300
+status
+expect_instances 2
+expect_apart 1 2
+expect_same 2 3
+view 1
+expect_module 7
+view 2
+expect_module 9
+shot tests/out/free_roam_p1.ppm
+view 1
+shot tests/out/free_roam_p2.ppm
+hold 1 -
+hold 2 U
+hold 3 U
+run 400
+hold 2 -
+hold 3 -
+run 120
+status
+expect_instances 1
+expect_same 1 2
+expect_same 1 3
+expect_module 7

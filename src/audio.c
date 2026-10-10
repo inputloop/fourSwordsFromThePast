@@ -406,6 +406,15 @@ void zelda_apu_write(uint32_t adr, uint8_t val) {
   g_apu_write.ports[adr & 0x3] = val;
 }
 
+// Each world instance has its own sound port state; only the viewed one is heard.
+void ZeldaGetApuPorts(uint8 *out) {
+  memcpy(out, g_apu_write.ports, 4);
+}
+
+void ZeldaSetApuPorts(const uint8 *in) {
+  memcpy(g_apu_write.ports, in, 4);
+}
+
 void ZeldaPushApuState() {
   ZeldaApuLock();
   g_apu_write_ents[g_apu_write_ent_pos++ & 0xf] = g_apu_write;

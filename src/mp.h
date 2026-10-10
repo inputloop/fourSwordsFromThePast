@@ -51,6 +51,9 @@ typedef struct MpState {
   uint8 module_snapshot[2];
   uint8 exit_blocked_timer;  // > 0 shows the "everyone must head that way" hint
   uint8 group_exits;         // 1: rooms change only when everyone heads the same way
+  uint8 independent;         // 1: players roam freely; splitting off asks for a new world instance
+  int8 split_request;        // player that leaves this world instance this frame, or -1
+  uint8 split_travel;        // 1: it went through an exit (the others replay the frame without it)
   uint16 inputs[kMpMaxPlayers];
   MpPlayer p[kMpMaxPlayers];
 } MpState;
@@ -103,6 +106,9 @@ void Mp_EndObject();
 void Mp_PreSprite(int k);
 void Mp_PreAncilla(int k);
 bool Mp_SuppressCamera();
+// Runs the camera scroll of the gameplay modules. A player who just got their
+// own world instance may stand away from the center; the camera catches up.
+void Mp_CameraCatchUp(void (*scroll)(void));
 typedef bool MpSpriteCheckFunc(int k);
 bool Mp_AnyPlayer(int k, MpSpriteCheckFunc *func);
 typedef uint8 MpSpriteCheckFuncU8(int k);
@@ -110,6 +116,21 @@ uint8 Mp_AnyPlayerU8(int k, MpSpriteCheckFuncU8 *func);
 void Mp_ClearPerFrameSpriteFlags();
 void Mp_FriendlyFire();
 void Mp_ForEachAlivePlayer(int k, void (*func)(int k));
+
+// World instance support (see instance.c)
+int Mp_CtxSize();
+void Mp_ExportPlayer(int p, uint8 *ctx_out);
+void Mp_ImportPlayer(int p, const uint8 *ctx, uint8 downed, uint8 revive_ctr);
+void Mp_RemovePlayer(int p);
+void Mp_SetLeader(int p);
+uint32 Mp_AreaKeyPublic();
+bool Mp_InStableGameplay();
+// Set by the instance code: is anyone standing in another world instance?
+extern bool (*g_mp_other_instance_alive)(void);
+// Called when a regular save state was loaded (all players come back together).
+extern void (*g_mp_state_loaded_hook)(void);
+// True when more than one player is in the game in total (all instances).
+extern bool g_mp_coop;
 
 typedef struct Ppu Ppu;
 void Mp_PrepareRender(Ppu *ppu);

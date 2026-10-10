@@ -29,6 +29,7 @@
 #include "session.h"
 #include "ui.h"
 #include "bindings.h"
+#include "instance.h"
 
 static bool g_run_without_emu = 0;
 
@@ -72,6 +73,8 @@ static bool g_display_perf;
 static int g_curr_fps;
 static int g_ppu_render_flags = 0;
 static int g_snes_width, g_snes_height;
+// Size of the whole picture: bigger than one game screen in split screen.
+static int g_disp_width, g_disp_height;
 static int g_sdl_audio_mixer_volume = SDL_MIX_MAXVOLUME;
 static struct RendererFuncs g_renderer_funcs;
 
@@ -152,16 +155,65 @@ static SDL_HitTestResult HitTestCallback(SDL_Window *win, const SDL_Point *pt, v
   return SDL_HITTEST_NORMAL;
 }
 
+static SDL_mutex *g_audio_mutex;
+
+// The worlds to show: one per local player, in different places (split screen).
+static int GetViews(int *views) {
+  const SessionStatus *st = Session_GetStatus();
+  int n = 0;
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    int inst = Inst_OfPlayer(st->local_slot[i]);
+    bool dup = inst < 0;
+    for (int j = 0; j < n; j++)
+      dup |= views[j] == inst;
+    if (!dup)
+      views[n++] = inst;
+  }
+  if (n == 0)
+    views[n++] = Inst_Current();
+  return n;
+}
+
+static void DrawSplitScreen(uint8 *pixel_buffer, int pitch, const int *views, int nviews, uint32 render_flags) {
+  int home = Inst_Current();
+  for (int v = 0; v < nviews; v++) {
+    Inst_Switch(views[v]);
+    uint8 *dst = pixel_buffer + (v & 1) * g_snes_width * 4 + (v >> 1) * g_snes_height * pitch;
+    ZeldaDrawPpuFrame(dst, pitch, render_flags);
+  }
+  if (nviews == 3) {
+    for (int y = 0; y < g_snes_height; y++)
+      memset(pixel_buffer + (g_snes_height + y) * pitch + g_snes_width * 4, 0, g_snes_width * 4);
+  }
+  Inst_Switch(home);
+}
+
 static void DrawPpuFrameWithPerf() {
-  int render_scale = PpuGetCurrentRenderScale(g_zenv.ppu, g_ppu_render_flags);
+  int views[kInstMax];
+  int nviews = GetViews(views);
+  int cols = nviews >= 2 ? 2 : 1, rows = nviews >= 3 ? 2 : 1;
+  g_disp_width = g_snes_width * cols;
+  g_disp_height = g_snes_height * rows;
+  if (nviews == 1)
+    Inst_Switch(views[0]);
+  int render_scale = nviews == 1 ? PpuGetCurrentRenderScale(g_zenv.ppu, g_ppu_render_flags) : 1;
   uint8 *pixel_buffer = 0;
   int pitch = 0;
 
-  g_renderer_funcs.BeginDraw(g_snes_width * render_scale,
-                             g_snes_height * render_scale,
+  g_renderer_funcs.BeginDraw(g_disp_width * render_scale,
+                             g_disp_height * render_scale,
                              &pixel_buffer, &pitch);
   if (!pixel_buffer)
     return;  // the renderer couldn't give us a buffer this frame
+  if (nviews > 1) {
+    // Split screen: every world is drawn at normal resolution.
+    SDL_LockMutex(g_audio_mutex);
+    DrawSplitScreen(pixel_buffer, pitch, views, nviews, g_ppu_render_flags & ~kPpuRenderFlags_4x4Mode7);
+    SDL_UnlockMutex(g_audio_mutex);
+    Ui_Draw(pixel_buffer, pitch, g_disp_width, g_disp_height, 1);
+    g_renderer_funcs.EndDraw();
+    return;
+  }
   if (g_display_perf || g_config.display_perf_title) {
     static float history[64], average;
     static int history_pos;
@@ -178,11 +230,10 @@ static void DrawPpuFrameWithPerf() {
   }
   if (g_display_perf)
     RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
-  Ui_Draw(pixel_buffer, pitch, g_snes_width * render_scale, g_snes_height * render_scale, render_scale);
+  Ui_Draw(pixel_buffer, pitch, g_disp_width * render_scale, g_disp_height * render_scale, render_scale);
   g_renderer_funcs.EndDraw();
 }
 
-static SDL_mutex *g_audio_mutex;
 static uint8 *g_audiobuffer, *g_audiobuffer_cur, *g_audiobuffer_end;
 static int g_frames_per_block;
 static uint8 g_audio_channels;
@@ -257,9 +308,9 @@ static bool SdlRenderer_Init(SDL_Window *window) {
     printf("\n");
   }
   g_renderer = renderer;
-  g_logical_w = g_snes_width, g_logical_h = g_snes_height;
+  g_logical_w = g_disp_width, g_logical_h = g_disp_height;
   if (!g_config.ignore_aspect_ratio)
-    SDL_RenderSetLogicalSize(renderer, g_snes_width, g_snes_height);
+    SDL_RenderSetLogicalSize(renderer, g_disp_width, g_disp_height);
 
   int tex_mult = (g_ppu_render_flags & kPpuRenderFlags_4x4Mode7) ? 4 : 1;
   return SdlRenderer_CreateTexture(g_snes_width * tex_mult, g_snes_height * tex_mult);
@@ -277,9 +328,9 @@ static void SdlRenderer_BeginDraw(int width, int height, uint8 **pixels, int *pi
     if (!SdlRenderer_CreateTexture(IntMax(width, g_texture_w), IntMax(height, g_texture_h)))
       return;
   }
-  if (!g_config.ignore_aspect_ratio && (g_logical_w != g_snes_width || g_logical_h != g_snes_height)) {
-    g_logical_w = g_snes_width, g_logical_h = g_snes_height;
-    SDL_RenderSetLogicalSize(g_renderer, g_snes_width, g_snes_height);
+  if (!g_config.ignore_aspect_ratio && (g_logical_w != g_disp_width || g_logical_h != g_disp_height)) {
+    g_logical_w = g_disp_width, g_logical_h = g_disp_height;
+    SDL_RenderSetLogicalSize(g_renderer, g_disp_width, g_disp_height);
   }
   g_sdl_renderer_rect.w = width;
   g_sdl_renderer_rect.h = height;
@@ -339,6 +390,7 @@ static void ApplyDisplaySettings() {
   g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
   g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
   g_snes_height = (g_config.extend_y ? 240 : 224);
+  g_disp_width = g_snes_width, g_disp_height = g_snes_height;
   g_ppu_render_flags = CalcRenderFlags();
   // The renderers pick up the new size and filtering on the next frame.
   if (size_changed)
@@ -364,6 +416,7 @@ int main(int argc, char** argv) {
   g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
   g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
   g_snes_height = (g_config.extend_y ? 240 : 224);
+  g_disp_width = g_snes_width, g_disp_height = g_snes_height;
 
 
   // Delay actually setting those features in ram until any snapshots finish playing.
@@ -474,6 +527,7 @@ int main(int argc, char** argv) {
 
   Session_Init(g_config.mp_player_name);
   Session_SetFriendlyFire(g_config.mp_friendly_fire);
+  Session_SetRoamTogether(g_config.mp_shared_screen);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);
 
@@ -570,6 +624,8 @@ int main(int argc, char** argv) {
     Ui_Update(local_inputs, Bindings_GetMenuFallbackInput());
 
     bool is_replay = false;
+    // Sound comes from the world of the first local player.
+    Inst_SetAudioPlayer(Session_GetStatus()->local_slot[0]);
     if (!Ui_PausesGame()) {
       SDL_LockMutex(g_audio_mutex);
       Session_Tick(local_inputs, g_config.features0);

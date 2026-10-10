@@ -464,6 +464,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
   } else if (section == 6) {
     if (StringEqualsNoCase(key, "FriendlyFire")) {
       return ParseBool(value, &g_config.mp_friendly_fire);
+    } else if (StringEqualsNoCase(key, "SharedScreen")) {
+      return ParseBool(value, &g_config.mp_shared_screen);
     } else if (StringEqualsNoCase(key, "UseUpnp")) {
       return ParseBool(value, &g_config.mp_use_upnp);
     } else if (StringEqualsNoCase(key, "Port")) {

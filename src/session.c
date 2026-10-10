@@ -8,9 +8,10 @@
 #include "util.h"
 #include "zelda_rtl.h"
 #include "features.h"
+#include "instance.h"
 
 enum {
-  kProtoVersion = 2,
+  kProtoVersion = 3,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -84,6 +85,7 @@ static struct {
   MpFrameInput ring[kRingSize];
   uint32 ring_frame[kRingSize];
   bool ff;
+  bool together;
   uint8 slot_owner[kMpMaxPlayers];
   uint8 slot_local[kMpMaxPlayers];
   uint8 pending_join_mask, pending_leave_mask;
@@ -156,7 +158,7 @@ static void ResetSlots() {
   memset(g_s.slot_owner, 0xff, sizeof(g_s.slot_owner));
   memset(g_s.slot_local, 0xff, sizeof(g_s.slot_local));
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    if (g_mp.p[p].joined) {
+    if (Inst_IsJoined(p)) {
       g_s.slot_owner[p] = 0;
       g_s.slot_local[p] = p == 0 ? 0 : 0xff;
     }
@@ -180,13 +182,13 @@ static void ApplyEvents(const MpFrameInput *fi) {
     if (slot >= kMpMaxPlayers)
       continue;
     if (e[0] == kSessEv_Join) {
-      if (!g_mp.p[slot].joined)
-        Mp_Join(slot);
+      if (!Inst_IsJoined(slot))
+        Inst_Join(slot);
       g_s.slot_owner[slot] = e[2];
       g_s.slot_local[slot] = e[3];
     } else if (e[0] == kSessEv_Leave) {
-      if (g_mp.p[slot].joined && Mp_NumJoined() > 1) {
-        Mp_Leave(slot);
+      if (Inst_IsJoined(slot) && Inst_NumJoined() > 1) {
+        Inst_Leave(slot);
         g_s.slot_owner[slot] = 0xff;
         g_s.slot_local[slot] = 0xff;
       }
@@ -199,18 +201,18 @@ static bool g_last_was_replay;
 
 static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   ApplyEvents(fi);
-  g_mp.friendly_fire = fi->flags & 1;
+  Inst_SetFriendlyFire(fi->flags & 1);
+  Inst_SetIndependent(!(fi->flags & 4));
   g_wanted_zelda_features = fi->features;
   g_apui00_override = deterministic_audio ? (fi->flags >> 1) & 1 : -1;
-  Mp_SetInputs(fi->inputs);
-  g_last_was_replay = ZeldaRunFrame(fi->inputs[g_mp.leader]);
+  g_last_was_replay = Inst_RunFrame(fi->inputs);
   g_apui00_override = -1;
   g_s.frame++;
 }
 
 static int FindFreeSlot(const uint8 *reserved) {
   for (int p = 0; p < kMpMaxPlayers; p++)
-    if (g_s.slot_owner[p] == 0xff && !reserved[p] && !g_mp.p[p].joined)
+    if (g_s.slot_owner[p] == 0xff && !reserved[p] && !Inst_IsJoined(p))
       return p;
   return -1;
 }
@@ -254,7 +256,7 @@ static void QueueJoinLeave(MpFrameInput *fi, uint8 owner, uint8 *join_mask, uint
 static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 features) {
   memset(fi, 0, sizeof(*fi));
   fi->features = features;
-  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0);
+  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.together ? 4 : 0);
   uint8 reserved[kMpMaxPlayers] = { 0 };
   QueueJoinLeave(fi, 0, &g_s.pending_join_mask, &g_s.pending_leave_mask, reserved);
   for (int c = 0; c < kSessionMaxClients; c++) {
@@ -335,7 +337,15 @@ void Session_SetFriendlyFire(bool on) {
 }
 
 bool Session_GetFriendlyFire() {
-  return g_s.st.mode == kSessionClient ? g_mp.friendly_fire : g_s.ff;
+  return g_s.st.mode == kSessionClient ? Inst_GetFriendlyFire() : g_s.ff;
+}
+
+void Session_SetRoamTogether(bool on) {
+  g_s.together = on;
+}
+
+bool Session_GetRoamTogether() {
+  return g_s.st.mode == kSessionClient ? !Inst_GetIndependent() : g_s.together;
 }
 
 void Session_LocalJoin(int i) {
@@ -394,7 +404,7 @@ bool Session_Host(uint16 port, bool use_upnp) {
 
 static void HostStartSnapshot(HostClient *hc) {
   ByteArray raw = { 0 }, comp = { 0 };
-  ZeldaSaveStateToBuffer(&raw);
+  Inst_SaveState(&raw);
   // header: frame, slot owners/locals, then the compressed state
   uint8 hdr[4 + 8];
   memcpy(hdr, &g_s.frame, 4);
@@ -438,7 +448,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
   if (type == kPkt_Discover) {
     WBegin(&w, kPkt_Info);
     WData(&w, g_s.name, 24);
-    Wr8(&w, Mp_NumJoined());
+    Wr8(&w, Inst_NumJoined());
     Wr16(&w, Net_LocalPort(g_s.sock));
     Net_Send(g_s.sock, from, w.buf, w.pos);
   } else if (type == kPkt_Hello) {
@@ -470,7 +480,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
           SetMessage(msg);
         }
       }
-      if (!hc || Mp_NumJoined() >= kMpMaxPlayers) {
+      if (!hc || Inst_NumJoined() >= kMpMaxPlayers) {
         if (hc)
           hc->used = false;
         WBegin(&w, kPkt_Reject);
@@ -617,7 +627,7 @@ static void ClientFinishSnapshot() {
   memcpy(&frame, g_s.snap, 4);
   memcpy(g_s.slot_owner, g_s.snap + 4, 4);
   memcpy(g_s.slot_local, g_s.snap + 8, 4);
-  if (!ZeldaLoadStateFromBuffer(raw.data, raw.size))
+  if (!Inst_LoadState(raw.data, raw.size))
     SetMessage("Snapshot size mismatch");
   ByteArray_Destroy(&raw);
   g_s.frame = frame;
@@ -794,8 +804,8 @@ void Session_Disconnect() {
   }
   if (was_playing) {
     for (int p = 0; p < kMpMaxPlayers; p++) {
-      if (g_mp.p[p].joined && g_s.slot_owner[p] != me && Mp_NumJoined() > 1) {
-        Mp_Leave(p);
+      if (Inst_IsJoined(p) && g_s.slot_owner[p] != me && Inst_NumJoined() > 1) {
+        Inst_Leave(p);
         g_s.slot_owner[p] = 0xff;
         g_s.slot_local[p] = 0xff;
       }
@@ -880,7 +890,7 @@ int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
     RunFrame(&fi, host);
     if (host && g_s.frame % kHashInterval == 0) {
       fi.flags |= 0x80;
-      fi.hash = ZeldaHashState();
+      fi.hash = Inst_HashState();
     }
     g_s.ring[g_s.frame & (kRingSize - 1)] = fi;
     g_s.ring_frame[g_s.frame & (kRingSize - 1)] = g_s.frame;
@@ -906,7 +916,7 @@ int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
   for (int i = 0; i < run && g_s.st.client_state == 3; i++) {
     MpFrameInput fi = g_s.ring[(g_s.frame + 1) & (kRingSize - 1)];
     RunFrame(&fi, true);
-    if ((fi.flags & 0x80) && ZeldaHashState() != fi.hash) {
+    if ((fi.flags & 0x80) && Inst_HashState() != fi.hash) {
       char msg[96];
       snprintf(msg, sizeof(msg), "Out of sync at frame %u, resyncing", g_s.frame);
       SetMessage(msg);

@@ -1,4 +1,5 @@
 # A room change only happens when every standing player heads the same way.
+together 1
 load 2
 run 30
 join 2

@@ -71,6 +71,7 @@ typedef struct Config {
 
   // [Multiplayer]
   bool mp_friendly_fire;
+  bool mp_shared_screen;
   bool mp_use_upnp;
   uint16 mp_port;
   const char *mp_player_name;

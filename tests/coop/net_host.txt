@@ -4,7 +4,7 @@ host 47474
 tick 300
 status
 expect_players 2
-# The client holds right, so the host can't take the group into the palace alone.
+# In free roaming the host walks into the palace alone and gets a world of its own.
 hold 1 U
 tick 300
 hold 1 -
