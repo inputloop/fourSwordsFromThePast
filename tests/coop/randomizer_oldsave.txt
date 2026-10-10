@@ -10,30 +10,14 @@ spoke 4f1 40
 loadslot
 run 400
 expect_ram f3c5 2
-expect_ram f4f6 3
 # "Start from Link's house": no intro, Link walks out into the open world.
 hold 1 A
 run 4
 hold 1 -
 run 300
-# Close the "You got ..." messages for the two start items.
-hold 1 A
-run 4
-hold 1 -
-run 200
-hold 1 A
-run 4
-hold 1 -
-run 200
-hold 1 A
-run 4
-hold 1 -
-run 200
-hold 1 A
-run 4
-hold 1 -
-run 200
+# Nothing is handed out at the start (the uncle has it).
 expect_ram f4f6 0
+expect_ram f359 0
 expect_module 7
 hold 1 D
 run 200

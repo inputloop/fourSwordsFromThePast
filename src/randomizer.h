@@ -2,8 +2,9 @@
 //
 // A randomized game starts in "open mode": no intro and no escape from
 // Hyrule Castle; Link can go anywhere. Swords and shields are randomized too:
-// instead of the uncle's sword and shield Link is handed two random items,
-// and the pedestal, the smiths and the fairies give random items.
+// the uncle (waiting in the secret passage) gives two random items instead
+// of his sword and shield, and the pedestal, the smiths and the fairies give
+// random items.
 //
 // Whether a new game is randomized is decided when the save file is created
 // (Gameplay menu > Randomizer). The seed is stored in the save file, so the
@@ -54,8 +55,9 @@ bool Rando_SpecialDone(int which);
 // The smiths keep Link's sword while tempering it; remember its level.
 void Rando_OnSmithsTakeSword();
 void Rando_OnSmithsReturnSword();
-// Hands out the items Link gets at the start of a randomized game, one at a
-// time, as soon as he is free to receive them.
+// The uncle in the secret passage hands over his two (random) items.
+void Rando_UncleGivesItems();
+// Hands out the uncle's second item as soon as Link is free to receive it.
 void Rando_GiveStartItems();
 
 // Tests: generates the placement for seed and checks it can be beaten.

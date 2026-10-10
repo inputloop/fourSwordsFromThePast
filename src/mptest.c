@@ -21,6 +21,7 @@
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
 //   newgame             create a save file in slot 1 and load it
+//   enter <hexroom>     go into a room through the game's first entrance to it
 //   spoke <hexoff> <hexval> / loadslot  change a byte of save slot 1 / load slot 1
 //   rando <off|random|hexseed>  randomizer setting for new save files
 //   randocheck <seed> <count> [v]  check that seeds can be beaten (v: print spoilers)
@@ -201,6 +202,18 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       WORD(g_ram[0]) = 0;
       CopySaveToWRAM();
       music_control = 0xf1;
+    } else if (!strcmp(cmd, "enter")) {
+      // enter <hex room>: go through the first entrance that leads into that room
+      int room = strtol(arg1, NULL, 16);
+      for (int i = 0; i < 0x85; i++) {
+        if (kEntranceData_rooms[i] == room) {
+          which_entrance = i;
+          main_module_index = 6;
+          submodule_index = 0;
+          printf("entering room %x through entrance %x\n", room, i);
+          break;
+        }
+      }
     } else if (!strcmp(cmd, "spoke")) {
       // spoke <hexoffset> <hexval>: change a byte of save slot 1 (fixing its checksum)
       g_zenv.sram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);

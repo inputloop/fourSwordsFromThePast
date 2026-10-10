@@ -5752,6 +5752,13 @@ void Uncle_InPassage(int k) {  // 85df19
     break;
   case 1:  // GiveSwordAndShield
     item_receipt_method = 0;
+    if (Rando_CurrentSeed()) {
+      // Randomized: two random items, and the story stays where it is.
+      Rando_UncleGivesItems();
+      sprite_ai_state[k]++;
+      sprite_graphics[k] = 1;
+      break;
+    }
     Link_ReceiveItem(0, 0);
     sprite_ai_state[k]++;
     sprite_graphics[k] = 1;

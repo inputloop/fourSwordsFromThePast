@@ -30,9 +30,10 @@ randomizer for save files created from then on (or set `Randomizer` in the
   Magic Cape, Cane of Byrna, mails, Mirror Shield, boomerangs, a bottle,
   heart pieces, rupees, bombs and arrows. Small keys, big keys, maps and
   compasses stay in their dungeons, so dungeons play as before.
-- **Swords and shields are randomized too.** Instead of the uncle's sword
-  and shield, Link is handed two random items when the game starts. The
-  Master Sword pedestal, the smiths, the Pyramid fairy (throw any sword in)
+- **Swords and shields are randomized too.** Link starts with nothing. The
+  uncle waits in the secret passage next to the castle (through the hole
+  under the bush, like in the original) and gives the two random items the
+  seed put there instead of his sword and shield. The Master Sword pedestal, the smiths, the Pyramid fairy (throw any sword in)
   and the Waterfall of Wishing fairy (throw any shield in) each give a
   random item once, and you get back what you threw in or handed over. The
   four swords and three shields can be anywhere, also in chests, and are

@@ -1,37 +1,21 @@
 # A new randomized save file starts in open mode: no intro, no escape. Link
-# picks Link's house or the sanctuary, is handed two random items (in place
-# of the uncle's sword and shield) and walks right out into the open world.
+# picks Link's house or the sanctuary and walks right out into the open
+# world. No items are handed out at the start.
 rando 40
 run 200
 newgame
 run 400
 expect_ram f4f0 52
 expect_ram f3c5 2
-expect_ram f4f6 3
 expect_ram f36e 80
 # "Start from Link's house"
 hold 1 A
 run 4
 hold 1 -
 run 300
-# Close the "You got ..." messages for the two start items.
-hold 1 A
-run 4
-hold 1 -
-run 200
-hold 1 A
-run 4
-hold 1 -
-run 200
-hold 1 A
-run 4
-hold 1 -
-run 200
-hold 1 A
-run 4
-hold 1 -
-run 200
+# Nothing is handed out at the start (the uncle has it).
 expect_ram f4f6 0
+expect_ram f359 0
 expect_module 7
 hold 1 D
 run 200

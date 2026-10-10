@@ -61,21 +61,35 @@ uint32 Rando_GetNewGameSetting() { return g_new_game_setting; }
 // his house or the sanctuary and can go anywhere right away. save is a save
 // file or the save area of RAM.
 static void ApplyOpenStart(uint8 *save) {
-  // Instead of the uncle's sword and shield, Link is handed two random items
-  // when the game starts (they may be the sword and shield).
-  save[kRandoPendingOffs] = 3;
   save[0x36E] = 0x80;     // full magic
   save[0x3C5] = 2;        // progress: Zelda is safe in the sanctuary
-  save[0x3C6] |= 0x15;    // progress flags as after the escape
+  // Progress flags as after the escape, except that the uncle still waits in
+  // the secret passage (bit 0): he hands over two random items there.
+  save[0x3C6] |= 0x14;
   save[0x3C7] = 1;        // map marker
   save[0x3C8] = 0;        // starting point: Link's house
   save[0x3CC] = 0;        // no follower (Zelda stays in the sanctuary)
 }
 
 void Rando_OnFileLoaded() {
+  if (Rando_CurrentSeed() == 0)
+    return;
   // Randomized files made before the open start existed get it now.
-  if (Rando_CurrentSeed() != 0 && g_ram[0xF3C5] < 2)
+  if (g_ram[0xF3C5] < 2)
     ApplyOpenStart(&g_ram[0xF000]);
+  // Files from the build that handed out the uncle's items at the start:
+  // if they weren't handed out yet, the uncle gives them after all.
+  if (g_ram[0xF000 + kRandoPendingOffs] == 3 && !Rando_SpecialDone(kRando_StartSword)) {
+    g_ram[0xF000 + kRandoPendingOffs] = 0;
+    g_ram[0xF3C6] &= ~1;
+  }
+}
+
+void Rando_UncleGivesItems() {
+  // First item now, the second one as soon as Link has put the first away.
+  g_ram[0xF000 + kRandoPendingOffs] |= 2;
+  sram_progress_flags |= 1;  // the uncle is gone next time
+  Link_ReceiveItem(Rando_SpecialItem(kRando_StartSword, kSpecialLocations[kRando_StartSword].vanilla), 0);
 }
 
 void Rando_OnNewFile(uint8 *sram_slot) {
@@ -471,6 +485,8 @@ void Rando_GiveStartItems() {
     return;
   int which = (*pending & 1) ? kRando_StartSword : kRando_StartShield;
   *pending &= (*pending & 1) ? ~1 : ~2;
+  if (Rando_SpecialDone(which))
+    return;
   Link_ReceiveItem(Rando_SpecialItem(which, kSpecialLocations[which].vanilla), 0);
 }
 
