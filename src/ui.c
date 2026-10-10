@@ -430,18 +430,9 @@ static void ScreenMultiplayer() {
       Session_SetFriendlyFire(!Session_GetFriendlyFire());
       g_ui.dirty_settings = true;
     }
-    Item("Camera", Session_GetRoamTogether() ? "shared screen" : "free roaming");
-    a = Act();
-    if (a != kAct_None) {
-      Session_SetRoamTogether(!Session_GetRoamTogether());
-      g_ui.dirty_settings = true;
-    }
   } else {
     Label("Friendly fire");
     snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s (host decides)", OnOff(Inst_GetFriendlyFire()));
-    Label("Camera");
-    snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s (host decides)",
-             Inst_GetIndependent() ? "free roaming" : "shared screen");
   }
   Item("Back", NULL);
   if (Act() == kAct_Select)
@@ -1033,7 +1024,6 @@ void Ui_SaveSettings() {
   Bindings_WriteConfig(f);
   fprintf(f, "[Multiplayer]\n");
   fprintf(f, "FriendlyFire = %d\n", Session_GetFriendlyFire());
-  fprintf(f, "SharedScreen = %d\n", Session_GetRoamTogether());
   fprintf(f, "UseUpnp = %d\n", g_ui.use_upnp);
   fprintf(f, "Port = %d\n", g_config.mp_port);
   if (g_config.mp_player_name)

@@ -155,7 +155,6 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Inst_SetFriendlyFire(atoi(arg1));
     } else if (!strcmp(cmd, "together")) {
       Inst_SetIndependent(!atoi(arg1));
-      Session_SetRoamTogether(atoi(arg1));
     } else if (!strcmp(cmd, "view")) {
       view = atoi(arg1) - 1;
     } else if (!strcmp(cmd, "expect_instances")) {
@@ -237,6 +236,10 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         }
         Inst_RunFrame(held);
         for (int p = 0; p < kMpMaxPlayers && checks; p++) {
+          if (Inst_IsJoined(p) && Inst_ExitBlockedTimer(p) == 90) {
+            printf("[frame %d] P%d was told everyone has to head that way\n", frame, p + 1);
+            jumps++;
+          }
           if (pw[p] < 0)
             continue;
           SwitchToPlayer(p);

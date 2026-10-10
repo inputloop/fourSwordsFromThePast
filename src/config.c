@@ -465,7 +465,7 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     if (StringEqualsNoCase(key, "FriendlyFire")) {
       return ParseBool(value, &g_config.mp_friendly_fire);
     } else if (StringEqualsNoCase(key, "SharedScreen")) {
-      return ParseBool(value, &g_config.mp_shared_screen);
+      return true;  // no longer used: players always roam freely
     } else if (StringEqualsNoCase(key, "UseUpnp")) {
       return ParseBool(value, &g_config.mp_use_upnp);
     } else if (StringEqualsNoCase(key, "Port")) {

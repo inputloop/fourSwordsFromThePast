@@ -576,7 +576,8 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     g_mp.area_key = 0xffffffff;
     return;
   }
-  if (g_mp.area_key == 0xffffffff && (link_player_handler_state != kPlayerState_Ground || link_auxiliary_state))
+  // Getting out of bed: wait until the leader has hopped onto the floor.
+  if (g_mp.area_key == 0xffffffff && link_auxiliary_state)
     return;
 
   uint32 key = Mp_AreaKey();

@@ -527,7 +527,6 @@ int main(int argc, char** argv) {
 
   Session_Init(g_config.mp_player_name);
   Session_SetFriendlyFire(g_config.mp_friendly_fire);
-  Session_SetRoamTogether(g_config.mp_shared_screen);
   Session_SetRandomizer(g_config.randomizer);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);
@@ -604,9 +603,11 @@ int main(int argc, char** argv) {
         SDL_PauseAudioDevice(device, audiopaused);
     }
 
-    // Netplay clients can't pause the host's game.
-    if (g_paused && Session_GetStatus()->mode == kSessionClient)
+    // Nobody pauses an online game (it would freeze everybody).
+    if (Session_IsNetplay()) {
       g_paused = false;
+      g_turbo = false;
+    }
 
     if (g_paused) {
       SDL_Delay(16);
@@ -739,6 +740,9 @@ static void HandleCommand(uint32 j, bool pressed) {
   if (j <= kKeys_Controls_Last)
     return;  // game buttons are handled by the per-player bindings
 
+  // Online, pausing or fast-forwarding would stop or outrun everybody else.
+  if (Session_IsNetplay() && (j == kKeys_Turbo || j == kKeys_ReplayTurbo || j == kKeys_Pause || j == kKeys_PauseDimmed))
+    return;
   if (j == kKeys_Turbo) {
     g_turbo = pressed;
     return;

@@ -12,7 +12,7 @@
 #include "randomizer.h"
 
 enum {
-  kProtoVersion = 4,
+  kProtoVersion = 5,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -86,7 +86,6 @@ static struct {
   MpFrameInput ring[kRingSize];
   uint32 ring_frame[kRingSize];
   bool ff;
-  bool together;
   uint32 rando;
   uint8 slot_owner[kMpMaxPlayers];
   uint8 slot_local[kMpMaxPlayers];
@@ -204,7 +203,6 @@ static bool g_last_was_replay;
 static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   ApplyEvents(fi);
   Inst_SetFriendlyFire(fi->flags & 1);
-  Inst_SetIndependent(!(fi->flags & 4));
   Rando_SetNewGameSetting(fi->flags & 8 ? fi->rando : kRando_Off);
   g_wanted_zelda_features = fi->features;
   g_apui00_override = deterministic_audio ? (fi->flags >> 1) & 1 : -1;
@@ -259,7 +257,7 @@ static void QueueJoinLeave(MpFrameInput *fi, uint8 owner, uint8 *join_mask, uint
 static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 features) {
   memset(fi, 0, sizeof(*fi));
   fi->features = features;
-  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.together ? 4 : 0) | (g_s.rando ? 8 : 0);
+  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.rando ? 8 : 0);
   fi->rando = g_s.rando;
   uint8 reserved[kMpMaxPlayers] = { 0 };
   QueueJoinLeave(fi, 0, &g_s.pending_join_mask, &g_s.pending_leave_mask, reserved);
@@ -348,10 +346,6 @@ bool Session_GetFriendlyFire() {
   return g_s.st.mode == kSessionClient ? Inst_GetFriendlyFire() : g_s.ff;
 }
 
-void Session_SetRoamTogether(bool on) {
-  g_s.together = on;
-}
-
 void Session_SetRandomizer(uint32 setting) {
   g_s.rando = setting;
 }
@@ -360,9 +354,7 @@ uint32 Session_GetRandomizer() {
   return g_s.st.mode == kSessionClient ? Rando_GetNewGameSetting() : g_s.rando;
 }
 
-bool Session_GetRoamTogether() {
-  return g_s.st.mode == kSessionClient ? !Inst_GetIndependent() : g_s.together;
-}
+
 
 void Session_LocalJoin(int i) {
   if (i < 0 || i >= kSessionMaxLocal || g_s.st.local_slot[i] >= 0)

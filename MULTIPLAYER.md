@@ -27,8 +27,10 @@ Players can drop in and drop out at any time.
 - **Friendly fire**: toggle it in the Multiplayer screen (the host decides).
   When on, swords, arrows, rods, boomerangs, the hookshot and bombs hurt
   teammates.
-- **Camera**: *free roaming* (the default) or *shared screen*, also in the
-  Multiplayer screen (the host decides).
+- **Free roaming** is always on: nobody ever has to wait for the others or
+  head the same way.
+- Online, the pause and turbo hotkeys do nothing (they would stop or outrun
+  everybody else). Use the menu; it doesn't stop the game online.
 
 ## Rules of the shared world
 
@@ -54,28 +56,18 @@ Players can drop in and drop out at any time.
   - A follower (Zelda, the old man, ...) stays with whoever was leading the
     group.
   - The sound is from the world of the first player on this computer.
-- **Shared screen** (option). The camera follows the *leader*. Rooms and
-  screens only change when every standing player heads the same way: walking
-  into a door, stairs or the screen edge alone acts like a wall (with an
-  "Everyone has to head that way!" hint). When the group goes through,
-  everybody comes along. Pits, warps and scripted scenes aren't blocked.
-  Links can't walk more than about a screen apart (a tether to the leader)
-  or off the edge of the screen; that just feels like an invisible wall.
-  Nobody is ever pushed or dragged, so nobody ends up in a wall.
-- **The leader.** In a shared screen, whoever opens a menu, talks to someone
-  or takes an exit becomes the leader that the camera, rooms and cutscenes
-  follow.
+- **The leader.** In a group sharing a screen, whoever opens a menu, talks
+  to someone or takes an exit becomes the leader that the camera, rooms and
+  cutscenes follow.
 - **Downed, not dead.** A Link that runs out of hearts becomes a flickering
   ghost that lies where it fell. Someone has to come and stand next to it
   for 1.5 seconds to revive it with half a heart. It is game over only when
   everyone is down; then everybody continues together.
   - A fairy in a bottle (shared by the team, like all items) saves a Link
     that would go down: the bottle empties and the Link gets up to 7 hearts.
-  - Free roaming: a ghost lying alone in some room keeps its world, paused,
-    until a standing teammate enters that room or screen; then the ghost is
-    there, right where it fell.
-  - Shared screen: when the group changes rooms, ghosts are carried along
-    (they can't stay behind in a room nobody is in).
+  - A ghost lying alone in some room keeps its world, paused, until a
+    standing teammate enters that room or screen; then the ghost is there,
+    right where it fell.
 - **Enemies** go after the nearest Link and can be hurt by anyone.
 
 ## How it works (for modders)
@@ -86,9 +78,10 @@ addresses. `src/mp.c` gives each player a private copy of those RAM ranges
 
 - The **leader**'s context is in RAM at frame boundaries, so camera, rooms,
   menus and cutscenes work as in the original game.
-- Group exits (`Mp_RunRouting`): if a frame starts a room change while the
-  players don't all hold that direction, the frame is replayed from a RAM
-  snapshot with the walking player standing still.
+- Exits (`Mp_RunRouting`): if a player takes an exit alone, that player
+  continues in a new world (see below). The engine also still has the old
+  "group exits" shared-screen mode (`Inst_SetIndependent(false)`), which
+  the game no longer offers; `tests/coop/group_exits.txt` keeps it working.
 - The gameplay modules run `Mp_RunOtherPlayers()` after the leader's player
   control, which swaps in each other Link and runs the same control code.
   If that code changes the game module, that player becomes the leader.
@@ -157,8 +150,8 @@ runs the regression tests, including a real host/client pair over UDP.
 
 ## Known limitations
 
-- In a shared screen the camera follows one Link at a time. There's no
-  zoomed-out shared camera.
+- Players sharing a screen share one camera, which follows the leader.
+  There's no zoomed-out camera; walking out of view gives a player their own.
 - Free roaming with up to four worlds costs up to four times the CPU, which
   is still far below what any PC needs.
 - Room contents in two worlds can differ (for example an enemy killed in one
