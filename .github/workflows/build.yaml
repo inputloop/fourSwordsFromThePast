@@ -2,8 +2,6 @@ name: Build
 
 on:
   push:
-    branches:
-    - master
   pull_request:
   workflow_dispatch:
 
@@ -17,11 +15,13 @@ jobs:
         include:
         - name: Linux
           os: ubuntu-latest
+          artifact: zelda3-linux
         - name: Mac
           os: macos-latest
+          artifact: zelda3-macos
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: '3.10'
     - name: Install dependencies for Linux
@@ -35,22 +35,37 @@ jobs:
         brew install sdl2 coreutils
     - name: Build
       run: make -j$(nproc) zelda3
+    - name: Package
+      run: |
+        mkdir -p dist
+        cp zelda3 zelda3.ini README.md MULTIPLAYER.md dist/
+        tar -czf ${{ matrix.artifact }}.tar.gz -C dist .
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.artifact }}-${{ github.sha }}
+        path: ${{ matrix.artifact }}.tar.gz
+        if-no-files-found: error
 
   build-windows:
     name: on Windows (MinGW cross build)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install MinGW
       run: |
         sudo apt update
         sudo apt install -y gcc-mingw-w64-x86-64
     - name: Build
       run: tools/build_windows_mingw.sh
+    - name: Package
+      run: cp README.md MULTIPLAYER.md build-windows/
     - uses: actions/upload-artifact@v4
       with:
-        name: zelda3-windows
+        name: zelda3-windows-${{ github.sha }}
         path: |
           build-windows/zelda3.exe
           build-windows/SDL2.dll
           build-windows/zelda3.ini
+          build-windows/README.md
+          build-windows/MULTIPLAYER.md
+        if-no-files-found: error
