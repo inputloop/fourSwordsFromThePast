@@ -43,8 +43,8 @@ Players can drop in and drop out at any time.
 - **Free roaming (default).** Everybody goes wherever they want. Players who
   are close together share a screen. A player who walks out of view or
   through a door, stairs or a pit on their own continues in a world of their
-  own with their own camera. When players meet again (same room or screen, in
-  view of each other), they share a screen again. Players on the same
+  own with their own camera. When players meet again (same room or screen,
+  close enough that their cameras line up), they share a screen again. Players on the same
   computer in different places get a split screen (side by side for two,
   2x2 for three or four). Netplay players always see their own Link.
   - Progress is shared between the worlds right away: items, rupees, bombs,
@@ -107,7 +107,11 @@ world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
   snapshot without them. A player walking out of their group's view is
   copied into a new world without replaying.
 - **Merge.** Two worlds in the same room or overworld screen, with one
-  world's players in view of the other's camera, become one world.
+  world's players in view of the other's camera and the two cameras within
+  48 pixels of each other, become one world.
+- Each world tracks which area it is in, even with one player, so players
+  merging in are never mistaken for a group arriving (which would put them
+  on top of the leader).
 - **Shared progress.** After every frame, the save file area of RAM
   (`7EF000-7EF4FF`) is synced: changed bytes are copied to every world, room
   and overworld flags are combined, and counters (bombs, arrows, magic,

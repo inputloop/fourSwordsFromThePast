@@ -1,9 +1,10 @@
 # Free roaming stress test: four players run around on their own for a while.
+# Fails if a standing Link jumps (teleports) or a visible Link is not drawn.
 load 2
 run 30
 join 2
 join 3
 join 4
-wander 6000 7
+wander 20000 5 check
 status
 expect_players 4

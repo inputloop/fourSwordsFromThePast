@@ -168,9 +168,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "trace")) {
+      extern bool g_inst_trace;
+      g_inst_trace = atoi(arg1);
     } else if (!strcmp(cmd, "wander")) {
       // wander <frames> <seed>: every player walks around randomly and swings the sword.
       uint32 seed = atoi(arg2) * 2654435761u + 1;
+      bool checks = arg3[0] != 0;  // wander <frames> <seed> check: report jumps / invisible Links
+      int jumps = 0, invisible = 0;
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         if (n % 24 == 0) {
           for (int p = 0; p < kMpMaxPlayers; p++) {
@@ -178,7 +183,38 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
             held[p] = ParseKeys((const char *[]){ "U", "D", "L", "R", "UL", "UR", "DL", "DR", "B" }[(seed >> 16) % 9]);
           }
         }
+        // Remember where everybody was, to report sudden jumps and missing sprites.
+        int pw[kMpMaxPlayers], px[kMpMaxPlayers], py[kMpMaxPlayers], pm[kMpMaxPlayers];
+        for (int p = 0; p < kMpMaxPlayers; p++) {
+          pw[p] = Inst_OfPlayer(p);
+          if (pw[p] < 0)
+            continue;
+          SwitchToPlayer(p);
+          px[p] = Mp_PlayerX(p), py[p] = Mp_PlayerY(p);
+          pm[p] = main_module_index << 8 | submodule_index;
+        }
         Inst_RunFrame(held);
+        for (int p = 0; p < kMpMaxPlayers && checks; p++) {
+          if (pw[p] < 0)
+            continue;
+          SwitchToPlayer(p);
+          int d = abs(Mp_PlayerX(p) - px[p]) + abs(Mp_PlayerY(p) - py[p]);
+          bool stable = pm[p] == (7 << 8) || pm[p] == (9 << 8);
+          if (d > 12 && stable && main_module_index == pm[p] >> 8 && submodule_index == 0 && !g_mp.p[p].downed && *Mp_PlayerRam(p, 0x5D) == 0) {
+            printf("[frame %d] JUMP P%d by %d (%d,%d)->(%d,%d) world %d->%d leader=%d downed=%d module=%d state=%d recoil=%d\n", frame, p + 1, d,
+                   px[p], py[p], Mp_PlayerX(p), Mp_PlayerY(p), pw[p], Inst_Current(), g_mp.leader, g_mp.p[p].downed, main_module_index, *Mp_PlayerRam(p, 0x5D), *Mp_PlayerRam(p, 0x46));
+            jumps++;
+          }
+          if (p != g_mp.leader && !g_mp.p[p].downed && Mp_InStableGameplay() && Mp_NumJoined() > 1 &&
+              g_mp_render.p[p].count == 0 && pw[p] == Inst_Current()) {
+            int sx = (int16)(Mp_PlayerX(p) - BG2HOFS_copy2), sy = (int16)(Mp_PlayerY(p) - BG2VOFS_copy2);
+            if (sx > 0 && sx < 240 && sy > 0 && sy < 200) {
+              printf("[frame %d] INVISIBLE P%d world %d leader=%d visible=%d screen=%d,%d\n", frame, p + 1, Inst_Current(),
+                     g_mp.leader, g_mp_render.p[p].visible, sx, sy);
+              invisible++;
+            }
+          }
+        }
         if (n % 600 == 0) {
           printf("[frame %d] worlds=%d hash=%08x", frame, Inst_Count(), Inst_HashState());
           for (int p = 0; p < kMpMaxPlayers; p++)
@@ -187,6 +223,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         }
       }
       memset(held, 0, sizeof(held));
+      if (checks) {
+        printf("wander: %d jumps, %d invisible\n", jumps, invisible);
+        if (jumps || invisible)
+          failures++;
+      }
     } else if (!strcmp(cmd, "splitshot")) {
       int r = Inst_Current();
       uint32 *wide = calloc(width * 2 * height * 4, 1);

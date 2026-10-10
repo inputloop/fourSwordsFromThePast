@@ -44,6 +44,8 @@ static MpState g_snap_mp;
 static MpRenderState g_snap_render;
 static uint8 g_snap_ports[4];
 
+bool g_inst_trace;
+#define TRACE(...) do { if (g_inst_trace) printf(__VA_ARGS__); } while (0)
 static bool Inst_OtherInstanceAlive();
 static void Inst_CollapseIntoCurrent();
 static void Inst_Sync();
@@ -290,6 +292,7 @@ static bool RunInstance(int i, const uint16 *inputs) {
     if (p < 0 || !can_split || Mp_NumJoined() < 2 || (j = FreeSlot()) < 0)
       break;
     bool travel = g_mp.split_travel;
+    TRACE("  split P%d from world %d into %d travel=%d module=%d/%d\n", p + 1, i, j, travel, main_module_index, submodule_index);
     // The follower follows whoever led the group before this frame.
     bool follower_goes_along = travel && p == g_snap_mp.leader;
     SplitOff(j, p, follower_goes_along);
@@ -311,6 +314,7 @@ static bool RunInstance(int i, const uint16 *inputs) {
 }
 
 static void MovePlayers(int from, int to) {
+  TRACE("  move players of world %d into %d\n", from, to);
   uint8 ctx[kMpMaxPlayers][kMpCtxMaxBytes];
   uint8 joined[kMpMaxPlayers] = { 0 }, downed[kMpMaxPlayers], ctr[kMpMaxPlayers];
   Inst_Switch(from);
@@ -350,6 +354,9 @@ static void GetView(int i, InstView *v) {
 static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
   if (!va->stable || !vb->stable || va->key != vb->key)
     return false;
+  // Only once the cameras are nearly in the same place, so nobody's view jumps.
+  if (abs((int16)(va->cam_x - vb->cam_x)) > 48 || abs((int16)(va->cam_y - vb->cam_y)) > 48)
+    return false;
   Inst_Switch(b);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
@@ -377,6 +384,7 @@ static void MergeAndCleanUp() {
     Inst_Switch(i);
     uint8 m = main_module_index;
     if (m < 6 || m == 0x14 || m == 0x19 || m == 0x1a) {
+      TRACE("  collapse into world %d (module %d)\n", i, m);
       Inst_CollapseIntoCurrent();
       return;
     }
@@ -387,6 +395,7 @@ static void MergeAndCleanUp() {
       continue;
     for (int k = 0; k < kInstMax; k++) {
       if (k != i && g_inst[k].active && HasAlive(k)) {
+        TRACE("  orphans of world %d\n", i);
         MovePlayers(i, k);
         break;
       }
@@ -402,10 +411,13 @@ static void MergeAndCleanUp() {
       GetView(b, &vb);
       // The world with a follower (Zelda, the old man...) is the one that stays.
       bool b_first = vb.has_follower && !va.has_follower;
-      if (!b_first && CanMerge(a, &va, b, &vb))
+      if (!b_first && CanMerge(a, &va, b, &vb)) {
+        TRACE("  merge %d into %d key=%x\n", b, a, va.key);
         MovePlayers(b, a);
-      else if (CanMerge(b, &vb, a, &va))
+      } else if (CanMerge(b, &vb, a, &va)) {
+        TRACE("  merge %d into %d key=%x\n", a, b, va.key);
         MovePlayers(a, b);
+      }
     }
   }
 }

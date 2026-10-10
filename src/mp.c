@@ -291,8 +291,13 @@ static uint32 Mp_AreaKey() {
 }
 
 void Mp_EndFrame() {
-  if (!Mp_Active())
+  // A Link playing alone in a world keeps track of where it is, so players
+  // who join this world later aren't mistaken for a group that just arrived.
+  if (!Mp_Active()) {
+    if (g_mp.area_key != 0xffffffff && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0)
+      g_mp.area_key = Mp_AreaKey();
     return;
+  }
   Mp_SwapToLeader();
   Mp_AttributeObjects();
   if (main_module_index == 18 || main_module_index == 23)  // death / game over
@@ -553,6 +558,9 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
 
   uint32 key = Mp_AreaKey();
   if (key != g_mp.area_key || g_mp.after_death) {
+    extern bool g_inst_trace;
+    if (g_inst_trace)
+      printf("  regroup: area %x -> %x after_death=%d leader=P%d\n", g_mp.area_key, key, g_mp.after_death, g_mp.leader + 1);
     g_mp.area_key = key;
     for (int p = 0; p < kMpMaxPlayers; p++) {
       if (g_mp.p[p].joined && p != g_mp.leader) {
@@ -572,11 +580,16 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (p == g_mp.leader || !g_mp.p[p].joined)
       continue;
-    // Downed Links left behind float over to the leader.
+    // Downed Links left behind float over to the leader. Far away ones
+    // (another room) appear next to the leader.
     if (g_mp.p[p].downed) {
-      if (Abs16(Mp_PlayerX(p), lx) > kMpTetherX || Abs16(Mp_PlayerY(p), ly) > kMpTetherY) {
-        WORD(*Mp_PlayerRam(p, 0x22)) = lx;
-        WORD(*Mp_PlayerRam(p, 0x20)) = ly;
+      uint16 *gx = (uint16 *)Mp_PlayerRam(p, 0x22), *gy = (uint16 *)Mp_PlayerRam(p, 0x20);
+      int dx = (int16)(lx - *gx), dy = (int16)(ly - *gy);
+      if (abs(dx) > 400 || abs(dy) > 400) {
+        *gx = lx, *gy = ly;
+      } else if (abs(dx) > 40 || abs(dy) > 32) {
+        *gx += dx > 1 ? 2 : dx < -1 ? -2 : 0;
+        *gy += dy > 1 ? 2 : dy < -1 ? -2 : 0;
       }
       continue;
     }
