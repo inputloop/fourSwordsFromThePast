@@ -3,17 +3,27 @@
 set SDL2=third_party\SDL2-2.28.2
 
 IF NOT EXIST "third_party\tcc\tcc.exe" (
+  ECHO Downloading the TCC compiler...
+  curl -L -o third_party\tcc.zip https://github.com/FitzRoyX/tinycc/releases/download/tcc_20230519/tcc_20230519.zip
+  tar -xf third_party\tcc.zip -C third_party
+  del third_party\tcc.zip
+)
+IF NOT EXIST "third_party\tcc\tcc.exe" (
   ECHO:
-  ECHO ERROR: third_party\tcc\tcc.exe doesn't exist. Please verify that you have put it in the right location.
+  ECHO ERROR: third_party\tcc\tcc.exe doesn't exist and could not be downloaded.
   ECHO   Download it from https://github.com/FitzRoyX/tinycc/releases/download/tcc_20230519/tcc_20230519.zip
-  ECHO   It needs to be the 64-bit version.
+  ECHO   and unzip it so that third_party\tcc\tcc.exe exists. It needs to be the 64-bit version.
   ECHO:
   PAUSE
   EXIT /B 1
-) ELSE (
-  REM
 )
 
+IF NOT EXIST "%SDL2%\lib\x64\SDL2.dll" (
+  ECHO Downloading SDL2...
+  curl -L -o third_party\sdl.zip https://github.com/libsdl-org/SDL/releases/download/release-2.28.2/SDL2-devel-2.28.2-VC.zip
+  tar -xf third_party\sdl.zip -C third_party
+  del third_party\sdl.zip
+)
 IF NOT EXIST "%SDL2%\lib\x64\SDL2.dll" (
   ECHO:
   ECHO ERROR: SDL is not unzipped properly into %SDL2%
@@ -21,14 +31,13 @@ IF NOT EXIST "%SDL2%\lib\x64\SDL2.dll" (
   ECHO:
   PAUSE
   EXIT /B 1
-) ELSE (
-  REM
 )
 
 IF NOT EXIST "zelda3_assets.dat" (
   ECHO:
   ECHO ERROR: zelda3_assets.dat was not found.
-  ECHO You need to extract assets from the ROM first, or get this file from a friend. Please see README.md
+  ECHO Put your ROM here as zelda3.sfc and run extract_assets.bat (needs Python),
+  ECHO or copy zelda3_assets.dat from a build you extracted earlier. Please see README.md
   ECHO:
   PAUSE
   EXIT /B 1
