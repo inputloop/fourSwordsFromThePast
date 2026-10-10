@@ -3,10 +3,10 @@
 # the shuffled item.
 randocheck 1 5000
 load 1
-# Seed 40 puts the Titan's Mitt in the sanctuary chest. Being the first
+# Seed 3 puts the Titan's Mitt in the sanctuary chest. Being the first
 # glove, it is received as the Power Glove.
 poke f4f0 52
-poke f4f1 40
+poke f4f1 3
 poke f4f2 0
 poke f4f3 0
 poke f4f4 0

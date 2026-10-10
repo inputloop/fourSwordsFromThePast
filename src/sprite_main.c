@@ -1,3 +1,4 @@
+#include "randomizer.h"
 #include "sprite_main.h"
 #include "sprite.h"
 #include "tagalong.h"
@@ -1208,6 +1209,18 @@ void Sprite_WishPond3(int k) {
     break;
   case 6:
     sprite_ai_state[k] = 7;
+    // Randomized: any shield thrown into the waterfall and any sword thrown
+    // to the pyramid fairy is taken (and given back with a random item).
+    if (Rando_CurrentSeed()) {
+      uint8 t = sprite_graphics[k];
+      bool shield = (t == 4 || t == 5 || t == 6), sword = (t == 0x49 || t == 1 || t == 2 || t == 3);
+      if (!savegame_is_darkworld && shield)
+        sprite_graphics[k] = Rando_SpecialDone(kRando_WaterfallFairy) ? 0xfe : 4;
+      else if (savegame_is_darkworld && sword)
+        sprite_graphics[k] = Rando_SpecialDone(kRando_PyramidFairy) ? 0xfe : 2;
+      else if (shield || sword)
+        sprite_graphics[k] = 0xfe;  // nothing for it here: it comes back as it was
+    }
     if (!savegame_is_darkworld) {
       if (sprite_graphics[k] == 12) {
         sprite_graphics[k] = 42;
@@ -1264,7 +1277,16 @@ void Sprite_WishPond3(int k) {
     PaletteFilter_RestoreSP5F();
     Palette_RevertTranslucencySwap();
     item_receipt_method = 2;
-    Link_ReceiveItem(sprite_graphics[k], 0);
+    if (Rando_CurrentSeed() && (sprite_graphics[k] == 5 || sprite_graphics[k] == 3)) {
+      (&link_item_bow)[sprite_C[k]] = sprite_D[k];  // the thrown sword or shield comes back
+      Link_ReceiveItem(Rando_SpecialItem(sprite_graphics[k] == 5 ? kRando_WaterfallFairy : kRando_PyramidFairy,
+                                         sprite_graphics[k]), 0);
+    } else if (sprite_graphics[k] == 0xfe) {
+      (&link_item_bow)[sprite_C[k]] = sprite_D[k];  // given back unchanged
+      Hud_RefreshIcon();
+    } else {
+      Link_ReceiveItem(sprite_graphics[k], 0);
+    }
     sprite_ai_state[k] = 10;
     break;
   case 10: {
@@ -2127,7 +2149,7 @@ void MasterSword_Main(int k) {  // 8588d6
     if (!sprite_delay_main[k]) {
       save_ow_event_info[BYTE(overworld_screen_index)] |= 0x40;
       item_receipt_method = 0;
-      Link_ReceiveItem(1, 0);
+      Link_ReceiveItem(Rando_SpecialItem(kRando_Pedestal, 1), 0);
       savegame_map_icons_indicator = 5;
       link_unk_master_sword = 0;
       sprite_ai_state[k] = 5;
@@ -10135,7 +10157,8 @@ void Smithy_Main(int k) {  // 86b34e
     break;
   case 2:  // HandleTemperingChoice
     if (choice_in_multiselect_box == 0) {
-      if (link_sword_type < 3) {
+      // Randomized: the smiths work on any sword (and give a random item).
+      if (Rando_CurrentSeed() ? !Rando_SpecialDone(kRando_Smiths) : link_sword_type < 3) {
         Sprite_ShowMessageUnconditional(0xda);
         sprite_ai_state[k] = 3;
       } else {
@@ -10157,6 +10180,7 @@ void Smithy_Main(int k) {  // 86b34e
       sprite_ai_state[sprite_E[k]] = 5;
       sprite_ai_state[k] = 5;
       flag_overworld_area_did_change = 0;
+      Rando_OnSmithsTakeSword();
       link_sword_type = 255;
       sram_progress_indicator_3 |= 128;
     }
@@ -10181,7 +10205,8 @@ void Smithy_Main(int k) {  // 86b34e
     sprite_ai_state[k] = 0;
     sprite_ai_state[sprite_E[k]] = 0;
     item_receipt_method = 0;
-    Link_ReceiveItem(2, 0);
+    Rando_OnSmithsReturnSword();
+    Link_ReceiveItem(Rando_SpecialItem(kRando_Smiths, 2), 0);
     sram_progress_indicator_3 &= ~0x80;
     break;
   case 7:  //

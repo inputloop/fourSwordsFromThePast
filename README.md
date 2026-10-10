@@ -20,8 +20,8 @@ randomizer for save files created from then on (or set `Randomizer` in the
 
 - **Open start, no tutorial.** A randomized file skips the intro and the
   escape from Hyrule Castle: it starts as if Zelda was just brought to the
-  sanctuary. Link has the fighter's sword and shield and full magic, starts
-  at his house or the sanctuary, and can go anywhere from the first step:
+  sanctuary. Link has full magic, starts at his house or the sanctuary, and
+  can go anywhere from the first step:
   no rain, no guards blocking the way, no need to rescue Zelda (so no Lamp
   needed to get started). Randomized files made with an older build get the
   open start when loaded. Non-randomized files start the usual way.
@@ -30,15 +30,25 @@ randomizer for save files created from then on (or set `Randomizer` in the
   Magic Cape, Cane of Byrna, mails, Mirror Shield, boomerangs, a bottle,
   heart pieces, rupees, bombs and arrows. Small keys, big keys, maps and
   compasses stay in their dungeons, so dungeons play as before.
-- Items given by people or found outside chests (Boots, Book,
-  Flippers, Mirror, Flute, Master Sword, medallions, pendants and crystals)
+- **Swords and shields are randomized too.** Instead of the uncle's sword
+  and shield, Link is handed two random items when the game starts. The
+  Master Sword pedestal, the smiths, the Pyramid fairy (throw any sword in)
+  and the Waterfall of Wishing fairy (throw any shield in) each give a
+  random item once, and you get back what you threw in or handed over. The
+  four swords and three shields can be anywhere, also in chests, and are
+  progressive: each sword found is the next level (fighter's, Master,
+  tempered, golden), and so is each shield. You may start without a sword;
+  the logic makes sure you find one before you need it.
+- Other items given by people or found outside chests (Boots, Book,
+  Flippers, Mirror, Flute, medallions, pendants and crystals)
   are where they always were.
 - Every seed is checked to be beatable without glitches, starting from the
   open start. One Lamp is always in Link's house or the sanctuary chest.
   The castle basement and sewer chests (normally opened during the escape)
-  only get filler. Gloves and mails are
-  progressive: the first glove found is the Power Glove, the second the
-  Titan's Mitt.
+  only get filler. Dungeons count as needing a sword, and the medallion
+  tablets and Agahnim's tower barrier the Master Sword level (or the cape).
+  Gloves and mails are progressive too: the first glove found is the Power
+  Glove, the second the Titan's Mitt.
 - The seed is stored in the save file, so a file stays randomized the same
   way. *Gameplay > This game* shows the seed; choosing "on, seed ..." makes
   new files with that same seed, to race a friend or replay it.

@@ -6597,6 +6597,7 @@ static void Dungeon_PlayerControlCore();
 
 void Module07_00_PlayerControl() {  // 8288de
   Dungeon_PlayerControlCore();
+  Rando_GiveStartItems();
   Mp_RunOtherPlayers(&Dungeon_PlayerControlCore);
 }
 

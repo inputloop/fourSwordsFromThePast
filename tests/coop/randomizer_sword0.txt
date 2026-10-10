@@ -1,0 +1,18 @@
+# Same chest, but Link has no sword yet: the first sword found is the
+# fighter's sword, whatever sword the seed put there.
+load 1
+poke f4f0 52
+poke f4f1 40
+poke f4f2 0
+poke f4f3 0
+poke f4f4 0
+poke f359 0
+run 400
+pos 1 1246 606
+hold 1 U
+run 4
+hold 1 A
+run 2
+hold 1 -
+run 200
+expect_ram f359 1

@@ -1,5 +1,6 @@
 #include "overworld.h"
 #include "mp.h"
+#include "randomizer.h"
 #include "hud.h"
 #include "load_gfx.h"
 #include "dungeon.h"
@@ -802,6 +803,7 @@ void Module09_00_PlayerControl() {  // 82a53c
   if (trigger_special_entrance)
     Overworld_AnimateEntrance();
   Link_Main();
+  Rando_GiveStartItems();
   Mp_RunOtherPlayers(&Overworld_OtherPlayerControl);
   if (super_bomb_indicator_unk2 != 0xff)
     Hud_SuperBombIndicator();

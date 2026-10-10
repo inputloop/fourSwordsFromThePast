@@ -1,6 +1,7 @@
 #include "randomizer.h"
 #include "variables.h"
 #include "assets.h"
+#include "player.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -9,6 +10,9 @@ enum {
   kRandoMarkerOffs = 0x4F0,  // 'R' when randomized
   kRandoSeedOffs = 0x4F1,    // 4 bytes
   kRandoMarker = 0x52,
+  kRandoSmithSwordOffs = 0x4F5,  // sword level while the smiths have the sword
+  kRandoPendingOffs = 0x4F6,     // start items still to hand out (bit 0, bit 1)
+  kRandoDoneOffs = 0x4F7,        // special locations already used (bit per location)
   kMaxChests = 256,
 };
 
@@ -19,7 +23,32 @@ enum {
   kI_Cape = 0x19, kI_Glove = 0x1B, kI_Mitt = 0x1C, kI_Pearl = 0x1F,
   kI_BlueMail = 0x22, kI_RedMail = 0x23, kI_SmallKey = 0x24, kI_Compass = 0x25,
   kI_BigKey = 0x32, kI_Map = 0x33,
+  kI_FighterSwordShield = 0x00, kI_MasterSword = 0x01, kI_TemperedSword = 0x02, kI_GoldenSword = 0x03,
+  kI_FighterShield = 0x04, kI_RedShield = 0x05, kI_FighterSword = 0x49,
 };
+
+// Places outside chests that give swords and shields. They take part in the
+// shuffle as extra locations (with made-up room numbers 0x1000+).
+static const struct {
+  uint16 room;
+  uint8 vanilla;
+} kSpecialLocations[kRando_NumSpecial] = {
+  {0x1000, kI_FighterSword},   // start: the uncle's sword
+  {0x1001, kI_FighterShield},  // start: the uncle's shield
+  {0x1002, kI_MasterSword},    // Master Sword pedestal
+  {0x1003, kI_TemperedSword},  // smiths
+  {0x1004, kI_GoldenSword},    // Pyramid fairy
+  {0x1005, kI_RedShield},      // Waterfall of Wishing fairy
+};
+
+static bool IsSword(uint8 item) {
+  return item == kI_FighterSwordShield || item == kI_FighterSword || item == kI_MasterSword ||
+         item == kI_TemperedSword || item == kI_GoldenSword;
+}
+
+static bool IsShield(uint8 item) {
+  return item == kI_FighterShield || item == kI_RedShield || item == kI_MirrorShield;
+}
 
 static uint32 g_new_game_setting;
 
@@ -28,14 +57,13 @@ uint32 Rando_GetNewGameSetting() { return g_new_game_setting; }
 
 // Open start: no intro and no escape from Hyrule Castle (no rain, no guards
 // blocking the way, no need to rescue Zelda first, so no Lamp needed). The
-// game is as if Zelda was just brought to the sanctuary: Link has the
-// fighter's sword and shield, may start at his house or the sanctuary, and
-// can go anywhere right away. save is a save file or the save area of RAM.
+// game is as if Zelda was just brought to the sanctuary: Link may start at
+// his house or the sanctuary and can go anywhere right away. save is a save
+// file or the save area of RAM.
 static void ApplyOpenStart(uint8 *save) {
-  if (save[0x359] < 1)
-    save[0x359] = 1;      // fighter's sword
-  if (save[0x35A] < 1)
-    save[0x35A] = 1;      // fighter's shield
+  // Instead of the uncle's sword and shield, Link is handed two random items
+  // when the game starts (they may be the sword and shield).
+  save[kRandoPendingOffs] = 3;
   save[0x36E] = 0x80;     // full magic
   save[0x3C5] = 2;        // progress: Zelda is safe in the sanctuary
   save[0x3C6] |= 0x15;    // progress flags as after the escape
@@ -95,6 +123,7 @@ typedef struct State {
 
 typedef struct Ev {
   bool lift1, lift2, lamp, bow, hook, hammer, fire, ice, pearl, somaria, cape;
+  bool sword1, sword2, shield1, pedestal;
   bool ep, boots, book, dp, dm, mirror, dm_east, hera, ms, aga, dw_s, dw_n;
   bool flippers, flute, ether, quake, dwdm;
   bool pod, sp, sw, tt, ip, mm, tr, gt, win;
@@ -113,30 +142,37 @@ static void Evaluate(const State *s, Ev *e) {
   e->pearl = HAS(kI_Pearl);
   e->somaria = HAS(kI_Somaria);
   e->cape = HAS(kI_Cape);
-  // Light World
-  e->ep = e->lamp && e->bow;                       // Eastern Palace
+  int swords = s->n[kI_FighterSwordShield] + s->n[kI_FighterSword] + s->n[kI_MasterSword] +
+               s->n[kI_TemperedSword] + s->n[kI_GoldenSword];
+  e->sword1 = swords >= 1;
+  e->sword2 = swords >= 2;                         // the Master Sword level
+  e->shield1 = s->n[kI_FighterShield] + s->n[kI_RedShield] + s->n[kI_MirrorShield] >= 1;
+  // Light World. Every dungeon needs a sword for its boss.
+  e->ep = e->lamp && e->bow && e->sword1;          // Eastern Palace
   e->boots = e->ep;                                // Sahasrahla, after the green pendant
   e->book = e->boots;                              // library: dash into the shelf
-  e->dp = e->book && e->lift1 && (e->lamp || e->fire);  // Desert Palace
+  e->dp = e->book && e->lift1 && (e->lamp || e->fire) && e->sword1;  // Desert Palace
   e->dm = e->lift1 && e->lamp;                     // Death Mountain via the old man
   e->mirror = e->dm;
   e->dm_east = e->dm && (e->hook || (e->mirror && e->hammer));
-  e->hera = e->dm && (e->mirror || (e->hook && e->hammer)) && (e->lamp || e->fire);
-  e->ms = e->ep && e->dp && e->hera;               // three pendants
-  e->aga = (e->ms || e->cape) && e->lamp;
+  e->hera = e->dm && (e->mirror || (e->hook && e->hammer)) && (e->lamp || e->fire) && e->sword1;
+  e->pedestal = e->ep && e->dp && e->hera;         // three pendants
+  e->ms = e->sword2;
+  // The barrier to the tower needs the Master Sword level, or the cape.
+  e->aga = (e->sword2 || e->cape) && e->sword1 && e->lamp;
   e->flippers = e->lift1;                          // Zora
   // Dark World
   e->dw_s = e->pearl && (e->aga || e->lift2 || (e->lift1 && e->hammer));
   e->dw_n = e->pearl && (e->lift2 || (e->lift1 && e->hammer) || (e->aga && e->hook));
   e->flute = e->dw_s;                              // shovel from the flute boy, then dig
-  e->ether = e->dm && e->book && e->ms;
+  e->ether = e->dm && e->book && e->sword2;        // tablets need the Master Sword
   e->quake = e->dw_n && e->lift1;                  // catfish
   e->dwdm = e->dm_east && e->lift2 && e->pearl;
-  e->pod = e->dw_s && e->hammer && e->bow && e->lamp;
-  e->sp = e->dw_s && e->mirror && e->flippers && e->hook && e->hammer;
-  e->sw = e->dw_n && e->fire;
-  e->tt = e->dw_n && e->hammer;
-  e->ip = e->lift2 && e->flippers && e->pearl && e->fire && e->hammer && e->hook;
+  e->pod = e->dw_s && e->hammer && e->bow && e->lamp && e->sword1;
+  e->sp = e->dw_s && e->mirror && e->flippers && e->hook && e->hammer && e->sword1;
+  e->sw = e->dw_n && e->fire && e->sword1;
+  e->tt = e->dw_n && e->hammer && e->sword1;
+  e->ip = e->lift2 && e->flippers && e->pearl && e->fire && e->hammer && e->hook && e->sword1;
   e->mm = e->lift2 && e->flute && e->pearl && e->ether && e->somaria && e->lamp && e->fire &&
           e->boots && e->hook;
   e->tr = e->dm_east && e->lift2 && e->hammer && e->pearl && e->somaria && e->quake &&
@@ -186,6 +222,12 @@ static int RoomAccess(int room, const Ev *e) {
   case 0x10C: return e->tr;                         // mimic cave
   case 0xF8: return e->dwdm;                        // superbunny cave
   case 0x3C: return e->dwdm && e->hook && e->lift1; // hookshot cave
+  // Swords and shields outside chests
+  case 0x1000: case 0x1001: return true;            // handed out at the start
+  case 0x1002: return e->pedestal;
+  case 0x1003: return e->dw_n && e->lift2 && e->sword1;  // frog smith, then hand over a sword
+  case 0x1004: return e->dw_s && e->ip && e->mm && e->sword1;  // crystals 5 and 6, throw a sword
+  case 0x1005: return e->flippers && e->shield1;    // throw a shield into the waterfall
   default: return -1;
   }
 }
@@ -203,7 +245,7 @@ static bool IsKnownRoom(int room) {
 // Not needed to finish the game, but nobody wants to miss them.
 static bool IsUsefulItem(uint8 item) {
   switch (item) {
-  case 0x06: case 0x0C: case 0x16: case 0x17: case 0x18: case 0x22: case 0x23: case 0x2A: case 0x3F:
+  case 0x0C: case 0x16: case 0x17: case 0x18: case 0x22: case 0x23: case 0x2A: case 0x3F:
     return true;
   }
   return false;
@@ -219,7 +261,7 @@ static bool IsProgression(uint8 item) {
   case kI_Lamp: case kI_Glove: case kI_Mitt: case kI_Pearl: case kI_Somaria: case kI_Cape:
     return true;
   }
-  return false;
+  return IsSword(item) || IsShield(item);
 }
 
 typedef struct Rng {
@@ -246,7 +288,8 @@ static void Shuffle(Rng *r, uint8 *a, int n) {
 }
 
 typedef struct Placement {
-  int nchests;
+  int nchests;  // chests and special locations
+  int nreal;    // chests only (they come first)
   uint16 room[kMaxChests];
   uint8 vanilla[kMaxChests];
   uint8 item[kMaxChests];
@@ -255,11 +298,18 @@ typedef struct Placement {
 
 static void LoadChests(Placement *pl) {
   pl->nchests = 0;
-  for (size_t i = 0; i + 2 < kDungeonRoomChests_SIZE && pl->nchests < kMaxChests; i += 3) {
+  for (size_t i = 0; i + 2 < kDungeonRoomChests_SIZE && pl->nchests < kMaxChests - kRando_NumSpecial; i += 3) {
     int k = pl->nchests++;
     pl->room[k] = WORD(kDungeonRoomChests[i]) & 0x7fff;
     pl->vanilla[k] = pl->item[k] = kDungeonRoomChests[i + 2];
     pl->shuffled[k] = !IsDungeonItem(pl->vanilla[k]);
+  }
+  pl->nreal = pl->nchests;
+  for (int i = 0; i < kRando_NumSpecial; i++) {
+    int k = pl->nchests++;
+    pl->room[k] = kSpecialLocations[i].room;
+    pl->vanilla[k] = pl->item[k] = kSpecialLocations[i].vanilla;
+    pl->shuffled[k] = true;
   }
 }
 
@@ -383,12 +433,60 @@ uint8 Rando_ChestItem(int idx, uint8 vanilla_item) {
     g_cache_seed = seed;
     g_cache_valid = true;
   }
-  return idx >= 0 && idx < g_cache.nchests ? g_cache.item[idx] : vanilla_item;
+  return idx >= 0 && idx < g_cache.nreal ? g_cache.item[idx] : vanilla_item;
+}
+
+uint8 Rando_SpecialItem(int which, uint8 vanilla_item) {
+  if (Rando_CurrentSeed() == 0)
+    return vanilla_item;
+  Rando_ChestItem(-1, 0);  // make sure the placement is there
+  g_ram[0xF000 + kRandoDoneOffs] |= 1 << which;
+  return g_cache.item[g_cache.nreal + which];
+}
+
+bool Rando_SpecialDone(int which) {
+  return (g_ram[0xF000 + kRandoDoneOffs] >> which) & 1;
+}
+
+static uint8 SwordLevel() {
+  return link_sword_type == 0xff ? g_ram[0xF000 + kRandoSmithSwordOffs] : link_sword_type;
+}
+
+void Rando_OnSmithsTakeSword() {
+  if (Rando_CurrentSeed() != 0)
+    g_ram[0xF000 + kRandoSmithSwordOffs] = link_sword_type;
+}
+
+void Rando_OnSmithsReturnSword() {
+  if (Rando_CurrentSeed() != 0 && link_sword_type == 0xff)
+    link_sword_type = g_ram[0xF000 + kRandoSmithSwordOffs];
+}
+
+void Rando_GiveStartItems() {
+  uint8 *pending = &g_ram[0xF000 + kRandoPendingOffs];
+  if (!*pending || Rando_CurrentSeed() == 0 || submodule_index != 0 ||
+      (main_module_index != 7 && main_module_index != 9) ||
+      link_player_handler_state != 0 || link_auxiliary_state || item_receipt_method ||
+      flag_is_link_immobilized)
+    return;
+  int which = (*pending & 1) ? kRando_StartSword : kRando_StartShield;
+  *pending &= (*pending & 1) ? ~1 : ~2;
+  Link_ReceiveItem(Rando_SpecialItem(which, kSpecialLocations[which].vanilla), 0);
 }
 
 uint8 Rando_AdjustReceivedItem(uint8 item) {
   if (Rando_CurrentSeed() == 0)
     return item;
+  // Swords and shields are progressive: each one found is the next level.
+  if (IsSword(item)) {
+    static const uint8 kSwords[4] = { kI_FighterSword, kI_MasterSword, kI_TemperedSword, kI_GoldenSword };
+    uint8 level = SwordLevel();
+    return kSwords[level < 4 ? level : 3];
+  }
+  if (IsShield(item)) {
+    static const uint8 kShields[3] = { kI_FighterShield, kI_RedShield, kI_MirrorShield };
+    return kShields[link_shield_type < 3 ? link_shield_type : 2];
+  }
   // The first glove found is the Power Glove, the next the Titan's Mitt.
   if (item == kI_Glove || item == kI_Mitt)
     return link_item_gloves ? kI_Mitt : kI_Glove;
@@ -414,7 +512,8 @@ bool Rando_Check(uint32 seed, bool verbose) {
   if (verbose) {
     for (int k = 0; k < pl.nchests; k++)
       if (pl.item[k] != pl.vanilla[k])
-        printf("  chest %3d room %03x: %02x (was %02x)\n", k, pl.room[k], pl.item[k], pl.vanilla[k]);
+        printf("  %s %3d room %03x: %02x (was %02x)\n", k < pl.nreal ? "chest" : "place", k,
+               pl.room[k], pl.item[k], pl.vanilla[k]);
   }
   return ok;
 }

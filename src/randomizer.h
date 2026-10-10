@@ -1,8 +1,9 @@
 // Basic item randomizer: shuffles the contents of every chest in the game.
 //
 // A randomized game starts in "open mode": no intro and no escape from
-// Hyrule Castle; Link starts with the fighter's sword and shield and can go
-// anywhere.
+// Hyrule Castle; Link can go anywhere. Swords and shields are randomized too:
+// instead of the uncle's sword and shield Link is handed two random items,
+// and the pedestal, the smiths and the fairies give random items.
 //
 // Whether a new game is randomized is decided when the save file is created
 // (Gameplay menu > Randomizer). The seed is stored in the save file, so the
@@ -36,8 +37,26 @@ uint32 Rando_CurrentSeed();
 
 // The item in chest number idx (index into the chest table).
 uint8 Rando_ChestItem(int idx, uint8 vanilla_item);
-// Applied to an item received from a chest: gloves and mails are progressive.
+// Applied to every item Link receives: swords, shields, gloves and mails are
+// progressive (the next level of what Link has).
 uint8 Rando_AdjustReceivedItem(uint8 item);
+
+// Places outside chests that give swords and shields.
+enum {
+  kRando_StartSword, kRando_StartShield, kRando_Pedestal, kRando_Smiths,
+  kRando_PyramidFairy, kRando_WaterfallFairy,
+  kRando_NumSpecial,
+};
+// The item given at one of those places instead of vanilla_item.
+// Marks the place as used.
+uint8 Rando_SpecialItem(int which, uint8 vanilla_item);
+bool Rando_SpecialDone(int which);
+// The smiths keep Link's sword while tempering it; remember its level.
+void Rando_OnSmithsTakeSword();
+void Rando_OnSmithsReturnSword();
+// Hands out the items Link gets at the start of a randomized game, one at a
+// time, as soon as he is free to receive them.
+void Rando_GiveStartItems();
 
 // Tests: generates the placement for seed and checks it can be beaten.
 // Prints the spoiler when verbose. Returns false if no placement was found.

@@ -1887,6 +1887,7 @@ void PlayerHandler_15_HoldItem() {  // 8799ac
 }
 
 void Link_ReceiveItem(uint8 item, int chest_position) {  // 8799ad
+  item = Rando_AdjustReceivedItem(item);
   if (link_auxiliary_state) {
     link_auxiliary_state = 0;
     link_incapacitated_timer = 0;
@@ -3815,7 +3816,6 @@ void Link_PerformOpenChest() {  // 87b574
     if (g_ram[ram_addr])
       item = alt;
   }
-  item = Rando_AdjustReceivedItem(item);
 
   Link_ReceiveItem(item, chest_position);
 }
