@@ -37,8 +37,11 @@ Players can drop in and drop out at any time.
   into a door, stairs or the screen edge alone acts like a wall (with an
   "Everyone has to head that way!" hint). When the group goes through,
   everybody comes along. Pits, warps and scripted scenes aren't blocked.
-  Whoever opens a menu or talks to someone becomes the leader. Other Links
-  can't leave the screen.
+  Whoever opens a menu or talks to someone becomes the leader.
+- **Stay together.** Links can't walk more than about a screen apart (a
+  tether to the leader) or off the edge of the screen; that just feels like
+  an invisible wall. Nobody is ever pushed or dragged, so nobody ends up in a
+  wall. Downed ghosts left behind float over to the leader.
 - **Downed, not dead.** A Link that runs out of hearts becomes a flickering
   ghost. Stand next to them for 1.5 seconds to revive them with 3 hearts. It
   is game over only when everyone is down.

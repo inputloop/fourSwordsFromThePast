@@ -473,16 +473,44 @@ static void Mp_HandleRevives() {
   }
 }
 
-static void Mp_ClampToScreen() {
+enum {
+  kMpTetherX = 104,  // how far (in pixels) a Link may be from the leader
+  kMpTetherY = 76,
+};
+
+static int Abs16(uint16 a, uint16 b) {
+  return abs((int16)(a - b));
+}
+
+// Undoes movement of the resident Link that takes it further than allowed
+// from (lx, ly), or further off screen. This never moves a Link anywhere it
+// wasn't already, so nobody gets pushed into walls.
+static void Mp_LimitMovement(uint16 old_x, uint16 old_y, uint16 lx, uint16 ly) {
   int extra = (enhanced_features0 & kFeatures0_ExtendScreen64) ? 40 : 0;
-  int x0 = BG2HOFS_copy2 - extra, x1 = BG2HOFS_copy2 + 256 - 16 + extra;
-  int y0 = BG2VOFS_copy2 - 8, y1 = BG2VOFS_copy2 + 224 - 32;
-  int x = (int16)(link_x_coord - BG2HOFS_copy2) + BG2HOFS_copy2;
-  int y = (int16)(link_y_coord - BG2VOFS_copy2) + BG2VOFS_copy2;
-  if (x < x0) link_x_coord = x0;
-  if (x > x1) link_x_coord = x1;
-  if (y < y0) link_y_coord = y0;
-  if (y > y1) link_y_coord = y1;
+  int sx = (int16)(link_x_coord - BG2HOFS_copy2), old_sx = (int16)(old_x - BG2HOFS_copy2);
+  int sy = (int16)(link_y_coord - BG2VOFS_copy2), old_sy = (int16)(old_y - BG2VOFS_copy2);
+  bool bad_x = (Abs16(link_x_coord, lx) > kMpTetherX && Abs16(link_x_coord, lx) > Abs16(old_x, lx)) ||
+               (sx < -extra && sx < old_sx) || (sx > 256 - 16 + extra && sx > old_sx);
+  bool bad_y = (Abs16(link_y_coord, ly) > kMpTetherY && Abs16(link_y_coord, ly) > Abs16(old_y, ly)) ||
+               (sy < -8 && sy < old_sy) || (sy > 224 - 32 && sy > old_sy);
+  if (bad_x)
+    link_x_coord = old_x;
+  if (bad_y)
+    link_y_coord = old_y;
+}
+
+// The leader may not walk away from the others either.
+static void Mp_LimitLeaderMovement() {
+  uint16 old_x = link_x_coord_prev, old_y = link_y_coord_prev;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (p == g_mp.leader || !Mp_IsAlive(p))
+      continue;
+    uint16 px = Mp_PlayerX(p), py = Mp_PlayerY(p);
+    if (Abs16(link_x_coord, px) > kMpTetherX && Abs16(link_x_coord, px) > Abs16(old_x, px))
+      link_x_coord = old_x;
+    if (Abs16(link_y_coord, py) > kMpTetherY && Abs16(link_y_coord, py) > Abs16(old_y, py))
+      link_y_coord = old_y;
+  }
 }
 
 // Called by the gameplay modules after the leader's player control ran.
@@ -513,10 +541,21 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     g_mp.after_death = 0;
   }
 
+  Mp_LimitLeaderMovement();
+  uint16 lx = link_x_coord, ly = link_y_coord;
+
   uint8 m = main_module_index, s = submodule_index;
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    if (p == g_mp.leader || !Mp_IsAlive(p))
+    if (p == g_mp.leader || !g_mp.p[p].joined)
       continue;
+    // Downed Links left behind float over to the leader.
+    if (g_mp.p[p].downed) {
+      if (Abs16(Mp_PlayerX(p), lx) > kMpTetherX || Abs16(Mp_PlayerY(p), ly) > kMpTetherY) {
+        WORD(*Mp_PlayerRam(p, 0x22)) = lx;
+        WORD(*Mp_PlayerRam(p, 0x20)) = ly;
+      }
+      continue;
+    }
     if (main_module_index != m || submodule_index != s)
       break;
     Mp_SwapTo(p);
@@ -527,11 +566,12 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
       Mp_SwapTo(p);
     }
     Mp_BeginObject();
+    uint16 old_x = link_x_coord, old_y = link_y_coord;
     g_mp.in_other_update = 1;
     control();
     g_mp.in_other_update = 0;
     if (main_module_index == m && submodule_index == s)
-      Mp_ClampToScreen();
+      Mp_LimitMovement(old_x, old_y, lx, ly);
     // Hud_RefillLogic only runs for the leader, so apply pending hearts directly.
     if (link_hearts_filler) {
       int h = link_health_current + link_hearts_filler;
