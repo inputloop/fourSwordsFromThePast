@@ -11,6 +11,7 @@
 //   expect_alive <p>    fail unless player p is standing
 //   expect_downed <p>   fail unless player p is down
 //   clearsprites        remove all enemies
+//   holecheck           verify every overworld fall hole resolves correctly in co-op
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
 //   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
@@ -36,6 +37,8 @@
 #include "mp.h"
 #include "snes/ppu.h"
 #include "sprite.h"
+#include "overworld.h"
+#include "assets.h"
 #include "session.h"
 #include "ui.h"
 #include "upnp.h"
@@ -216,6 +219,32 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: module %d, expected %s at frame %d\n", main_module_index, arg1, frame);
         failures++;
       }
+    } else if (!strcmp(cmd, "holecheck")) {
+      // For every overworld fall hole, put a Link anywhere the original camera
+      // could show it and check the co-op search finds that hole's entrance.
+      int bad = 0, total = 0;
+      for (int i = 0; i <= 36 / 2; i++) {
+        int a = kFallHole_Area[i];
+        int j = a & 0xbf;
+        bool big = !kOverworldMapIsSmall[a & 0x3f];
+        overworld_area_index = a;
+        overworld_offset_base_y = kOverworld_OffsetBaseY[j];
+        overworld_offset_base_x = kOverworld_OffsetBaseX[j] >> 3;
+        overworld_offset_mask_y = big ? 0x3f0 : 0x1f0;
+        overworld_offset_mask_x = overworld_offset_mask_y >> 3;
+        uint16 pos = kFallHole_Pos[i];
+        int x = ((pos & overworld_offset_mask_x) + overworld_offset_base_x) << 3;
+        int cam16 = ((pos >> 3) & overworld_offset_mask_y) + overworld_offset_base_y;
+        for (int r = 16 + 8; r < 16 + 216; r++) {
+          int k = Overworld_FindFallHoleNear(x, cam16 + r);
+          total++;
+          if (k < 0 || kFallHole_Entrances[k] != kFallHole_Entrances[i])
+            bad++;
+        }
+      }
+      printf("holecheck: %d of %d positions resolved to the wrong hole\n", bad, total);
+      if (bad)
+        failures++;
     } else if (!strcmp(cmd, "clearsprites")) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;

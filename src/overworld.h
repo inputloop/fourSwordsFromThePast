@@ -145,6 +145,7 @@ void Overworld_DwDeathMountainPaletteAnimation();
 void Overworld_LoadEventOverlay();
 void Ancilla_TerminateWaterfallSplashes();
 void Overworld_GetPitDestination();
+int Overworld_FindFallHoleNear(uint16 x, uint16 real_y);
 void Overworld_UseEntrance();
 uint16 Overworld_ToolAndTileInteraction(uint16 x, uint16 y);
 void Overworld_PickHammerSfx(uint16 a);

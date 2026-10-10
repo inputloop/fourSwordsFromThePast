@@ -1,0 +1,2 @@
+# Falling into any overworld hole in co-op must lead to that hole, whatever the camera does.
+holecheck

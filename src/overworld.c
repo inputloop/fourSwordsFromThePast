@@ -3221,6 +3221,24 @@ void Ancilla_TerminateWaterfallSplashes() {  // 8ffd3c
   }
 }
 
+// The fall hole table stores positions as (camera y - 16, link x), which the
+// original game computes when Link falls. Try every camera position that
+// could have had a Link standing at (x, real_y) on screen, nearest first.
+int Overworld_FindFallHoleNear(uint16 x, uint16 real_y) {
+  static const int8 kDx[3] = { 0, 8, -8 };
+  for (int k = 16; k < 16 + 256; k += 8) {
+    for (int d = 0; d < 3; d++) {
+      uint16 yy = (real_y - k) & ~7, xx = (x + kDx[d]) & ~7;
+      uint16 pos = ((yy - overworld_offset_base_y) & overworld_offset_mask_y) << 3;
+      pos += (((xx >> 3) - overworld_offset_base_x) & overworld_offset_mask_x);
+      for (int i = 36 / 2; i >= 0; i--)
+        if (kFallHole_Pos[i] == pos && kFallHole_Area[i] == overworld_area_index)
+          return i;
+    }
+  }
+  return -1;
+}
+
 void Overworld_GetPitDestination() {  // 9bb860
   uint16 x = (link_x_coord & ~7);
   uint16 y = (link_y_coord & ~7);
@@ -3233,6 +3251,10 @@ void Overworld_GetPitDestination() {  // 9bb860
     if (kFallHole_Pos[i] == pos && kFallHole_Area[i] == overworld_area_index)
       break;
     if (--i < 0) {
+      // In co-op the camera follows the group, so the camera based position
+      // above doesn't match the table. Find the hole the player really fell in.
+      if (Mp_Active() && (i = Overworld_FindFallHoleNear(x, tiledetect_which_y_pos[0])) >= 0)
+        break;
       savegame_is_darkworld = 0;
       // Chris Houlihan's room
       which_entrance = 130;
