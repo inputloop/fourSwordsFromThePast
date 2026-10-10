@@ -505,6 +505,19 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBoolBit(value, &g_config.features0, kFeatures0_MiscBugFixes);
     } else if (StringEqualsNoCase(key, "GameChangingBugFixes")) {
       return ParseBoolBit(value, &g_config.features0, kFeatures0_GameChangingBugFixes);
+    } else if (StringEqualsNoCase(key, "Randomizer")) {
+      // off | random | seed:XXXXXXXX (hex)
+      const char *seed_str = StringStartsWithNoCase(value, "seed:");
+      if (seed_str) {
+        uint32 seed = (uint32)strtoul(seed_str, NULL, 16);
+        g_config.randomizer = seed > 1 ? seed : 2;
+      } else {
+        bool on;
+        if (!ParseBool(value, &on) && !StringEqualsNoCase(value, "random"))
+          return false;
+        g_config.randomizer = StringEqualsNoCase(value, "random") || on;
+      }
+      return true;
     } else if (StringEqualsNoCase(key, "CancelBirdTravel")) {
       return ParseBoolBit(value, &g_config.features0, kFeatures0_CancelBirdTravel);
     }

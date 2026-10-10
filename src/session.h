@@ -31,10 +31,12 @@ enum SessionEventType {
 
 typedef struct MpFrameInput {
   uint16 inputs[kMpMaxPlayers];
-  uint8 flags;  // bit0: friendly fire, bit1: music playing (apui00), bit7: hash valid
+  uint8 flags;  // bit0: friendly fire, bit1: music playing (apui00), bit2: shared screen,
+                // bit3: randomizer setting follows, bit7: hash valid
   uint8 nevents;
   uint32 features;
   uint32 hash;  // hash of the state after this frame, if flags bit7
+  uint32 rando;  // randomizer setting for new games, if flags bit3 (see randomizer.h)
   uint8 events[kSessionMaxEvents][4];  // type, slot, owner client id, owner local index
 } MpFrameInput;
 
@@ -74,6 +76,9 @@ bool Session_GetFriendlyFire();
 // Shared screen with group exits instead of independent roaming (the host decides).
 void Session_SetRoamTogether(bool on);
 bool Session_GetRoamTogether();
+// Randomizer for games created from now on: kRando_Off, kRando_RandomSeed or a seed (the host decides).
+void Session_SetRandomizer(uint32 setting);
+uint32 Session_GetRandomizer();
 
 bool Session_Host(uint16 port, bool use_upnp);
 bool Session_Join(const char *address);

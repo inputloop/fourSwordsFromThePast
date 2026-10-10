@@ -72,6 +72,7 @@ typedef struct Config {
   // [Multiplayer]
   bool mp_friendly_fire;
   bool mp_shared_screen;
+  uint32 randomizer;  // for new games: 0 off, 1 random seed, else this seed
   bool mp_use_upnp;
   uint16 mp_port;
   const char *mp_player_name;

@@ -1,0 +1,22 @@
+# Randomizer: thousands of seeds must give a placement that can be beaten
+# with the same items as the original game; then a chest in the game gives
+# the shuffled item.
+randocheck 1 5000
+load 1
+# Seed 1D puts the Titan's Mitt in the sanctuary chest. Being the first
+# glove, it is received as the Power Glove.
+poke f4f0 52
+poke f4f1 1d
+poke f4f2 0
+poke f4f3 0
+poke f4f4 0
+run 400
+pos 1 1246 606
+hold 1 U
+run 4
+hold 1 A
+run 2
+hold 1 -
+run 200
+expect_ram f354 1
+expect_ram f36c 18

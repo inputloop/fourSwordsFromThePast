@@ -3,6 +3,7 @@
 #include "variables.h"
 #include "dungeon.h"
 #include "mp.h"
+#include "randomizer.h"
 #include "nmi.h"
 #include "hud.h"
 #include "load_gfx.h"
@@ -5739,7 +5740,7 @@ uint8 OpenChestForItem(uint8 tile, int *chest_position) {  // 81eb66
     for (i = 0; i < kDungeonRoomChests_SIZE; i += 3, chest_data += 3) {
       chest_room = *(uint16 *)chest_data;
       if ((chest_room & 0x7fff) == dungeon_room_index && --chest_idx < 0) {
-        data = chest_data[2];
+        data = Rando_ChestItem(i / 3, chest_data[2]);
         if (chest_room & 0x8000) {
           if (!(link_bigkey & kUpperBitmasks[cur_palace_index_x2 >> 1])) {
             dialogue_message_index = 0x7a;

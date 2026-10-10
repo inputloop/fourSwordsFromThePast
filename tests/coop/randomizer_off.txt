@@ -1,0 +1,12 @@
+# Without the randomizer the sanctuary chest has its heart container.
+load 1
+run 400
+pos 1 1246 606
+hold 1 U
+run 4
+hold 1 A
+run 2
+hold 1 -
+run 200
+expect_ram f354 0
+expect_ram f4f0 0

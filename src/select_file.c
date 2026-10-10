@@ -1,3 +1,4 @@
+#include "randomizer.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "load_gfx.h"
@@ -866,6 +867,7 @@ void NameFile_DoTheNaming() {  // 8cda4d
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0xf8, 0, 0,
   };
   memcpy(sram + 0x340, kSramInit_Normal, 60);
+  Rando_OnNewFile(sram);
   Intro_FixCksum(sram);
   ZeldaWriteSram();
   ReturnToFileSelect();

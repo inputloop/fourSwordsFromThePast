@@ -196,6 +196,9 @@
     <ClCompile Include="src\instance.c">
       <Filter>Zelda</Filter>
     </ClCompile>
+    <ClCompile Include="src\randomizer.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
     <ClCompile Include="src\mptest.c">
       <Filter>Zelda</Filter>
     </ClCompile>
@@ -415,6 +418,9 @@
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\instance.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\randomizer.h">
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\net.h">

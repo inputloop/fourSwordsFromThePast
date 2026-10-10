@@ -20,6 +20,7 @@
 //   holecheck           verify every overworld fall hole resolves correctly in co-op
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
+//   pos <p> <x> <y>     put player p at x,y
 //   poke <hexaddr> <hexval>  change a RAM byte (shared progress spreads to every world)
 //   expect_ram <hexaddr> <hexval>  fail unless the RAM byte has that value
 //   expect_near <p> <x> <y>  fail unless player p is within 4 pixels of x,y
@@ -45,6 +46,7 @@
 #include "features.h"
 #include "mp.h"
 #include "instance.h"
+#include "randomizer.h"
 #include "snes/ppu.h"
 #include "sprite.h"
 #include "overworld.h"
@@ -171,6 +173,26 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "randocheck")) {
+      // randocheck <first seed> <count> [verbose]: every seed must give a beatable placement
+      int bad = 0;
+      for (uint32 seed = strtoul(arg1, NULL, 16), n = atoi(arg2); n > 0; n--, seed++) {
+        if (arg3[0])
+          printf("seed %08x\n", seed);
+        if (!Rando_Check(seed, arg3[0] != 0))
+          bad++, printf("seed %08x: no placement found\n", seed);
+      }
+      printf("randocheck: %d of %s seeds failed\n", bad, arg2);
+      if (bad)
+        failures++;
+    } else if (!strcmp(cmd, "rando")) {
+      // rando <off|random|hexseed>: randomizer setting for new save files
+      Rando_SetNewGameSetting(!strcmp(arg1, "off") ? kRando_Off : !strcmp(arg1, "random") ? kRando_RandomSeed :
+                              (uint32)strtoul(arg1, NULL, 16));
+    } else if (!strcmp(cmd, "chestdump")) {
+      for (int i = 0; i < (int)kDungeonRoomChests_SIZE; i += 3)
+        printf("chest %3d room %03x big %d item %02x\n", i / 3, WORD(kDungeonRoomChests[i]) & 0x7fff,
+               WORD(kDungeonRoomChests[i]) >> 15, kDungeonRoomChests[i + 2]);
     } else if (!strcmp(cmd, "trace")) {
       extern bool g_inst_trace;
       g_inst_trace = atoi(arg1);
@@ -332,6 +354,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: %d resyncs, expected %s\n", Session_GetStatus()->resyncs, arg1);
         failures++;
       }
+    } else if (!strcmp(cmd, "pos")) {
+      // pos <p> <x> <y>: put player p there (no collision check)
+      int p = atoi(arg1) - 1;
+      SwitchToPlayer(p);
+      WORD(*Mp_PlayerRam(p, 0x22)) = atoi(arg2);
+      WORD(*Mp_PlayerRam(p, 0x20)) = atoi(arg3);
     } else if (!strcmp(cmd, "poke")) {
       g_ram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
     } else if (!strcmp(cmd, "expect_ram")) {

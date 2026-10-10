@@ -9,9 +9,10 @@
 #include "zelda_rtl.h"
 #include "features.h"
 #include "instance.h"
+#include "randomizer.h"
 
 enum {
-  kProtoVersion = 3,
+  kProtoVersion = 4,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -86,6 +87,7 @@ static struct {
   uint32 ring_frame[kRingSize];
   bool ff;
   bool together;
+  uint32 rando;
   uint8 slot_owner[kMpMaxPlayers];
   uint8 slot_local[kMpMaxPlayers];
   uint8 pending_join_mask, pending_leave_mask;
@@ -203,6 +205,7 @@ static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   ApplyEvents(fi);
   Inst_SetFriendlyFire(fi->flags & 1);
   Inst_SetIndependent(!(fi->flags & 4));
+  Rando_SetNewGameSetting(fi->flags & 8 ? fi->rando : kRando_Off);
   g_wanted_zelda_features = fi->features;
   g_apui00_override = deterministic_audio ? (fi->flags >> 1) & 1 : -1;
   g_last_was_replay = Inst_RunFrame(fi->inputs);
@@ -256,7 +259,8 @@ static void QueueJoinLeave(MpFrameInput *fi, uint8 owner, uint8 *join_mask, uint
 static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 features) {
   memset(fi, 0, sizeof(*fi));
   fi->features = features;
-  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.together ? 4 : 0);
+  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.together ? 4 : 0) | (g_s.rando ? 8 : 0);
+  fi->rando = g_s.rando;
   uint8 reserved[kMpMaxPlayers] = { 0 };
   QueueJoinLeave(fi, 0, &g_s.pending_join_mask, &g_s.pending_leave_mask, reserved);
   for (int c = 0; c < kSessionMaxClients; c++) {
@@ -288,6 +292,8 @@ static void WriteFrame(Writer *w, const MpFrameInput *fi) {
   Wr32(w, fi->features);
   if (fi->flags & 0x80)
     Wr32(w, fi->hash);
+  if (fi->flags & 8)
+    Wr32(w, fi->rando);
   for (int i = 0; i < fi->nevents; i++)
     WData(w, fi->events[i], 4);
 }
@@ -301,6 +307,8 @@ static void ReadFrame(Reader *r, MpFrameInput *fi) {
   fi->features = Rd32(r);
   if (fi->flags & 0x80)
     fi->hash = Rd32(r);
+  if (fi->flags & 8)
+    fi->rando = Rd32(r);
   if (fi->nevents > kSessionMaxEvents) {
     r->err = true;
     return;
@@ -342,6 +350,14 @@ bool Session_GetFriendlyFire() {
 
 void Session_SetRoamTogether(bool on) {
   g_s.together = on;
+}
+
+void Session_SetRandomizer(uint32 setting) {
+  g_s.rando = setting;
+}
+
+uint32 Session_GetRandomizer() {
+  return g_s.st.mode == kSessionClient ? Rando_GetNewGameSetting() : g_s.rando;
 }
 
 bool Session_GetRoamTogether() {

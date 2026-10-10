@@ -12,6 +12,31 @@ own US ROM to extract the game's assets.
 
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 
+## Item randomizer
+
+*Pause menu > Gameplay > Randomize new games* turns on a basic item
+randomizer for save files created from then on (or set `Randomizer` in the
+`[Features]` section of `zelda3.ini`).
+
+- The contents of every chest in the game are shuffled: Bow, Hookshot,
+  Hammer, gloves, Moon Pearl, Fire and Ice Rods, Lamp, Cane of Somaria,
+  Magic Cape, Cane of Byrna, mails, Mirror Shield, boomerangs, a bottle,
+  heart pieces, rupees, bombs and arrows. Small keys, big keys, maps and
+  compasses stay in their dungeons, so dungeons play as before.
+- Items given by people or found outside chests (Sword, Boots, Book,
+  Flippers, Mirror, Flute, Master Sword, medallions, pendants and crystals)
+  are where they always were.
+- Every seed is checked to be beatable without glitches. One Lamp is always
+  found during the escape from Hyrule Castle. Gloves and mails are
+  progressive: the first glove found is the Power Glove, the second the
+  Titan's Mitt.
+- The seed is stored in the save file, so a file stays randomized the same
+  way. *Gameplay > This game* shows the seed; choosing "on, seed ..." makes
+  new files with that same seed, to race a friend or replay it.
+- In netplay the host's setting is used, and everybody plays the same seed.
+- `src/randomizer.c` has the location logic. `./zelda3 --mptest` with
+  `randocheck <first seed> <count> [verbose]` checks seeds and prints spoilers.
+
 ## Quick start (Linux / macOS)
 
 ```sh

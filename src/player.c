@@ -1,3 +1,4 @@
+#include "randomizer.h"
 #include "mp.h"
 #include "player.h"
 #include "zelda_rtl.h"
@@ -3814,6 +3815,7 @@ void Link_PerformOpenChest() {  // 87b574
     if (g_ram[ram_addr])
       item = alt;
   }
+  item = Rando_AdjustReceivedItem(item);
 
   Link_ReceiveItem(item, chest_position);
 }

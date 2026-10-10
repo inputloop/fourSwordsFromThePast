@@ -7,6 +7,7 @@
 #include "features.h"
 #include "mp.h"
 #include "instance.h"
+#include "randomizer.h"
 #include "session.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -563,6 +564,38 @@ static void ScreenGameplay() {
   };
   snprintf(g_ui.title, sizeof(g_ui.title), "GAMEPLAY OPTIONS");
   bool client = Session_GetStatus()->mode == kSessionClient;
+  // The randomizer: Off -> random seed -> the seed of the game being played -> Off
+  uint32 rando = Session_GetRandomizer(), current = Rando_CurrentSeed();
+  char buf[48];
+  if (rando == kRando_Off)
+    snprintf(buf, sizeof(buf), "off");
+  else if (rando == kRando_RandomSeed)
+    snprintf(buf, sizeof(buf), "on, new seed");
+  else
+    snprintf(buf, sizeof(buf), "on, seed %08X", rando);
+  Item("Randomize new games", buf);
+  int a = Act();
+  if (a != kAct_None && !client) {
+    uint32 choices[4] = { kRando_Off, kRando_RandomSeed };
+    int n = 2, at = 0;
+    if (current)
+      choices[n++] = current;
+    if (rando > kRando_RandomSeed && rando != current)
+      choices[n++] = rando;
+    for (int i = 0; i < n; i++)
+      if (choices[i] == rando)
+        at = i;
+    uint32 next = choices[(at + (a == kAct_Left ? n - 1 : 1)) % n];
+    Session_SetRandomizer(next);
+    g_config.randomizer = next;
+    g_ui.dirty_settings = true;
+  }
+  if (current)
+    snprintf(buf, sizeof(buf), "randomized, seed %08X", current);
+  else
+    snprintf(buf, sizeof(buf), "not randomized");
+  Label("This game");
+  snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s", buf);
   for (size_t i = 0; i < countof(kFeatures); i++) {
     Item(kFeatures[i].name, OnOff(g_config.features0 & kFeatures[i].bit));
     if (!client)
@@ -573,6 +606,8 @@ static void ScreenGameplay() {
     Goto(kScreen_Main);
   if (client)
     snprintf(g_ui.footer, sizeof(g_ui.footer), "In an online game the host's options are used");
+  else
+    snprintf(g_ui.footer, sizeof(g_ui.footer), "Randomizing applies to new save files");
 }
 
 static void ScreenControls() {
@@ -990,6 +1025,11 @@ void Ui_SaveSettings() {
   };
   for (size_t i = 0; i < countof(kKeys); i++)
     fprintf(f, "%s = %d\n", kKeys[i].key, (g_config.features0 & kKeys[i].bit) != 0);
+  uint32 rando = Session_GetRandomizer();
+  if (rando > kRando_RandomSeed)
+    fprintf(f, "Randomizer = seed:%08X\n", rando);
+  else
+    fprintf(f, "Randomizer = %s\n", rando ? "random" : "off");
   Bindings_WriteConfig(f);
   fprintf(f, "[Multiplayer]\n");
   fprintf(f, "FriendlyFire = %d\n", Session_GetFriendlyFire());
