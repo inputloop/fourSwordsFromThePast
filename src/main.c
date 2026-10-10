@@ -28,6 +28,7 @@
 #include "audio.h"
 #include "session.h"
 #include "ui.h"
+#include "bindings.h"
 
 static bool g_run_without_emu = 0;
 
@@ -64,12 +65,9 @@ static uint8 g_current_window_scale;
 enum { kMaxPads = 4 };
 static SDL_JoystickID g_pad_ids[kMaxPads];
 static bool g_pad_used[kMaxPads];
-static uint16 g_pad_buttons[kMaxPads];
-static uint16 g_pad_axis[kMaxPads];
 static uint32 g_pad_modifiers[kMaxPads];
 static uint16 g_pad_last_cmd[kMaxPads][kGamepadBtn_Count];
 static int PadIndexFromId(SDL_JoystickID id);
-static int g_input1_state;
 static bool g_display_perf;
 static int g_curr_fps;
 static int g_ppu_render_flags = 0;
@@ -489,7 +487,8 @@ int main(int argc, char** argv) {
         int pad = PadIndexFromId(event.cdevice.which);
         if (pad >= 0) {
           g_pad_used[pad] = false;
-          g_pad_buttons[pad] = g_pad_axis[pad] = 0;
+          g_pad_modifiers[pad] = 0;
+          Bindings_ResetController(pad);
           if (pad != 0)
             Session_LocalLeave(pad);
         }
@@ -522,13 +521,20 @@ int main(int argc, char** argv) {
         }
         break;
       case SDL_KEYDOWN:
-        if (!Ui_HandleKey(event.key.keysym.sym, true))
-          HandleInput(event.key.keysym.sym, event.key.keysym.mod, true);
+        if (event.key.repeat)
+          break;
+        if (!Ui_HandleKey(event.key.keysym.sym, true)) {
+          Bindings_OnKey(event.key.keysym.sym, true);
+          // Keys used for playing don't also trigger hotkeys.
+          if (!Bindings_IsGameKey(event.key.keysym.sym))
+            HandleInput(event.key.keysym.sym, event.key.keysym.mod, true);
+        }
         break;
       case SDL_TEXTINPUT:
         Ui_HandleText(event.text.text);
         break;
       case SDL_KEYUP:
+        Bindings_OnKey(event.key.keysym.sym, false);
         HandleInput(event.key.keysym.sym, event.key.keysym.mod, false);
         break;
       case SDL_QUIT:
@@ -553,18 +559,15 @@ int main(int argc, char** argv) {
     }
 
     uint16 local_inputs[kSessionMaxLocal];
-    for (int i = 0; i < kSessionMaxLocal; i++) {
-      local_inputs[i] = g_pad_buttons[i] | g_pad_axis[i];
-      if (i == 0)
-        local_inputs[0] |= g_input1_state;
-    }
+    for (int i = 0; i < kSessionMaxLocal; i++)
+      local_inputs[i] = Bindings_GetInput(i);
     // Couch drop-in: Start on a controller without a player joins the game.
     for (int i = 1; i < kSessionMaxLocal; i++) {
       if (!Session_IsLocalJoined(i) && (local_inputs[i] & 8))
         Session_LocalJoin(i);
     }
     // The overlay menu takes the inputs while it is open.
-    Ui_Update(local_inputs);
+    Ui_Update(local_inputs, Bindings_GetMenuFallbackInput());
 
     bool is_replay = false;
     if (!Ui_PausesGame()) {
@@ -676,14 +679,8 @@ static void RenderNumber(uint8 *dst, size_t pitch, int n, bool big) {
 static void HandleCommand_Locked(uint32 j, bool pressed);
 
 static void HandleCommand(uint32 j, bool pressed) {
-  if (j <= kKeys_Controls_Last) {
-    static const uint8 kKbdRemap[] = { 0, 4, 5, 6, 7, 2, 3, 8, 0, 9, 1, 10, 11 };
-    if (pressed)
-      g_input1_state |= 1 << kKbdRemap[j];
-    else
-      g_input1_state &= ~(1 << kKbdRemap[j]);
-    return;
-  }
+  if (j <= kKeys_Controls_Last)
+    return;  // game buttons are handled by the per-player bindings
 
   if (j == kKeys_Turbo) {
     g_turbo = pressed;
@@ -790,7 +787,7 @@ static void OpenOneGamepad(int i) {
       if (!g_pad_used[p]) {
         g_pad_used[p] = true;
         g_pad_ids[p] = id;
-        g_pad_buttons[p] = g_pad_axis[p] = 0;
+        Bindings_ResetController(p);
         g_pad_modifiers[p] = 0;
         printf("Controller %d connected: %s\n", p + 1, SDL_GameControllerName(controller));
         return;
@@ -830,6 +827,11 @@ static int RemapSdlButton(int button) {
 static void HandleGamepadInput(int pad, int button, bool pressed) {
   if (!!(g_pad_modifiers[pad] & (1 << button)) == pressed)
     return;
+  if (pressed && Ui_HandlePadButton(pad, button)) {
+    g_pad_modifiers[pad] |= 1 << button;
+    return;  // used by the menu (e.g. assigning a button)
+  }
+  Bindings_OnPadButton(pad, button, pressed);
   if (button == kGamepadBtn_Guide && pressed)
     Ui_HandleKey(SDLK_ESCAPE, true);
   g_pad_modifiers[pad] ^= 1 << button;
@@ -838,15 +840,8 @@ static void HandleGamepadInput(int pad, int button, bool pressed) {
   uint32 j = g_pad_last_cmd[pad][button];
   if (j == 0)
     return;
-  if (j <= kKeys_Controls_Last) {
-    static const uint8 kRemap[] = { 0, 4, 5, 6, 7, 2, 3, 8, 0, 9, 1, 10, 11 };
-    if (pressed)
-      g_pad_buttons[pad] |= 1 << kRemap[j];
-    else
-      g_pad_buttons[pad] &= ~(1 << kRemap[j]);
-  } else {
+  if (j > kKeys_Controls_Last)
     HandleCommand(j, pressed);
-  }
 }
 
 static void HandleVolumeAdjustment(int volume_adjustment) {
@@ -861,52 +856,11 @@ static void HandleVolumeAdjustment(int volume_adjustment) {
 #endif
 }
 
-// Approximates atan2(y, x) normalized to the [0,4) range
-// with a maximum error of 0.1620 degrees
-// normalized_atan(x) ~ (b x + x^2) / (1 + 2 b x + x^2)
-static float ApproximateAtan2(float y, float x) {
-  uint32 sign_mask = 0x80000000;
-  float b = 0.596227f;
-  // Extract the sign bits
-  uint32 ux_s = sign_mask & *(uint32 *)&x;
-  uint32 uy_s = sign_mask & *(uint32 *)&y;
-  // Determine the quadrant offset
-  float q = (float)((~ux_s & uy_s) >> 29 | ux_s >> 30);
-  // Calculate the arctangent in the first quadrant
-  float bxy_a = b * x * y;
-  if (bxy_a < 0.0f) bxy_a = -bxy_a;  // avoid fabs
-  float num = bxy_a + y * y;
-  float atan_1q = num / (x * x + bxy_a + num + 0.000001f);
-  // Translate it to the proper quadrant
-  uint32_t uatan_2q = (ux_s ^ uy_s) | *(uint32 *)&atan_1q;
-  return q + *(float *)&uatan_2q;
-}
-
 static void HandleGamepadAxisInput(int pad, int axis, int value) {
   static int last_xs[kMaxPads], last_ys[kMaxPads];
   if (axis == SDL_CONTROLLER_AXIS_LEFTX || axis == SDL_CONTROLLER_AXIS_LEFTY) {
-    int last_x = last_xs[pad], last_y = last_ys[pad];
-    *(axis == SDL_CONTROLLER_AXIS_LEFTX ? &last_x : &last_y) = value;
-    last_xs[pad] = last_x, last_ys[pad] = last_y;
-    int buttons = 0;
-    if (last_x * last_x + last_y * last_y >= 10000 * 10000) {
-      // in the non deadzone part, divide the circle into eight 45 degree
-      // segments rotated by 22.5 degrees that control which direction to move.
-      // todo: do this without floats?
-      static const uint8 kSegmentToButtons[8] = {
-        1 << 4,           // 0 = up
-        1 << 4 | 1 << 7,  // 1 = up, right
-        1 << 7,           // 2 = right
-        1 << 7 | 1 << 5,  // 3 = right, down
-        1 << 5,           // 4 = down
-        1 << 5 | 1 << 6,  // 5 = down, left
-        1 << 6,           // 6 = left
-        1 << 6 | 1 << 4,  // 7 = left, up
-      };
-      uint8 angle = (uint8)(int)(ApproximateAtan2(last_y, last_x) * 64.0f + 0.5f);
-      buttons = kSegmentToButtons[(uint8)(angle + 16 + 64) >> 5];
-    }
-    g_pad_axis[pad] = buttons;
+    *(axis == SDL_CONTROLLER_AXIS_LEFTX ? &last_xs[pad] : &last_ys[pad]) = value;
+    Bindings_OnPadAxis(pad, last_xs[pad], last_ys[pad]);
   } else if ((axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
     if (value < 12000 || value >= 16000)  // hysteresis
       HandleGamepadInput(pad, axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? kGamepadBtn_L2 : kGamepadBtn_R2, value >= 12000);

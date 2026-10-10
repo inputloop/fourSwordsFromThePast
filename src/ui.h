@@ -16,7 +16,10 @@ typedef struct UiHostFuncs {
 
 void Ui_Init(const UiHostFuncs *host);
 // Processes menu navigation. Clears inputs that the menu consumed.
-void Ui_Update(uint16 *local_inputs);
+// fallback holds menu-only inputs from keys/buttons that work regardless of bindings.
+void Ui_Update(uint16 *local_inputs, uint16 fallback);
+// A controller button press; returns true if the menu used it (e.g. while assigning buttons).
+bool Ui_HandlePadButton(int controller, int pad_button);
 // Keyboard/text events (used for the menu toggle key and typing addresses).
 // Returns true if the key was consumed.
 bool Ui_HandleKey(int sdl_keycode, bool pressed);

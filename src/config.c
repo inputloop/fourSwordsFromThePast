@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include "features.h"
 #include "util.h"
+#include "bindings.h"
 
 enum {
   kKeyMod_ScanCode = 0x200,
@@ -143,6 +144,8 @@ static void ParseKeyArray(char *value, int cmd, int size) {
       fprintf(stderr, "Unknown key: '%s'\n", s);
       continue;
     }
+    if (cmd >= kKeys_Controls && cmd <= kKeys_Controls_Last && key_with_mod == 0)
+      Bindings_LegacyKey(cmd - kKeys_Controls, key);
     if (!KeyMapHash_Add(key_with_mod | REMAP_SDL_KEYCODE(key), cmd))
       fprintf(stderr, "Duplicate key: '%s'\n", s);
   }
@@ -242,6 +245,8 @@ static void ParseGamepadArray(char *value, int cmd, int size) {
         ss++;
         modifiers |= 1 << button;
       } else if (*ss == 0) {
+        if (cmd >= kKeys_Controls && cmd <= kKeys_Controls_Last && modifiers == 0)
+          Bindings_LegacyPad(cmd - kKeys_Controls, button);
         GamepadMap_Add(button, modifiers, cmd);
         break;
       } else
@@ -279,6 +284,8 @@ static int GetIniSection(const char *s) {
     return 5;
   if (StringEqualsNoCase(s, "[Multiplayer]"))
     return 6;
+  if (StringEqualsNoCase(s, "[Controls]"))
+    return 7;
   return -1;
 }
 
@@ -452,6 +459,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       g_config.language = value;
       return true;
     }
+  } else if (section == 7) {
+    return Bindings_ParseConfig(key, value);
   } else if (section == 6) {
     if (StringEqualsNoCase(key, "FriendlyFire")) {
       return ParseBool(value, &g_config.mp_friendly_fire);
@@ -539,6 +548,7 @@ static bool ParseOneConfigFile(const char *filename, int depth) {
 
 void ParseConfigFile(const char *filename) {
   g_config.msuvolume = 100;  // default msu volume, 100%
+  Bindings_SetDefaults();
   g_config.mp_use_upnp = true;
   g_config.mp_port = 47474;
 

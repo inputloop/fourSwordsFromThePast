@@ -161,7 +161,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       for (int i = 0; i < n; i++) {
         uint16 in[kMpMaxPlayers];
         memcpy(in, held, sizeof(in));
-        Ui_Update(in);
+        Ui_Update(in, 0);
         if (!Ui_PausesGame())
           frame += Session_Tick(in, g_wanted_zelda_features);
         SDL_Delay(16);

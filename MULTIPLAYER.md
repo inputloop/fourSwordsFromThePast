@@ -8,6 +8,12 @@ Players can drop in and drop out at any time.
 
 - **Menu**: press `Esc`, the controller's Guide button, or Back+Start.
   The menu has the Multiplayer, Video/HD and Gameplay screens.
+- **Controls**: *Pause menu > Controls* sets up each player (P1-P4): two
+  keyboard keys and two controller buttons per SNES button (press to assign),
+  which controller the player uses (or keyboard only, so two players can
+  share a keyboard), left stick deadzone, and an Xbox/Nintendo face button
+  swap. A live "Pressed" line shows what the game sees. Arrows, Enter,
+  Backspace and the d-pad always work in the menu.
 - **Couch co-op**: the keyboard plus the first controller is player 1. Every
   other controller joins by pressing START. Use *Multiplayer > Remove local
   player* (or unplug the controller) to drop out.

@@ -9,6 +9,7 @@
 #include "session.h"
 #include "zelda_rtl.h"
 #include "variables.h"
+#include "bindings.h"
 
 // ---------------------------------------------------------------------------
 // 5x7 pixel font
@@ -193,6 +194,7 @@ enum {
   kScreen_Video,
   kScreen_Gameplay,
   kScreen_Controls,
+  kScreen_Bindings,
 };
 
 enum {
@@ -226,6 +228,12 @@ static struct {
   uint32 message_time;
   bool dirty_settings;
   bool want_quit_confirm;
+  uint16 last_fallback;
+  // Controls screen
+  int bind_player;
+  int capture_button;  // SNES button waiting for a key/controller button, -1 = none
+  uint32 capture_start;
+  uint16 raw_inputs[4];
 } g_ui;
 
 static bool Item(const char *label, const char *value) {
@@ -316,6 +324,9 @@ static void ScreenMain() {
   Item("Gameplay options", ">");
   if (Act() == kAct_Select)
     Goto(kScreen_Gameplay);
+  Item("Controls", ">");
+  if (Act() == kAct_Select)
+    Goto(kScreen_Bindings);
   Item("Controls help", ">");
   if (Act() == kAct_Select)
     Goto(kScreen_Controls);
@@ -556,8 +567,9 @@ static void ScreenGameplay() {
 
 static void ScreenControls() {
   snprintf(g_ui.title, sizeof(g_ui.title), "CONTROLS");
-  Label("Keyboard: arrows, X=A Z=B S=X A=Y");
+  Label("Default keys: arrows, X=A Z=B S=X A=Y");
   Label("  Enter=Start  Right Shift=Select");
+  Label("Change them in Pause menu > Controls");
   Label("Menu: Esc, controller Guide, or");
   Label("  Back+Start on any controller");
   Label("Drop in: press Start on a new controller");
@@ -565,6 +577,88 @@ static void ScreenControls() {
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);
+}
+
+static void ScreenBindings() {
+  int p = g_ui.bind_player;
+  BindProfile *bp = &g_bind[p];
+  char buf[64];
+  snprintf(g_ui.title, sizeof(g_ui.title), "CONTROLS - PLAYER %d", p + 1);
+  snprintf(buf, sizeof(buf), "< P%d >", p + 1);
+  Item("Player", buf);
+  int a = Act();
+  if (a == kAct_Left || a == kAct_Right || a == kAct_Select) {
+    g_ui.bind_player = (p + (a == kAct_Left ? 3 : 1)) & 3;
+    return;
+  }
+  if (bp->controller == kBindNoController)
+    snprintf(buf, sizeof(buf), "none (keyboard only)");
+  else
+    snprintf(buf, sizeof(buf), "controller %d", bp->controller + 1);
+  Item("Uses", buf);
+  a = Act();
+  if (a != kAct_None) {
+    int c = bp->controller == kBindNoController ? -1 : bp->controller;
+    c += a == kAct_Left ? -1 : 1;
+    c = c < -1 ? 3 : c > 3 ? -1 : c;
+    bp->controller = c < 0 ? kBindNoController : c;
+    g_ui.dirty_settings = true;
+  }
+  for (int b = 0; b < kBindButtons; b++) {
+    char keys[40], pad[40];
+    Bindings_DescribeKeys(p, b, keys, sizeof(keys));
+    Bindings_DescribePad(p, b, pad, sizeof(pad));
+    if (g_ui.capture_button == b)
+      snprintf(buf, sizeof(buf), "press key or button...");
+    else
+      snprintf(buf, sizeof(buf), "%.18s / %.16s", keys, pad);
+    Item(Bindings_ButtonName(b), buf);
+    a = Act();
+    if (a == kAct_Select) {
+      g_ui.capture_button = b;
+      g_ui.capture_start = SDL_GetTicks();
+    } else if (a == kAct_Left || a == kAct_Right) {
+      Bindings_Clear(p, b);
+      g_ui.dirty_settings = true;
+    }
+  }
+  snprintf(buf, sizeof(buf), "%s, deadzone %d%%", bp->stick_moves ? "moves" : "off", bp->deadzone);
+  Item("Left stick", buf);
+  a = Act();
+  if (a == kAct_Select) {
+    bp->stick_moves = !bp->stick_moves;
+    g_ui.dirty_settings = true;
+  } else if (a == kAct_Left || a == kAct_Right) {
+    bp->deadzone = (uint8)IntMin(IntMax(bp->deadzone + (a == kAct_Left ? -5 : 5), 5), 90);
+    g_ui.dirty_settings = true;
+  }
+  Item("Swap A/B and X/Y on controller", NULL);
+  if (Act() == kAct_Select) {
+    Bindings_SwapFaceButtons(p);
+    g_ui.dirty_settings = true;
+  }
+  Item("Reset this player", NULL);
+  if (Act() == kAct_Select) {
+    Bindings_ResetPlayer(p);
+    g_ui.dirty_settings = true;
+  }
+  // Live view of what this player is pressing.
+  uint16 in = Bindings_GetInput(p);
+  buf[0] = 0;
+  for (int b = 0; b < kBindButtons; b++) {
+    if (in & Bindings_ButtonBit(b)) {
+      size_t n = strlen(buf);
+      snprintf(buf + n, sizeof(buf) - n, "%s%s", n ? " " : "", Bindings_ButtonName(b));
+    }
+  }
+  char line[80];
+  snprintf(line, sizeof(line), "Pressed: %s", buf[0] ? buf : "-");
+  Label(line);
+  Item("Back", NULL);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Main);
+  snprintf(g_ui.footer, sizeof(g_ui.footer), g_ui.capture_button >= 0 ? "Esc cancels  -  Delete clears" :
+           "A: assign   Left/Right: clear");
 }
 
 static void BuildScreen() {
@@ -579,6 +673,7 @@ static void BuildScreen() {
   case kScreen_Video: ScreenVideo(); break;
   case kScreen_Gameplay: ScreenGameplay(); break;
   case kScreen_Controls: ScreenControls(); break;
+  case kScreen_Bindings: ScreenBindings(); break;
   }
 }
 
@@ -589,6 +684,7 @@ void Ui_Init(const UiHostFuncs *host) {
   if (host)
     g_ui.host = *host;
   g_ui.use_upnp = g_config.mp_use_upnp;
+  g_ui.capture_button = -1;
   if (g_config.mp_last_join)
     snprintf(g_ui.join_addr, sizeof(g_ui.join_addr), "%s", g_config.mp_last_join);
   BuildFont();
@@ -620,19 +716,30 @@ static void MoveCursor(int dir) {
   }
 }
 
-void Ui_Update(uint16 *local_inputs) {
+void Ui_Update(uint16 *local_inputs, uint16 fallback) {
   // Back + Start on any controller toggles the menu.
   uint16 all = 0, pressed = 0;
   for (int i = 0; i < 4; i++) {
     uint16 now = local_inputs[i];
+    g_ui.raw_inputs[i] = now;
     if ((now & 0xc) == 0xc && (g_ui.prev_inputs[i] & 0xc) != 0xc)
       Toggle();
     pressed |= now & ~g_ui.prev_inputs[i];
     all |= now;
     g_ui.prev_inputs[i] = now;
   }
+  // Arrows/Enter/Backspace and the d-pad always work in the menu.
+  pressed |= fallback & ~g_ui.last_fallback;
+  all |= fallback;
+  g_ui.last_fallback = fallback;
   if (!Ui_IsOpen())
     return;
+  // While waiting for a key to assign, inputs only go to the assignment.
+  if (g_ui.capture_button >= 0) {
+    for (int i = 0; i < 4; i++)
+      local_inputs[i] = 0;
+    return;
+  }
 
   // Auto repeat for held directions.
   if (all & 0xf0) {
@@ -672,6 +779,15 @@ void Ui_Update(uint16 *local_inputs) {
 bool Ui_HandleKey(int key, bool pressed) {
   if (!pressed)
     return false;
+  if (g_ui.screen == kScreen_Bindings && g_ui.capture_button >= 0) {
+    if (key == SDLK_DELETE)
+      Bindings_Clear(g_ui.bind_player, g_ui.capture_button);
+    else if (key != SDLK_ESCAPE)
+      Bindings_SetKey(g_ui.bind_player, g_ui.capture_button, key);
+    g_ui.capture_button = -1;
+    g_ui.dirty_settings = true;
+    return true;
+  }
   if (key == SDLK_ESCAPE) {
     if (g_ui.screen == kScreen_JoinAddress)
       Goto(kScreen_Multiplayer);
@@ -704,6 +820,19 @@ bool Ui_HandleKey(int key, bool pressed) {
     return true;  // swallow other keys while typing
   }
   return false;
+}
+
+bool Ui_HandlePadButton(int controller, int pad_button) {
+  if (g_ui.screen != kScreen_Bindings || g_ui.capture_button < 0)
+    return false;
+  // Ignore the press that started the capture.
+  if (SDL_GetTicks() - g_ui.capture_start < 250)
+    return true;
+  if (pad_button != kGamepadBtn_Guide)
+    Bindings_SetPad(g_ui.bind_player, g_ui.capture_button, pad_button);
+  g_ui.capture_button = -1;
+  g_ui.dirty_settings = true;
+  return true;
 }
 
 void Ui_HandleText(const char *text) {
@@ -851,6 +980,7 @@ void Ui_SaveSettings() {
   };
   for (size_t i = 0; i < countof(kKeys); i++)
     fprintf(f, "%s = %d\n", kKeys[i].key, (g_config.features0 & kKeys[i].bit) != 0);
+  Bindings_WriteConfig(f);
   fprintf(f, "[Multiplayer]\n");
   fprintf(f, "FriendlyFire = %d\n", Session_GetFriendlyFire());
   fprintf(f, "UseUpnp = %d\n", g_ui.use_upnp);
