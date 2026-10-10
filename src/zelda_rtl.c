@@ -13,7 +13,8 @@
 #include "audio.h"
 #include "assets.h"
 ZeldaEnv g_zenv;
-uint8 g_ram[131072];
+static uint8 g_ram_storage[131072];
+uint8 *g_ram = g_ram_storage;
 
 uint32 g_wanted_zelda_features;
 

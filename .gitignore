@@ -43,3 +43,4 @@ __pycache__
 /zelda3.coop.ini
 /third_party/tcc/
 /third_party/SDL2-*/
+*.d

@@ -1519,7 +1519,7 @@ typedef struct UploadVram_3 {
 
 #define uvram (*(UploadVram_3*)(&g_ram[0x1000]))
 
-extern uint8 g_ram[131072];
+extern uint8 *g_ram;  // points at the RAM of the active world instance
 extern const uint16 kUpperBitmasks[];
 extern const uint8 kLitTorchesColorPlus[];
 extern const uint8 kDungeonCrystalPendantBit[];

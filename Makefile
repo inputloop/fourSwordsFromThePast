@@ -19,7 +19,10 @@ all: $(TARGET_EXEC) zelda3_assets.dat
 $(TARGET_EXEC): $(OBJS) $(RES)
 	$(CC) $^ -o $@ $(LDFLAGS) $(SDLFLAGS)
 %.o : %.c
-	$(CC) -c $(CFLAGS) $< -o $@
+	$(CC) -c $(CFLAGS) -MMD -MP $< -o $@
+
+# Rebuild objects when headers change.
+-include $(OBJS:.o=.d)
 
 $(RES): src/platform/win32/zelda3.rc
 	@echo "Generating Windows resources"
@@ -31,7 +34,7 @@ zelda3_assets.dat:
 
 clean: clean_obj clean_gen
 clean_obj:
-	@$(RM) $(OBJS) $(TARGET_EXEC)
+	@$(RM) $(OBJS) $(OBJS:.o=.d) $(TARGET_EXEC)
 clean_gen:
 	@$(RM) $(RES) zelda3_assets.dat assets/zelda3_assets.dat assets/*.txt tables/*.png assets/sprites/*.png assets/*.yaml
 	@rm -rf assets/__pycache__ assets/dungeon assets/img assets/overworld assets/sound
