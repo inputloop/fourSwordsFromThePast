@@ -78,7 +78,8 @@ static int g_sdl_audio_mixer_volume = SDL_MIX_MAXVOLUME;
 static struct RendererFuncs g_renderer_funcs;
 
 void NORETURN Die(const char *error) {
-#if defined(NDEBUG) && defined(_WIN32)
+#if defined(_WIN32)
+  // Windows builds have no console, so show errors in a message box.
   SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, kWindowTitle, error, NULL);
 #endif
   fprintf(stderr, "Error: %s\n", error);
@@ -929,15 +930,49 @@ static void LoadLinkGraphics() {
 const uint8 *g_asset_ptrs[kNumberOfAssets];
 uint32 g_asset_sizes[kNumberOfAssets];
 
+#if defined(_WIN32)
+// Offers to run extract_assets.bat when the assets are missing but a ROM is present.
+static bool OfferAssetExtraction() {
+  FILE *f = fopen("extract_assets.bat", "rb");
+  if (!f)
+    return false;
+  fclose(f);
+  static const SDL_MessageBoxButtonData kButtons[] = {
+    { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Extract now" },
+    { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Quit" },
+  };
+  const SDL_MessageBoxData box = {
+    SDL_MESSAGEBOX_INFORMATION, NULL, kWindowTitle,
+    "zelda3_assets.dat is missing.\n\n"
+    "The game builds it once from your own ROM of A Link to the Past (USA).\n"
+    "Put the ROM (.sfc or .smc) in this folder, then choose Extract now.\n"
+    "This needs Python 3 (python.org).",
+    2, kButtons, NULL
+  };
+  int button = 0;
+  if (SDL_ShowMessageBox(&box, &button) != 0 || button != 1)
+    return false;
+  system("cmd /c extract_assets.bat");
+  return true;
+}
+#endif
+
 static void LoadAssets() {
   size_t length = 0;
   uint8 *data = ReadWholeFile("zelda3_assets.dat", &length);
+#if defined(_WIN32)
+  if (!data && OfferAssetExtraction())
+    data = ReadWholeFile("zelda3_assets.dat", &length);
+#endif
   if (!data) {
     size_t bps_length, bps_src_length;
     uint8 *bps, *bps_src;
     bps = ReadWholeFile("zelda3_assets.bps", &bps_length);
     if (!bps)
-      Die("Failed to read zelda3_assets.dat. Please see the README for information about how you get this file.");
+      Die("Missing zelda3_assets.dat.\n\n"
+          "Put your ROM of A Link to the Past (USA) (.sfc or .smc) next to the game and run "
+          "extract_assets.bat (Windows) or 'python3 assets/restool.py --extract-from-rom -r <rom>'. "
+          "This needs Python 3. See README.md.");
     bps_src = ReadWholeFile("zelda3.sfc", &bps_src_length);
     if (!bps_src)
       Die("Missing file: zelda3.sfc");
@@ -975,6 +1010,20 @@ static void LoadAssets() {
 // Go some steps up and find zelda3.ini
 static void SwitchDirectory() {
   char buf[4096];
+  // Prefer the folder the executable is in when it has zelda3.ini.
+  char *base = SDL_GetBasePath();
+  if (base) {
+    snprintf(buf, sizeof(buf), "%szelda3.ini", base);
+    FILE *f = fopen(buf, "rb");
+    if (f) {
+      fclose(f);
+      int err = chdir(base);
+      (void)err;
+      SDL_free(base);
+      return;
+    }
+    SDL_free(base);
+  }
   if (!getcwd(buf, sizeof(buf) - 32))
     return;
   size_t pos = strlen(buf);

@@ -25,4 +25,27 @@ done
 $CC $OBJS -o $OUT/zelda3.exe -L$SDL_DIR/lib -lmingw32 -lSDL2main -lSDL2 -lws2_32 -mwindows -static-libgcc
 cp $SDL_DIR/bin/SDL2.dll $OUT/
 cp zelda3.ini $OUT/
-echo "Built $OUT/zelda3.exe"
+
+# Ready to play folder: the game plus the tools to extract the assets from the player's own ROM.
+DIST=$OUT/dist
+rm -rf $DIST
+mkdir -p $DIST/other
+cp $OUT/zelda3.exe $OUT/SDL2.dll zelda3.ini extract_assets.bat README.md MULTIPLAYER.md $DIST/
+cp other/3x5_font.png $DIST/other/
+git ls-files assets | tar -cf - -T - | tar -xf - -C $DIST
+cat > $DIST/HOW_TO_PLAY.txt <<'TXT'
+fourSwordsFromThePast for Windows
+
+1. Copy your own ROM of "Legend of Zelda, The - A Link to the Past (USA)"
+   (.sfc or .smc, any file name) into this folder.
+2. Start zelda3.exe and choose "Extract now" (or double-click extract_assets.bat).
+   This needs Python 3 once: https://www.python.org/downloads/
+   (tick "Add python.exe to PATH" when installing).
+3. Play! Esc opens the menu. Extra controllers press START to join.
+   See MULTIPLAYER.md for online play.
+
+zelda3_assets.dat is made from your ROM: don't share it.
+TXT
+# The scripts are run on Windows, use CRLF line endings.
+sed -i 's/$/\r/' $DIST/extract_assets.bat $DIST/HOW_TO_PLAY.txt
+echo "Built $OUT/zelda3.exe, ready to play folder in $DIST"

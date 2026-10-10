@@ -22,11 +22,17 @@ make -j                                                     # builds ./zelda3 an
 
 ## Windows
 
-Download the `zelda3-windows` build from the GitHub Actions run, or
-cross-compile it with `tools/build_windows_mingw.sh`. Visual Studio
-(`Zelda3.sln`) and `run_with_tcc.bat` also work (see BUILDING.md). Put
-`zelda3_assets.dat` next to `zelda3.exe`: extract it once with
-`python assets/restool.py --extract-from-rom` (or `extract_assets.bat`).
+1. Download the `zelda3-windows-<commit>` artifact from the latest
+   [Build run](../../actions/workflows/build.yaml) and **unzip it** (running the
+   exe from inside the zip won't work).
+2. Copy your own ROM of *A Link to the Past (USA)* (`.sfc`/`.smc`, any name)
+   into the folder.
+3. Start `zelda3.exe` and choose **Extract now** (or run `extract_assets.bat`).
+   This needs [Python 3](https://www.python.org/downloads/) once; tick
+   "Add python.exe to PATH" when installing it.
+
+To build it yourself: `run_with_tcc.bat` (downloads its own compiler), Visual
+Studio (`Zelda3.sln`), or `tools/build_windows_mingw.sh` from Linux.
 
 The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 

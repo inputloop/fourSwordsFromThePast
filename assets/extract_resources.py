@@ -517,6 +517,7 @@ def make_directories():
   os.makedirs('overworld', exist_ok=True)
   os.makedirs('dungeon', exist_ok=True)
   os.makedirs('sound', exist_ok=True)
+  os.makedirs('sprites', exist_ok=True)
 
 def print_all_text_stuff():
   print_all_overworld_areas()
