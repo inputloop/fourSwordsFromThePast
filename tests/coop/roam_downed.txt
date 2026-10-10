@@ -1,7 +1,9 @@
 # Free roaming: P2 walks off and gets their own world. When P2 goes down
-# there, the ghost joins P1's world (no game over), floats over to P1, and
-# P1 revives them.
+# there, the ghost stays where it fell (no game over) until P1 comes over
+# and revives them.
 load 2
+# No fairy in the bottle, so going down is not prevented.
+poke f35c 2
 run 30
 join 2
 hold 1 D
@@ -23,15 +25,14 @@ run 40
 status
 expect_downed 2
 expect_alive 1
-expect_instances 1
-expect_same 1 2
-view 1
-expect_module 9
+# The ghost stays where it fell; P1 walks over and revives it.
+expect_near 2 4048 1800
 clearsprites
 run 100
-# The ghost floated over; step next to it.
+expect_near 2 4048 1800
+expect_same 1 2
 hold 1 R
-run 12
+run 185
 hold 1 -
 run 120
 status

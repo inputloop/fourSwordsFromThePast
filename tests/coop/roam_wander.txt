@@ -1,6 +1,9 @@
 # Free roaming stress test: four players run around on their own for a while.
-# Fails if a standing Link jumps (teleports) or a visible Link is not drawn.
+# Fails if a standing Link jumps (teleports), a ghost moves, or a visible
+# Link is not drawn.
 load 2
+# No fairy, so Links go down and must stay put as ghosts.
+poke f35c 2
 run 30
 join 2
 join 3

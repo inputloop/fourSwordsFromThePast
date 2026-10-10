@@ -171,7 +171,11 @@ static void UpdateCoopFlag() {
 void Inst_Join(int p) {
   if (p < 0 || p >= kMpMaxPlayers || Inst_IsJoined(p))
     return;
+  // New players appear next to the lowest numbered player who is standing.
   int target = -1;
+  for (int q = 0; q < kMpMaxPlayers && target < 0; q++)
+    if (Inst_IsJoined(q) && !Inst_PlayerDowned(q))
+      target = Inst_OfPlayer(q);
   for (int q = 0; q < kMpMaxPlayers && target < 0; q++)
     target = Inst_OfPlayer(q);
   int r = g_cur;
@@ -352,8 +356,11 @@ static void GetView(int i, InstView *v) {
 // Can everyone in instance b join instance a? They must be standing in a's
 // room, in view of a's camera, and not in the middle of something.
 static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
-  if (!va->stable || !vb->stable || va->key != vb->key)
+  if (!va->stable || !vb->stable || va->key != vb->key || !HasAlive(a))
     return false;
+  // Ghosts lying in this room show up as soon as someone standing is here.
+  if (!HasAlive(b))
+    return true;
   // Only once the cameras are nearly in the same place, so nobody's view jumps.
   if (abs((int16)(va->cam_x - vb->cam_x)) > 48 || abs((int16)(va->cam_y - vb->cam_y)) > 48)
     return false;
@@ -383,22 +390,15 @@ static void MergeAndCleanUp() {
       continue;
     Inst_Switch(i);
     uint8 m = main_module_index;
-    if (m < 6 || m == 0x14 || m == 0x19 || m == 0x1a) {
+    bool fairy = false;
+    for (int k = 0; k < 4; k++)
+      fairy |= link_bottle_info[k] == 6;
+    // Game over (the last standing Link died without a fairy) also brings
+    // everybody together, so they all continue from the same place.
+    if (m < 6 || m == 0x14 || m == 0x19 || m == 0x1a || (m == 18 && !fairy)) {
       TRACE("  collapse into world %d (module %d)\n", i, m);
       Inst_CollapseIntoCurrent();
       return;
-    }
-  }
-  // Worlds with only downed players: the ghosts go to someone standing.
-  for (int i = 0; i < kInstMax; i++) {
-    if (!g_inst[i].active || HasAlive(i))
-      continue;
-    for (int k = 0; k < kInstMax; k++) {
-      if (k != i && g_inst[k].active && HasAlive(k)) {
-        TRACE("  orphans of world %d\n", i);
-        MovePlayers(i, k);
-        break;
-      }
     }
   }
   // Groups that meet again play in one world.
@@ -409,8 +409,9 @@ static void MergeAndCleanUp() {
       InstView va, vb;
       GetView(a, &va);
       GetView(b, &vb);
-      // The world with a follower (Zelda, the old man...) is the one that stays.
-      bool b_first = vb.has_follower && !va.has_follower;
+      // The world with a follower (Zelda, the old man...) is the one that
+      // stays, and a world of standing players always outlasts one of ghosts.
+      bool b_first = !HasAlive(a) || (vb.has_follower && !va.has_follower && HasAlive(b));
       if (!b_first && CanMerge(a, &va, b, &vb)) {
         TRACE("  merge %d into %d key=%x\n", b, a, va.key);
         MovePlayers(b, a);
@@ -505,9 +506,20 @@ bool Inst_RunFrame(const uint16 *inputs) {
     g_inst[i].born = 0;
   bool replay = false;
   g_apu_push_enabled = false;
-  for (int i = 0; i < kInstMax; i++)
-    if (g_inst[i].active && !g_inst[i].born)
+  static const uint16 kNoInputs[kMpMaxPlayers];
+  for (int i = 0; i < kInstMax; i++) {
+    if (!g_inst[i].active || g_inst[i].born)
+      continue;
+    if (HasAlive(i)) {
       replay |= RunInstance(i, inputs);
+    } else {
+      // Only ghosts here: the world waits, frozen, for someone to come by.
+      // It first settles into normal gameplay so it can be joined.
+      Inst_Switch(i);
+      if (!Mp_InStableGameplay())
+        replay |= RunInstance(i, kNoInputs);
+    }
+  }
   g_apu_push_enabled = true;
   if (Inst_Count() > 1) {
     if (g_independent) {

@@ -1,5 +1,7 @@
 # An enemy downs P2 (no game over), P3 kills an enemy, then P3 revives P2.
 load 2
+# No fairy in the bottle, so going down is not prevented.
+poke f35c 2
 run 30
 join 2
 join 3

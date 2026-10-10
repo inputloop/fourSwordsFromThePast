@@ -1,0 +1,23 @@
+# A bottled fairy saves a Link that would go down; without one, it goes down.
+load 2
+run 30
+join 2
+expect_ram f35c 6
+hp 2 2
+spawn 41 2 0
+run 120
+status
+expect_alive 2
+expect_hp 2 40
+expect_ram f35c 2
+clearsprites
+# Wait out the blinking after the rescue; P1 steps away so the enemy goes for P2.
+hold 1 D
+run 40
+hold 1 -
+run 80
+hp 2 2
+spawn 41 2 0
+run 300
+expect_downed 2
+expect_alive 1

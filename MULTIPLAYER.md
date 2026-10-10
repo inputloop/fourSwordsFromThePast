@@ -64,11 +64,18 @@ Players can drop in and drop out at any time.
   Nobody is ever pushed or dragged, so nobody ends up in a wall.
 - **The leader.** In a shared screen, whoever opens a menu, talks to someone
   or takes an exit becomes the leader that the camera, rooms and cutscenes
-  follow. Downed ghosts left behind float over to the leader.
+  follow.
 - **Downed, not dead.** A Link that runs out of hearts becomes a flickering
-  ghost. Stand next to them for 1.5 seconds to revive them with half a heart. It
-  is game over only when everyone is down. A player who goes down alone in
-  their own world floats over to a teammate who is still standing.
+  ghost that lies where it fell. Someone has to come and stand next to it
+  for 1.5 seconds to revive it with half a heart. It is game over only when
+  everyone is down; then everybody continues together.
+  - A fairy in a bottle (shared by the team, like all items) saves a Link
+    that would go down: the bottle empties and the Link gets up to 7 hearts.
+  - Free roaming: a ghost lying alone in some room keeps its world, paused,
+    until a standing teammate enters that room or screen; then the ghost is
+    there, right where it fell.
+  - Shared screen: when the group changes rooms, ghosts are carried along
+    (they can't stay behind in a room nobody is in).
 - **Enemies** go after the nearest Link and can be hurt by anyone.
 
 ## How it works (for modders)

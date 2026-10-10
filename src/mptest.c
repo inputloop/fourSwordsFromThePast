@@ -20,6 +20,9 @@
 //   holecheck           verify every overworld fall hole resolves correctly in co-op
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
+//   poke <hexaddr> <hexval>  change a RAM byte (shared progress spreads to every world)
+//   expect_ram <hexaddr> <hexval>  fail unless the RAM byte has that value
+//   expect_near <p> <x> <y>  fail unless player p is within 4 pixels of x,y
 //   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
 //   hp <p> <health>     set a player's health (1/8 hearts)
 // Session (netplay) commands. "hold" then refers to local players.
@@ -184,7 +187,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           }
         }
         // Remember where everybody was, to report sudden jumps and missing sprites.
-        int pw[kMpMaxPlayers], px[kMpMaxPlayers], py[kMpMaxPlayers], pm[kMpMaxPlayers];
+        int pw[kMpMaxPlayers], px[kMpMaxPlayers], py[kMpMaxPlayers], pm[kMpMaxPlayers], pdown[kMpMaxPlayers];
         for (int p = 0; p < kMpMaxPlayers; p++) {
           pw[p] = Inst_OfPlayer(p);
           if (pw[p] < 0)
@@ -192,6 +195,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           SwitchToPlayer(p);
           px[p] = Mp_PlayerX(p), py[p] = Mp_PlayerY(p);
           pm[p] = main_module_index << 8 | submodule_index;
+          pdown[p] = g_mp.p[p].downed;
         }
         Inst_RunFrame(held);
         for (int p = 0; p < kMpMaxPlayers && checks; p++) {
@@ -203,6 +207,10 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           if (d > 12 && stable && main_module_index == pm[p] >> 8 && submodule_index == 0 && !g_mp.p[p].downed && *Mp_PlayerRam(p, 0x5D) == 0) {
             printf("[frame %d] JUMP P%d by %d (%d,%d)->(%d,%d) world %d->%d leader=%d downed=%d module=%d state=%d recoil=%d\n", frame, p + 1, d,
                    px[p], py[p], Mp_PlayerX(p), Mp_PlayerY(p), pw[p], Inst_Current(), g_mp.leader, g_mp.p[p].downed, main_module_index, *Mp_PlayerRam(p, 0x5D), *Mp_PlayerRam(p, 0x46));
+            jumps++;
+          }
+          if (g_mp.p[p].downed && pdown[p] && d != 0 && stable && main_module_index == pm[p] >> 8) {
+            printf("[frame %d] GHOST MOVED P%d by %d world %d->%d\n", frame, p + 1, d, pw[p], Inst_Current());
             jumps++;
           }
           if (p != g_mp.leader && !g_mp.p[p].downed && Mp_InStableGameplay() && Mp_NumJoined() > 1 &&
@@ -322,6 +330,21 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "expect_resyncs")) {
       if (Session_GetStatus()->resyncs != atoi(arg1)) {
         printf("FAIL: %d resyncs, expected %s\n", Session_GetStatus()->resyncs, arg1);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "poke")) {
+      g_ram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
+    } else if (!strcmp(cmd, "expect_ram")) {
+      int v = g_ram[strtol(arg1, NULL, 16)];
+      if (v != strtol(arg2, NULL, 16)) {
+        printf("FAIL: ram %s is %02x, expected %s at frame %d\n", arg1, v, arg2, frame);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "expect_near")) {
+      int p = atoi(arg1) - 1;
+      SwitchToPlayer(p);
+      if (abs(Mp_PlayerX(p) - atoi(arg2)) > 4 || abs(Mp_PlayerY(p) - atoi(arg3)) > 4) {
+        printf("FAIL: P%d is at %d,%d, expected %s,%s at frame %d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p), arg2, arg3, frame);
         failures++;
       }
     } else if (!strcmp(cmd, "peek")) {

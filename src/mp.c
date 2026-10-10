@@ -273,7 +273,7 @@ void Mp_ReadJoypads() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
       continue;
-    Mp_ReadJoypadInto(g_mp.inputs[p],
+    Mp_ReadJoypadInto(g_mp.p[p].downed ? 0 : g_mp.inputs[p],
                       Mp_PlayerRam(p, 0xF0), Mp_PlayerRam(p, 0xF2), Mp_PlayerRam(p, 0xF4),
                       Mp_PlayerRam(p, 0xF6), Mp_PlayerRam(p, 0xF8), Mp_PlayerRam(p, 0xFA));
   }
@@ -457,13 +457,36 @@ void Mp_ClearPerFrameSpriteFlags() {
       *Mp_PlayerRam(p, 0x314) = 0;  // flag_is_sprite_to_pick_up
 }
 
+// Called when the resident Link takes fatal damage. Returns true if co-op
+// handled it (the Link went down, or a bottled fairy saved it); the Link's
+// new health is in link_health_current. Returns false for a regular death,
+// which also handles fairies the original way.
 bool Mp_OnFatalDamage() {
   int me = g_mp.resident;
   bool other_alive = g_mp_other_instance_alive && g_mp_other_instance_alive();
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if ((p != me && Mp_IsAlive(p)) || other_alive) {
+      // A fairy in a bottle (shared by the team) saves the Link right away.
+      for (int i = 0; i < 4; i++) {
+        if (link_bottle_info[i] == 6) {
+          link_bottle_info[i] = 2;
+          link_health_current = link_health_capacity < 0x38 ? link_health_capacity : 0x38;
+          link_hearts_filler = 0;
+          countdown_for_blink = 0x60;
+          sound_effect_2 = 0x31;
+          Hud_Rebuild();
+          return true;
+        }
+      }
       g_mp.p[me].downed = 1;
       g_mp.p[me].revive_ctr = 0;
+      // A ghost lies still where it fell: no knockback, no hop.
+      link_player_handler_state = 0;
+      link_auxiliary_state = 0;
+      link_incapacitated_timer = 0;
+      link_z_coord = 0;
+      link_actual_vel_x = link_actual_vel_y = link_actual_vel_z = 0;
+      link_x_vel = link_y_vel = 0;
       link_health_current = 0;
       countdown_for_blink = 0;
       link_hearts_filler = 0;
@@ -580,19 +603,9 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (p == g_mp.leader || !g_mp.p[p].joined)
       continue;
-    // Downed Links left behind float over to the leader. Far away ones
-    // (another room) appear next to the leader.
-    if (g_mp.p[p].downed) {
-      uint16 *gx = (uint16 *)Mp_PlayerRam(p, 0x22), *gy = (uint16 *)Mp_PlayerRam(p, 0x20);
-      int dx = (int16)(lx - *gx), dy = (int16)(ly - *gy);
-      if (abs(dx) > 400 || abs(dy) > 400) {
-        *gx = lx, *gy = ly;
-      } else if (abs(dx) > 40 || abs(dy) > 32) {
-        *gx += dx > 1 ? 2 : dx < -1 ? -2 : 0;
-        *gy += dy > 1 ? 2 : dy < -1 ? -2 : 0;
-      }
+    // Downed Links stay where they fell until someone revives them.
+    if (g_mp.p[p].downed)
       continue;
-    }
     if (main_module_index != m || submodule_index != s)
       break;
     Mp_SwapTo(p);

@@ -1,0 +1,25 @@
+# When the last standing Link goes down without a fairy it is game over, and
+# the ghosts in other worlds come along so everybody continues together.
+load 2
+# No fairy in the bottle, so going down is not prevented.
+poke f35c 2
+run 30
+join 2
+hold 2 U
+run 200
+hold 2 -
+run 20
+hp 2 2
+spawn 41 2 0
+run 150
+expect_downed 2
+expect_alive 1
+expect_apart 1 2
+expect_near 2 4856 6506
+view 1
+hp 1 2
+spawn 41 1 0
+run 200
+expect_instances 1
+expect_same 1 2
+expect_module 18

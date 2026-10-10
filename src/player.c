@@ -166,7 +166,7 @@ void Link_ControlHandler() {  // 87807f
         number_of_times_hurt_by_sprites++;
         uint8 new_dmg = link_health_current - dmg;
         if ((new_dmg == 0 || new_dmg >= 0xa8) && Mp_OnFatalDamage()) {
-          new_dmg = 0;
+          new_dmg = link_health_current;  // 0 when downed, more if a fairy helped
         } else if (new_dmg == 0 || new_dmg >= 0xa8) {
           mapbak_TM = TM_copy;
           mapbak_TS = TS_copy;

@@ -1,0 +1,33 @@
+# Free roaming: P2 goes down alone inside the palace. The ghost waits there
+# (its world is paused) until P1 walks in and revives it.
+load 2
+# No fairy in the bottle, so going down is not prevented.
+poke f35c 2
+run 30
+join 2
+hold 2 U
+run 200
+hold 2 -
+run 20
+hp 2 2
+spawn 41 2 0
+run 150
+expect_downed 2
+expect_alive 1
+expect_apart 1 2
+expect_near 2 4856 6506
+run 300
+expect_apart 1 2
+expect_near 2 4856 6506
+view 2
+expect_module 7
+view 1
+clearsprites
+hold 1 U
+run 200
+hold 1 -
+run 150
+status
+expect_same 1 2
+expect_alive 2
+expect_hp 2 4
