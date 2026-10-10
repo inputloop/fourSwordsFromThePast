@@ -198,6 +198,8 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
 
   if (g_zenv.ppu->extraLeftRight != 0 || render_flags & kPpuRenderFlags_Height240)
     ConfigurePpuSideSpace();
+  else
+    PpuSetExtraSideSpace(g_zenv.ppu, 0, 0, 0);  // widescreen may have been turned off in the menu
 
   int height = render_flags & kPpuRenderFlags_Height240 ? 240 : 224;
 
