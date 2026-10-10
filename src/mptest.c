@@ -21,6 +21,7 @@
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
 //   newgame             create a save file in slot 1 and load it
+//   spoke <hexoff> <hexval> / loadslot  change a byte of save slot 1 / load slot 1
 //   rando <off|random|hexseed>  randomizer setting for new save files
 //   randocheck <seed> <count> [v]  check that seeds can be beaten (v: print spoilers)
 //   pos <p> <x> <y>     put player p at x,y
@@ -196,6 +197,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       static const uint16 kName[6] = { 0x18e, 0x18e, 0x18e, 0x18e, 0x18e, 0x18e };  // spaces? any tile works
       memcpy(sram + 0x3d9, kName, sizeof(kName));
       FileSelect_InitNewSave(sram);
+      srm_var1 = 2;
+      WORD(g_ram[0]) = 0;
+      CopySaveToWRAM();
+      music_control = 0xf1;
+    } else if (!strcmp(cmd, "spoke")) {
+      // spoke <hexoffset> <hexval>: change a byte of save slot 1 (fixing its checksum)
+      g_zenv.sram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
+      Intro_FixCksum(g_zenv.sram);
+    } else if (!strcmp(cmd, "loadslot")) {
+      // loadslot: load save slot 1, as if picked on the file select screen
       srm_var1 = 2;
       WORD(g_ram[0]) = 0;
       CopySaveToWRAM();

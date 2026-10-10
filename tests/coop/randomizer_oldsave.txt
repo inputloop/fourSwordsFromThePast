@@ -1,0 +1,26 @@
+# A randomized save file from before the open start (still at the start of
+# the story: rain, guards blocking the way, Zelda to rescue) gets the open
+# start when it is loaded.
+rando off
+run 200
+newgame
+# Mark slot 1 as randomized with seed 40, like an older build did.
+spoke 4f0 52
+spoke 4f1 40
+loadslot
+run 400
+expect_ram f3c5 2
+expect_ram f359 1
+expect_ram f35a 1
+# "Start from Link's house": no intro, Link walks out into the open world.
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+hold 1 D
+run 200
+hold 1 -
+run 100
+expect_module 9
+status

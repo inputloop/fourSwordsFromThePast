@@ -21,8 +21,10 @@ randomizer for save files created from then on (or set `Randomizer` in the
 - **Open start, no tutorial.** A randomized file skips the intro and the
   escape from Hyrule Castle: it starts as if Zelda was just brought to the
   sanctuary. Link has the fighter's sword and shield and full magic, starts
-  at his house or the sanctuary, and can go anywhere from the first step.
-  Non-randomized files start the usual way.
+  at his house or the sanctuary, and can go anywhere from the first step:
+  no rain, no guards blocking the way, no need to rescue Zelda (so no Lamp
+  needed to get started). Randomized files made with an older build get the
+  open start when loaded. Non-randomized files start the usual way.
 - The contents of every chest in the game are shuffled: Bow, Hookshot,
   Hammer, gloves, Moon Pearl, Fire and Ice Rods, Lamp, Cane of Somaria,
   Magic Cape, Cane of Byrna, mails, Mirror Shield, boomerangs, a bottle,

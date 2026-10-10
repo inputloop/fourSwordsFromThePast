@@ -28,6 +28,8 @@ uint32 Rando_GetNewGameSetting();
 
 // Called when the file select screen creates a new save file.
 void Rando_OnNewFile(uint8 *sram_slot);
+// Called when a save file was loaded into RAM.
+void Rando_OnFileLoaded();
 
 // Is the game in RAM randomized? Returns the seed, or 0.
 uint32 Rando_CurrentSeed();

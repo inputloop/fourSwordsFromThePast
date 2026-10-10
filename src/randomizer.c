@@ -26,6 +26,30 @@ static uint32 g_new_game_setting;
 void Rando_SetNewGameSetting(uint32 setting) { g_new_game_setting = setting; }
 uint32 Rando_GetNewGameSetting() { return g_new_game_setting; }
 
+// Open start: no intro and no escape from Hyrule Castle (no rain, no guards
+// blocking the way, no need to rescue Zelda first, so no Lamp needed). The
+// game is as if Zelda was just brought to the sanctuary: Link has the
+// fighter's sword and shield, may start at his house or the sanctuary, and
+// can go anywhere right away. save is a save file or the save area of RAM.
+static void ApplyOpenStart(uint8 *save) {
+  if (save[0x359] < 1)
+    save[0x359] = 1;      // fighter's sword
+  if (save[0x35A] < 1)
+    save[0x35A] = 1;      // fighter's shield
+  save[0x36E] = 0x80;     // full magic
+  save[0x3C5] = 2;        // progress: Zelda is safe in the sanctuary
+  save[0x3C6] |= 0x15;    // progress flags as after the escape
+  save[0x3C7] = 1;        // map marker
+  save[0x3C8] = 0;        // starting point: Link's house
+  save[0x3CC] = 0;        // no follower (Zelda stays in the sanctuary)
+}
+
+void Rando_OnFileLoaded() {
+  // Randomized files made before the open start existed get it now.
+  if (Rando_CurrentSeed() != 0 && g_ram[0xF3C5] < 2)
+    ApplyOpenStart(&g_ram[0xF000]);
+}
+
 void Rando_OnNewFile(uint8 *sram_slot) {
   if (g_new_game_setting == kRando_Off) {
     memset(sram_slot + kRandoMarkerOffs, 0, 5);
@@ -45,17 +69,7 @@ void Rando_OnNewFile(uint8 *sram_slot) {
   }
   sram_slot[kRandoMarkerOffs] = kRandoMarker;
   memcpy(sram_slot + kRandoSeedOffs, &seed, 4);
-  // Open start: no intro and no escape from Hyrule Castle. The file starts
-  // as if Zelda was just brought to the sanctuary: Link has the fighter's
-  // sword and shield, may start at his house or the sanctuary, and can go
-  // anywhere right away.
-  sram_slot[0x359] = 1;     // fighter's sword
-  sram_slot[0x35A] = 1;     // fighter's shield
-  sram_slot[0x36E] = 0x80;  // full magic
-  sram_slot[0x3C5] = 2;     // progress: Zelda is safe in the sanctuary
-  sram_slot[0x3C6] = 0x15;  // progress flags as after the escape
-  sram_slot[0x3C7] = 1;     // map marker
-  sram_slot[0x3C8] = 0;     // starting point: Link's house
+  ApplyOpenStart(sram_slot);
 }
 
 uint32 Rando_CurrentSeed() {

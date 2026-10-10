@@ -1,3 +1,4 @@
+#include "randomizer.h"
 #include "messaging.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -2094,6 +2095,7 @@ void CopySaveToWRAM() {  // 8ccfbb
   birdtravel_var1[k] = 0;
 
   memcpy(save_dung_info, &g_zenv.sram[WORD(g_ram[0])], 0x500);
+  Rando_OnFileLoaded();
 
   bg_tile_animation_countdown = 7;
   word_7EC013 = 7;
