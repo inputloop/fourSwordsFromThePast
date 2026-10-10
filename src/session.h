@@ -85,5 +85,6 @@ const SessionStatus *Session_GetStatus();
 bool Session_IsNetplay();
 // Whether local save states / turbo may be used.
 bool Session_AllowsLocalStateChanges();
+bool Session_LastFrameWasReplay();
 
 #endif  // ZELDA3_SESSION_H_

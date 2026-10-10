@@ -26,6 +26,8 @@
 #include "load_gfx.h"
 #include "util.h"
 #include "audio.h"
+#include "session.h"
+#include "ui.h"
 
 static bool g_run_without_emu = 0;
 
@@ -36,8 +38,8 @@ static void RenderNumber(uint8 *dst, size_t pitch, int n, bool big);
 static void HandleInput(int keyCode, int modCode, bool pressed);
 static void HandleCommand(uint32 j, bool pressed);
 static int RemapSdlButton(int button);
-static void HandleGamepadInput(int button, bool pressed);
-static void HandleGamepadAxisInput(int gamepad_id, int axis, int value);
+static void HandleGamepadInput(int pad, int button, bool pressed);
+static void HandleGamepadAxisInput(int pad, int axis, int value);
 static void OpenOneGamepad(int i);
 static void HandleVolumeAdjustment(int volume_adjustment);
 static void LoadAssets();
@@ -57,7 +59,16 @@ static SDL_Window *g_window;
 
 static uint8 g_paused, g_turbo, g_replay_turbo = true, g_cursor = true;
 static uint8 g_current_window_scale;
-static uint8 g_gamepad_buttons;
+// Per controller state. Controller 0 shares local player 0 with the keyboard,
+// every further controller is another local (couch) player.
+enum { kMaxPads = 4 };
+static SDL_JoystickID g_pad_ids[kMaxPads];
+static bool g_pad_used[kMaxPads];
+static uint16 g_pad_buttons[kMaxPads];
+static uint16 g_pad_axis[kMaxPads];
+static uint32 g_pad_modifiers[kMaxPads];
+static uint16 g_pad_last_cmd[kMaxPads][kGamepadBtn_Count];
+static int PadIndexFromId(SDL_JoystickID id);
 static int g_input1_state;
 static bool g_display_perf;
 static int g_curr_fps;
@@ -65,8 +76,6 @@ static int g_ppu_render_flags = 0;
 static int g_snes_width, g_snes_height;
 static int g_sdl_audio_mixer_volume = SDL_MIX_MAXVOLUME;
 static struct RendererFuncs g_renderer_funcs;
-static uint32 g_gamepad_modifiers;
-static uint16 g_gamepad_last_cmd[kGamepadBtn_Count];
 
 void NORETURN Die(const char *error) {
 #if defined(NDEBUG) && defined(_WIN32)
@@ -168,6 +177,7 @@ static void DrawPpuFrameWithPerf() {
   }
   if (g_display_perf)
     RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
+  Ui_Draw(pixel_buffer, pitch, g_snes_width * render_scale, g_snes_height * render_scale, render_scale);
   g_renderer_funcs.EndDraw();
 }
 
@@ -276,6 +286,39 @@ static const struct RendererFuncs kSdlRendererFuncs  = {
 
 void OpenGLRenderer_Create(struct RendererFuncs *funcs, bool use_opengl_es);
 
+static bool g_running = true;
+
+static void RequestQuit() {
+  g_running = false;
+}
+
+static void ToggleFullscreen() {
+  g_win_flags ^= SDL_WINDOW_FULLSCREEN_DESKTOP;
+  SDL_SetWindowFullscreen(g_window, g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP);
+}
+
+static uint32 CalcRenderFlags() {
+  return g_config.new_renderer * kPpuRenderFlags_NewRenderer |
+         g_config.enhanced_mode7 * kPpuRenderFlags_4x4Mode7 |
+         g_config.extend_y * kPpuRenderFlags_Height240 |
+         g_config.no_sprite_limits * kPpuRenderFlags_NoSpriteLimits;
+}
+
+// Applies display related settings changed in the options menu without a restart.
+static void ApplyDisplaySettings() {
+  bool size_changed = g_snes_width != g_config.extended_aspect_ratio * 2 + 256 ||
+                      g_snes_height != (g_config.extend_y ? 240 : 224);
+  g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
+  g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
+  g_snes_height = (g_config.extend_y ? 240 : 224);
+  g_ppu_render_flags = CalcRenderFlags();
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, g_config.linear_filtering ? "best" : "nearest");
+  g_renderer_funcs.Destroy();
+  g_renderer_funcs.Initialize(g_window);
+  if (size_changed)
+    ChangeWindowScale(0);
+}
+
 #undef main
 int main(int argc, char** argv) {
   argc--, argv++;
@@ -299,10 +342,7 @@ int main(int argc, char** argv) {
   // Delay actually setting those features in ram until any snapshots finish playing.
   g_wanted_zelda_features = g_config.features0;
 
-  g_ppu_render_flags = g_config.new_renderer * kPpuRenderFlags_NewRenderer |
-                       g_config.enhanced_mode7 * kPpuRenderFlags_4x4Mode7 |
-                       g_config.extend_y * kPpuRenderFlags_Height240 |
-                       g_config.no_sprite_limits * kPpuRenderFlags_NoSpriteLimits;
+  g_ppu_render_flags = CalcRenderFlags();
   ZeldaEnableMsu(g_config.enable_msu);
   ZeldaSetLanguage(g_config.language);
 
@@ -396,7 +436,6 @@ int main(int argc, char** argv) {
   for (int i = 0; i < SDL_NumJoysticks(); i++)
     OpenOneGamepad(i);
 
-  bool running = true;
   SDL_Event event;
   uint32 lastTick = SDL_GetTicks();
   uint32 curTick = 0;
@@ -406,20 +445,39 @@ int main(int argc, char** argv) {
   if (g_config.autosave)
     HandleCommand(kKeys_Load + 0, true);
 
-  while(running) {
+  Session_Init(g_config.mp_player_name);
+  Session_SetFriendlyFire(g_config.mp_friendly_fire);
+  static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
+  Ui_Init(&kUiHost);
+
+  while(g_running) {
     while(SDL_PollEvent(&event)) {
       switch(event.type) {
       case SDL_CONTROLLERDEVICEADDED:
         OpenOneGamepad(event.cdevice.which);
         break;
-      case SDL_CONTROLLERAXISMOTION:
-        HandleGamepadAxisInput(event.caxis.which, event.caxis.axis, event.caxis.value);
+      case SDL_CONTROLLERDEVICEREMOVED: {
+        int pad = PadIndexFromId(event.cdevice.which);
+        if (pad >= 0) {
+          g_pad_used[pad] = false;
+          g_pad_buttons[pad] = g_pad_axis[pad] = 0;
+          if (pad != 0)
+            Session_LocalLeave(pad);
+        }
         break;
+      }
+      case SDL_CONTROLLERAXISMOTION: {
+        int pad = PadIndexFromId(event.caxis.which);
+        if (pad >= 0)
+          HandleGamepadAxisInput(pad, event.caxis.axis, event.caxis.value);
+        break;
+      }
       case SDL_CONTROLLERBUTTONDOWN:
       case SDL_CONTROLLERBUTTONUP: {
         int b = RemapSdlButton(event.cbutton.button);
-        if (b >= 0)
-          HandleGamepadInput(b, event.type == SDL_CONTROLLERBUTTONDOWN);
+        int pad = PadIndexFromId(event.cbutton.which);
+        if (b >= 0 && pad >= 0)
+          HandleGamepadInput(pad, b, event.type == SDL_CONTROLLERBUTTONDOWN);
         break;
       }
       case SDL_MOUSEWHEEL:
@@ -435,13 +493,17 @@ int main(int argc, char** argv) {
         }
         break;
       case SDL_KEYDOWN:
-        HandleInput(event.key.keysym.sym, event.key.keysym.mod, true);
+        if (!Ui_HandleKey(event.key.keysym.sym, true))
+          HandleInput(event.key.keysym.sym, event.key.keysym.mod, true);
+        break;
+      case SDL_TEXTINPUT:
+        Ui_HandleText(event.text.text);
         break;
       case SDL_KEYUP:
         HandleInput(event.key.keysym.sym, event.key.keysym.mod, false);
         break;
       case SDL_QUIT:
-        running = false;
+        g_running = false;
         break;
       }
     }
@@ -452,20 +514,36 @@ int main(int argc, char** argv) {
         SDL_PauseAudioDevice(device, audiopaused);
     }
 
+    // Netplay clients can't pause the host's game.
+    if (g_paused && Session_GetStatus()->mode == kSessionClient)
+      g_paused = false;
+
     if (g_paused) {
       SDL_Delay(16);
       continue;
     }
 
-    // Clear gamepad inputs when joypad directional inputs to avoid wonkiness
-    int inputs = g_input1_state;
-    if (g_input1_state & 0xf0)
-      g_gamepad_buttons = 0;
-    inputs |= g_gamepad_buttons;
+    uint16 local_inputs[kSessionMaxLocal];
+    for (int i = 0; i < kSessionMaxLocal; i++) {
+      local_inputs[i] = g_pad_buttons[i] | g_pad_axis[i];
+      if (i == 0)
+        local_inputs[0] |= g_input1_state;
+    }
+    // Couch drop-in: Start on a controller without a player joins the game.
+    for (int i = 1; i < kSessionMaxLocal; i++) {
+      if (!Session_IsLocalJoined(i) && (local_inputs[i] & 8))
+        Session_LocalJoin(i);
+    }
+    // The overlay menu takes the inputs while it is open.
+    Ui_Update(local_inputs);
 
-    SDL_LockMutex(g_audio_mutex);
-    bool is_replay = ZeldaRunFrame(inputs);
-    SDL_UnlockMutex(g_audio_mutex);
+    bool is_replay = false;
+    if (!Ui_PausesGame()) {
+      SDL_LockMutex(g_audio_mutex);
+      Session_Tick(local_inputs, g_config.features0);
+      is_replay = Session_LastFrameWasReplay();
+      SDL_UnlockMutex(g_audio_mutex);
+    }
 
     frameCtr++;
 
@@ -602,6 +680,14 @@ void ZeldaApuUnlock() {
 static void HandleCommand_Locked(uint32 j, bool pressed) {
   if (!pressed)
     return;
+  // Anything that changes the game state outside of the frame stream would
+  // desync a netplay client. The host may do it, and clients then resync.
+  if (!Session_AllowsLocalStateChanges() &&
+      (j <= kKeys_ReplayRef_Last || j == kKeys_CheatLife || j == kKeys_CheatEquipment || j == kKeys_CheatKeys ||
+       j == kKeys_CheatWalkThroughWalls || j == kKeys_Reset || j == kKeys_ClearKeyLog || j == kKeys_StopReplay))
+    return;
+  if (Session_IsNetplay() && (j <= kKeys_ReplayRef_Last || j == kKeys_Reset || (j >= kKeys_CheatLife && j <= kKeys_CheatWalkThroughWalls)))
+    Session_ResyncAll();
   if (j <= kKeys_Load_Last) {
     SaveLoadSlot(kSaveLoad_Load, j - kKeys_Load);
   } else if (j <= kKeys_Save_Last) {
@@ -664,9 +750,31 @@ static void HandleInput(int keyCode, int keyMod, bool pressed) {
 static void OpenOneGamepad(int i) {
   if (SDL_IsGameController(i)) {
     SDL_GameController *controller = SDL_GameControllerOpen(i);
-    if (!controller)
+    if (!controller) {
       fprintf(stderr, "Could not open gamepad %d: %s\n", i, SDL_GetError());
+      return;
+    }
+    SDL_JoystickID id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(controller));
+    if (PadIndexFromId(id) >= 0)
+      return;
+    for (int p = 0; p < kMaxPads; p++) {
+      if (!g_pad_used[p]) {
+        g_pad_used[p] = true;
+        g_pad_ids[p] = id;
+        g_pad_buttons[p] = g_pad_axis[p] = 0;
+        g_pad_modifiers[p] = 0;
+        printf("Controller %d connected: %s\n", p + 1, SDL_GameControllerName(controller));
+        return;
+      }
+    }
   }
+}
+
+static int PadIndexFromId(SDL_JoystickID id) {
+  for (int p = 0; p < kMaxPads; p++)
+    if (g_pad_used[p] && g_pad_ids[p] == id)
+      return p;
+  return -1;
 }
 
 static int RemapSdlButton(int button) {
@@ -690,14 +798,26 @@ static int RemapSdlButton(int button) {
   }
 }
 
-static void HandleGamepadInput(int button, bool pressed) {
-  if (!!(g_gamepad_modifiers & (1 << button)) == pressed)
+static void HandleGamepadInput(int pad, int button, bool pressed) {
+  if (!!(g_pad_modifiers[pad] & (1 << button)) == pressed)
     return;
-  g_gamepad_modifiers ^= 1 << button;
+  if (button == kGamepadBtn_Guide && pressed)
+    Ui_HandleKey(SDLK_ESCAPE, true);
+  g_pad_modifiers[pad] ^= 1 << button;
   if (pressed)
-    g_gamepad_last_cmd[button] = FindCmdForGamepadButton(button, g_gamepad_modifiers);
-  if (g_gamepad_last_cmd[button] != 0)
-    HandleCommand(g_gamepad_last_cmd[button], pressed);
+    g_pad_last_cmd[pad][button] = FindCmdForGamepadButton(button, g_pad_modifiers[pad]);
+  uint32 j = g_pad_last_cmd[pad][button];
+  if (j == 0)
+    return;
+  if (j <= kKeys_Controls_Last) {
+    static const uint8 kRemap[] = { 0, 4, 5, 6, 7, 2, 3, 8, 0, 9, 1, 10, 11 };
+    if (pressed)
+      g_pad_buttons[pad] |= 1 << kRemap[j];
+    else
+      g_pad_buttons[pad] &= ~(1 << kRemap[j]);
+  } else {
+    HandleCommand(j, pressed);
+  }
 }
 
 static void HandleVolumeAdjustment(int volume_adjustment) {
@@ -733,17 +853,12 @@ static float ApproximateAtan2(float y, float x) {
   return q + *(float *)&uatan_2q;
 }
 
-static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
-  static int last_gamepad_id, last_x, last_y;
+static void HandleGamepadAxisInput(int pad, int axis, int value) {
+  static int last_xs[kMaxPads], last_ys[kMaxPads];
   if (axis == SDL_CONTROLLER_AXIS_LEFTX || axis == SDL_CONTROLLER_AXIS_LEFTY) {
-    // ignore other gamepads unless they have a big input
-    if (last_gamepad_id != gamepad_id) {
-      if (value > -16000 && value < 16000)
-        return;
-      last_gamepad_id = gamepad_id;
-      last_x = last_y = 0;
-    }
+    int last_x = last_xs[pad], last_y = last_ys[pad];
     *(axis == SDL_CONTROLLER_AXIS_LEFTX ? &last_x : &last_y) = value;
+    last_xs[pad] = last_x, last_ys[pad] = last_y;
     int buttons = 0;
     if (last_x * last_x + last_y * last_y >= 10000 * 10000) {
       // in the non deadzone part, divide the circle into eight 45 degree
@@ -762,10 +877,10 @@ static void HandleGamepadAxisInput(int gamepad_id, int axis, int value) {
       uint8 angle = (uint8)(int)(ApproximateAtan2(last_y, last_x) * 64.0f + 0.5f);
       buttons = kSegmentToButtons[(uint8)(angle + 16 + 64) >> 5];
     }
-    g_gamepad_buttons = buttons;
+    g_pad_axis[pad] = buttons;
   } else if ((axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
     if (value < 12000 || value >= 16000)  // hysteresis
-      HandleGamepadInput(axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? kGamepadBtn_L2 : kGamepadBtn_R2, value >= 12000);
+      HandleGamepadInput(pad, axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? kGamepadBtn_L2 : kGamepadBtn_R2, value >= 12000);
   }
 }
 

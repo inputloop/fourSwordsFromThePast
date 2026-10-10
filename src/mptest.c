@@ -17,6 +17,7 @@
 //   waitplay            tick until connected and playing (max 15s)
 //   localjoin <i> / localleave <i>
 //   corrupt             flip a byte of RAM (to test desync recovery)
+//   menu                toggle the overlay menu (navigate with hold + tick)
 //   expect_players <n>  fail unless n players are in the game
 //   expect_resyncs <n>  fail unless exactly n resyncs happened
 #include <stdio.h>
@@ -30,6 +31,7 @@
 #include "snes/ppu.h"
 #include "sprite.h"
 #include "session.h"
+#include "ui.h"
 #include <SDL.h>
 
 static uint16 ParseKeys(const char *s) {
@@ -87,6 +89,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   }
   uint16 held[kMpMaxPlayers] = { 0 };
   Session_Init("Tester");
+  Ui_Init(NULL);
   uint32 *pixels = calloc(width * height * 4 * 16, 1);
   char line[256];
   int frame = 0, failures = 0;
@@ -111,6 +114,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
     } else if (!strcmp(cmd, "shot")) {
       ZeldaDrawPpuFrame((uint8 *)pixels, width * 4, render_flags);
+      Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
     } else if (!strcmp(cmd, "status")) {
@@ -146,7 +150,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       bool wait = !strcmp(cmd, "waitplay");
       int n = wait ? 15 * 60 : atoi(arg1);
       for (int i = 0; i < n; i++) {
-        frame += Session_Tick(held, g_wanted_zelda_features);
+        uint16 in[kMpMaxPlayers];
+        memcpy(in, held, sizeof(in));
+        Ui_Update(in);
+        if (!Ui_PausesGame())
+          frame += Session_Tick(in, g_wanted_zelda_features);
         SDL_Delay(16);
         if (wait && Session_GetStatus()->client_state == 3)
           break;
@@ -155,6 +163,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
         failures++;
       }
+    } else if (!strcmp(cmd, "menu")) {
+      Ui_HandleKey(SDLK_ESCAPE, true);
     } else if (!strcmp(cmd, "corrupt")) {
       g_ram[0xF360] ^= 0x55;  // rupees
     } else if (!strcmp(cmd, "expect_players")) {

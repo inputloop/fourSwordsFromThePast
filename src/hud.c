@@ -1,3 +1,4 @@
+#include "mp.h"
 #include "hud.h"
 #include "zelda_rtl.h"
 
@@ -1383,6 +1384,13 @@ static void DrawHudComponents(uint16 *dst, const uint16 *src, int w, int h) {
 static void Hud_Update_Hearts() {  // 8dfb94
   static const uint16 kHudItemBoxTab1[] = { 0x24A2, 0x24A2, 0x24A2 };
   static const uint16 kHudItemBoxTab2[] = { 0x24A2, 0x24A1, 0x24A0 };
+  // In co-op each player's hearts are shown in a screen corner instead.
+  if (Mp_Active()) {
+    for (int y = 0; y < 3; y++)
+      for (int x = 19; x < 31; x++)
+        hud_tile_indices_buffer[HUDXY(x, y)] = 0x207f;
+    return;
+  }
   // The life meter
   Hud_UpdateHearts_Inner(&hud_tile_indices_buffer[HUDXY(20, 1)], kHudItemBoxTab1, link_health_capacity);
   Hud_UpdateHearts_Inner(&hud_tile_indices_buffer[HUDXY(20, 1)], kHudItemBoxTab2, (link_health_current + 3) & ~3);

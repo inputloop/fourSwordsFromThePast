@@ -40,6 +40,7 @@ static const MpRange kMpCtxRanges[] = {
   {0x476, 1},      // link_is_on_lower_level_mirror
   {0x47A, 1},      // about_to_jump_off_ledge
   {0x4CA, 1},      // low health beep
+  {0x656, 3},      // hud_cur_item_x/l/r (item switching enhancement)
   {0xB7B, 5},      // link_prevent_from_moving, drag_player
   {0xFC1, 5},      // flag_unk1, prev coords
   {0xF34F, 1},     // selected bottle
@@ -51,6 +52,7 @@ static const MpRange kMpCtxRanges[] = {
 static const MpRange kMpPersonalRanges[] = {
   {0xF0, 0x0B},
   {0x202, 1},
+  {0x656, 3},
   {0x303, 1},
   {0x307, 1},
   {0xF34F, 1},

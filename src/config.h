@@ -69,6 +69,13 @@ typedef struct Config {
   uint8 msuvolume;
   uint32 features0;
 
+  // [Multiplayer]
+  bool mp_friendly_fire;
+  bool mp_use_upnp;
+  uint16 mp_port;
+  const char *mp_player_name;
+  const char *mp_last_join;
+
   const char *link_graphics;
   char *memory_buffer;
   const char *shader;

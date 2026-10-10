@@ -277,6 +277,8 @@ static int GetIniSection(const char *s) {
     return 4;
   if (StringEqualsNoCase(s, "[GamepadMap]"))
     return 5;
+  if (StringEqualsNoCase(s, "[Multiplayer]"))
+    return 6;
   return -1;
 }
 
@@ -413,6 +415,10 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     } else if (StringEqualsNoCase(key, "ExtendedAspectRatio")) {
       const char* s;
       int h = 224;
+      // A later config file (zelda3.coop.ini) may override an earlier setting.
+      g_config.extended_aspect_ratio = 0;
+      g_config.extend_y = false;
+      g_config.features0 &= ~(kFeatures0_ExtendScreen64 | kFeatures0_WidescreenVisualFixes);
       bool nospr = false, novis = false;
       // todo: make it not depend on the order
       while ((s = NextDelim(&value, ',')) != NULL) {
@@ -444,6 +450,21 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.disable_frame_delay);
     } else if (StringEqualsNoCase(key, "Language")) {
       g_config.language = value;
+      return true;
+    }
+  } else if (section == 6) {
+    if (StringEqualsNoCase(key, "FriendlyFire")) {
+      return ParseBool(value, &g_config.mp_friendly_fire);
+    } else if (StringEqualsNoCase(key, "UseUpnp")) {
+      return ParseBool(value, &g_config.mp_use_upnp);
+    } else if (StringEqualsNoCase(key, "Port")) {
+      g_config.mp_port = (uint16)atoi(value);
+      return true;
+    } else if (StringEqualsNoCase(key, "PlayerName")) {
+      g_config.mp_player_name = value;
+      return true;
+    } else if (StringEqualsNoCase(key, "LastJoinAddress")) {
+      g_config.mp_last_join = value;
       return true;
     }
   } else if (section == 4) {
@@ -518,6 +539,8 @@ static bool ParseOneConfigFile(const char *filename, int depth) {
 
 void ParseConfigFile(const char *filename) {
   g_config.msuvolume = 100;  // default msu volume, 100%
+  g_config.mp_use_upnp = true;
+  g_config.mp_port = 47474;
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)
@@ -525,5 +548,7 @@ void ParseConfigFile(const char *filename) {
     if (!ParseOneConfigFile(filename, 0))
       fprintf(stderr, "Warning: Unable to read config file %s\n", filename);
   }
+  // Settings saved from the in-game options menu.
+  ParseOneConfigFile("zelda3.coop.ini", 0);
   RegisterDefaultKeys();
 }
