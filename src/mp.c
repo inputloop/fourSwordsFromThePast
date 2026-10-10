@@ -467,7 +467,7 @@ static void Mp_HandleRevives() {
     if (!near) {
       g_mp.p[p].revive_ctr = 0;
     } else if (++g_mp.p[p].revive_ctr >= kMpReviveFrames) {
-      Mp_Revive(p, 0x18);
+      Mp_Revive(p, 4);  // half a heart
       sound_effect_2 = 0x2f;
     }
   }

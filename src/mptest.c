@@ -10,6 +10,7 @@
 //   status              print player state
 //   expect_alive <p>    fail unless player p is standing
 //   expect_downed <p>   fail unless player p is down
+//   expect_hp <p> <n>   fail unless player p has n health (1/8 hearts)
 //   clearsprites        remove all enemies
 //   holecheck           verify every overworld fall hole resolves correctly in co-op
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
@@ -248,6 +249,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "clearsprites")) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;
+    } else if (!strcmp(cmd, "expect_hp")) {
+      int p = atoi(arg1) - 1;
+      if (Mp_PlayerHealth(p) != atoi(arg2)) {
+        printf("FAIL: P%d has %d health, expected %s\n", p + 1, Mp_PlayerHealth(p), arg2);
+        failures++;
+      }
     } else if (!strcmp(cmd, "expect_downed")) {
       int p = atoi(arg1) - 1;
       if (!g_mp.p[p].joined || !g_mp.p[p].downed) {

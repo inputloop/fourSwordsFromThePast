@@ -36,3 +36,4 @@ hold 3 -
 run 120
 status
 expect_alive 2
+expect_hp 2 4

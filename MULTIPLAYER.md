@@ -49,7 +49,7 @@ Players can drop in and drop out at any time.
   an invisible wall. Nobody is ever pushed or dragged, so nobody ends up in a
   wall. Downed ghosts left behind float over to the leader.
 - **Downed, not dead.** A Link that runs out of hearts becomes a flickering
-  ghost. Stand next to them for 1.5 seconds to revive them with 3 hearts. It
+  ghost. Stand next to them for 1.5 seconds to revive them with half a heart. It
   is game over only when everyone is down.
 - **Enemies** go after the nearest Link and can be hurt by anyone.
 
