@@ -1,5 +1,9 @@
 // Basic item randomizer: shuffles the contents of every chest in the game.
 //
+// A randomized game starts in "open mode": no intro and no escape from
+// Hyrule Castle; Link starts with the fighter's sword and shield and can go
+// anywhere.
+//
 // Whether a new game is randomized is decided when the save file is created
 // (Gameplay menu > Randomizer). The seed is stored in the save file, so the
 // game stays randomized the same way after saving and loading. Small keys,

@@ -45,6 +45,17 @@ void Rando_OnNewFile(uint8 *sram_slot) {
   }
   sram_slot[kRandoMarkerOffs] = kRandoMarker;
   memcpy(sram_slot + kRandoSeedOffs, &seed, 4);
+  // Open start: no intro and no escape from Hyrule Castle. The file starts
+  // as if Zelda was just brought to the sanctuary: Link has the fighter's
+  // sword and shield, may start at his house or the sanctuary, and can go
+  // anywhere right away.
+  sram_slot[0x359] = 1;     // fighter's sword
+  sram_slot[0x35A] = 1;     // fighter's shield
+  sram_slot[0x36E] = 0x80;  // full magic
+  sram_slot[0x3C5] = 2;     // progress: Zelda is safe in the sanctuary
+  sram_slot[0x3C6] = 0x15;  // progress flags as after the escape
+  sram_slot[0x3C7] = 1;     // map marker
+  sram_slot[0x3C8] = 0;     // starting point: Link's house
 }
 
 uint32 Rando_CurrentSeed() {
@@ -122,17 +133,19 @@ static void Evaluate(const State *s, Ev *e) {
   e->win = e->gt && e->aga;
 }
 
-static bool IsEscapeRoom(int room) {
-  // Link's house, the secret passage and Hyrule Castle (reachable during the escape).
-  return room == 0x104 || room == 0x55 || room == 0x71 || room == 0x72 || room == 0x80;
+static bool IsEarlyRoom(int room) {
+  // Link's house and the sanctuary: the two places a game starts from.
+  return room == 0x104 || room == 0x12;
 }
 
 // Returns 1 if the chest in room can be reached, 0 if not, -1 if the room
 // isn't known (then only filler goes there).
 static int RoomAccess(int room, const Ev *e) {
   switch (room) {
-  // Hyrule Castle, sanctuary and caves open from the start (bombs can be bought)
-  case 0x104: case 0x55: case 0x71: case 0x72: case 0x80: case 0x11: case 0x32: case 0x12:
+  // Places open from the start (bombs can be bought). The game starts after
+  // the escape, so the castle basement and sewers (rooms 0x11, 0x32, 0x71,
+  // 0x72, 0x80), whose keys come from the escape's guards, only get filler.
+  case 0x104: case 0x55: case 0x12:
   case 0x2F: case 0x11D: case 0x105: case 0x10A: case 0x123: case 0x120: case 0x10B:
     return true;
   case 0xE0: case 0xD0: return e->aga;              // Agahnim's tower
@@ -269,10 +282,10 @@ static bool TryFill(Placement *pl, Rng *r) {
   Shuffle(r, prog, nprog);
   Shuffle(r, junk, njunk);
 
-  // One lamp is found during the escape from Hyrule Castle, like in the original.
+  // One lamp is in Link's house or the sanctuary, where the game starts.
   int escape[8], nescape = 0;
   for (int k = 0; k < pl->nchests; k++)
-    if (pl->shuffled[k] && IsEscapeRoom(pl->room[k]) && nescape < 8)
+    if (pl->shuffled[k] && IsEarlyRoom(pl->room[k]) && nescape < 8)
       escape[nescape++] = k;
   for (int i = 0; i < nprog && nescape; i++) {
     if (prog[i] == kI_Lamp) {

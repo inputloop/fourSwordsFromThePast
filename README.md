@@ -18,16 +18,23 @@ See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 randomizer for save files created from then on (or set `Randomizer` in the
 `[Features]` section of `zelda3.ini`).
 
+- **Open start, no tutorial.** A randomized file skips the intro and the
+  escape from Hyrule Castle: it starts as if Zelda was just brought to the
+  sanctuary. Link has the fighter's sword and shield and full magic, starts
+  at his house or the sanctuary, and can go anywhere from the first step.
+  Non-randomized files start the usual way.
 - The contents of every chest in the game are shuffled: Bow, Hookshot,
   Hammer, gloves, Moon Pearl, Fire and Ice Rods, Lamp, Cane of Somaria,
   Magic Cape, Cane of Byrna, mails, Mirror Shield, boomerangs, a bottle,
   heart pieces, rupees, bombs and arrows. Small keys, big keys, maps and
   compasses stay in their dungeons, so dungeons play as before.
-- Items given by people or found outside chests (Sword, Boots, Book,
+- Items given by people or found outside chests (Boots, Book,
   Flippers, Mirror, Flute, Master Sword, medallions, pendants and crystals)
   are where they always were.
-- Every seed is checked to be beatable without glitches. One Lamp is always
-  found during the escape from Hyrule Castle. Gloves and mails are
+- Every seed is checked to be beatable without glitches, starting from the
+  open start. One Lamp is always in Link's house or the sanctuary chest.
+  The castle basement and sewer chests (normally opened during the escape)
+  only get filler. Gloves and mails are
   progressive: the first glove found is the Power Glove, the second the
   Titan's Mitt.
 - The seed is stored in the save file, so a file stays randomized the same

@@ -855,7 +855,15 @@ void NameFile_DoTheNaming() {  // 8cda4d
     }
   }
   srm_var1 = selectfile_R16 * 2 + 2;
-  uint8 *sram = &g_zenv.sram[selectfile_R16 * 0x500];
+  FileSelect_InitNewSave(&g_zenv.sram[selectfile_R16 * 0x500]);
+  ZeldaWriteSram();
+  ReturnToFileSelect();
+  irq_flag = 0xff;
+  sound_effect_1 = 0x2c;
+}
+
+// Fills in a new save file (the name is already there).
+void FileSelect_InitNewSave(uint8 *sram) {
   WORD(sram[0x3e5]) = 0x55aa;
   WORD(sram[0x20c]) = 0xf000;
   WORD(sram[0x20e]) = 0xf000;
@@ -869,10 +877,6 @@ void NameFile_DoTheNaming() {  // 8cda4d
   memcpy(sram + 0x340, kSramInit_Normal, 60);
   Rando_OnNewFile(sram);
   Intro_FixCksum(sram);
-  ZeldaWriteSram();
-  ReturnToFileSelect();
-  irq_flag = 0xff;
-  sound_effect_1 = 0x2c;
 }
 
 void NameFile_CheckForScrollInputX() {  // 8cdc8c

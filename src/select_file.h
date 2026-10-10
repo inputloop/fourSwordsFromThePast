@@ -10,6 +10,7 @@ void SelectFile_Func16();
 void Module_NamePlayer_1();
 void Module_NamePlayer_2();
 void Intro_FixCksum(uint8 *s);
+void FileSelect_InitNewSave(uint8 *sram);
 void LoadFileSelectGraphics();
 void Intro_ValidateSram();
 void Module01_FileSelect();

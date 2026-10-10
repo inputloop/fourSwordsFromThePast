@@ -20,6 +20,9 @@
 //   holecheck           verify every overworld fall hole resolves correctly in co-op
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
+//   newgame             create a save file in slot 1 and load it
+//   rando <off|random|hexseed>  randomizer setting for new save files
+//   randocheck <seed> <count> [v]  check that seeds can be beaten (v: print spoilers)
 //   pos <p> <x> <y>     put player p at x,y
 //   poke <hexaddr> <hexval>  change a RAM byte (shared progress spreads to every world)
 //   expect_ram <hexaddr> <hexval>  fail unless the RAM byte has that value
@@ -47,6 +50,8 @@
 #include "mp.h"
 #include "instance.h"
 #include "randomizer.h"
+#include "select_file.h"
+#include "messaging.h"
 #include "snes/ppu.h"
 #include "sprite.h"
 #include "overworld.h"
@@ -185,6 +190,17 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       printf("randocheck: %d of %s seeds failed\n", bad, arg2);
       if (bad)
         failures++;
+    } else if (!strcmp(cmd, "newgame")) {
+      // newgame: make a new save file in slot 1 and load it, as if picked on the file select screen
+      uint8 *sram = g_zenv.sram;
+      memset(sram, 0, 0x500);
+      static const uint16 kName[6] = { 0x18e, 0x18e, 0x18e, 0x18e, 0x18e, 0x18e };  // spaces? any tile works
+      memcpy(sram + 0x3d9, kName, sizeof(kName));
+      FileSelect_InitNewSave(sram);
+      srm_var1 = 2;
+      WORD(g_ram[0]) = 0;
+      CopySaveToWRAM();
+      music_control = 0xf1;
     } else if (!strcmp(cmd, "rando")) {
       // rando <off|random|hexseed>: randomizer setting for new save files
       Rando_SetNewGameSetting(!strcmp(arg1, "off") ? kRando_Off : !strcmp(arg1, "random") ? kRando_RandomSeed :

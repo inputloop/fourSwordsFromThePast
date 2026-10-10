@@ -1,0 +1,23 @@
+# A new randomized save file starts in open mode: no intro, no escape. Link
+# has the fighter's sword and shield, picks Link's house or the sanctuary,
+# and walks right out into the open world.
+rando 40
+run 200
+newgame
+run 400
+expect_ram f4f0 52
+expect_ram f3c5 2
+expect_ram f359 1
+expect_ram f35a 1
+expect_ram f36e 80
+# "Start from Link's house"
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+hold 1 D
+run 200
+hold 1 -
+run 100
+expect_module 9
