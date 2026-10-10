@@ -11,6 +11,7 @@
 //   expect_alive <p>    fail unless player p is standing
 //   expect_downed <p>   fail unless player p is down
 //   clearsprites        remove all enemies
+//   peek <hexaddr> [n]  print RAM bytes
 //   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
 //   hp <p> <health>     set a player's health (1/8 hearts)
 // Session (netplay) commands. "hold" then refers to local players.
@@ -203,6 +204,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: %d resyncs, expected %s\n", Session_GetStatus()->resyncs, arg1);
         failures++;
       }
+    } else if (!strcmp(cmd, "peek")) {
+      int addr = strtol(arg1, NULL, 16), n = arg2[0] ? atoi(arg2) : 1;
+      printf("[frame %d] peek %x:", frame, addr);
+      for (int i = 0; i < n; i++)
+        printf(" %02x", g_ram[addr + i]);
+      printf("\n");
     } else if (!strcmp(cmd, "clearsprites")) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;

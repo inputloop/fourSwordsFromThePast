@@ -325,6 +325,12 @@ static int Mp_NearestAlive(uint16 x, uint16 y) {
   return best;
 }
 
+static bool Mp_LeaderInCutscene() {
+  uint8 *state = Mp_PlayerRam(g_mp.leader, 0x5D);         // link_player_handler_state
+  uint8 *immobilized = Mp_PlayerRam(g_mp.leader, 0x2E4);  // flag_is_link_immobilized
+  return *state == kPlayerState_AsleepInBed || *immobilized;
+}
+
 void Mp_PreSprite(int k) {
   if (!Mp_Active())
     return;
@@ -335,6 +341,12 @@ void Mp_PreSprite(int k) {
     target = g_mp.sprite_owner[k];
   else
     target = Mp_NearestAlive(sprite_x_lo[k] | sprite_x_hi[k] << 8, sprite_y_lo[k] | sprite_y_hi[k] << 8);
+  // During story scenes (asleep in bed, cutscenes freezing Link) everything
+  // talks to the leader, so scripted state lands on the right Link.
+  if (Mp_LeaderInCutscene()) {
+    Mp_SwapTo(g_mp.leader);
+    return;
+  }
   // Many enemies have their own sword handling, so an enemy that is inside
   // some Link's sword swing deals with that Link this frame.
   if (st >= 9) {
@@ -478,6 +490,15 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     return;
   assert(g_mp.resident == g_mp.leader);
 
+  // While the leader sleeps through the intro the others aren't around yet.
+  // They join the leader once it is standing on the floor.
+  if (link_player_handler_state == kPlayerState_AsleepInBed) {
+    g_mp.area_key = 0xffffffff;
+    return;
+  }
+  if (g_mp.area_key == 0xffffffff && (link_player_handler_state != kPlayerState_Ground || link_auxiliary_state))
+    return;
+
   uint32 key = Mp_AreaKey();
   if (key != g_mp.area_key || g_mp.after_death) {
     g_mp.area_key = key;
@@ -615,7 +636,7 @@ void Mp_FriendlyFire() {
 
 // Draws the non-leader Links into private sprite lists for the renderer.
 void Mp_DrawOtherPlayers() {
-  if (!Mp_Active())
+  if (!Mp_Active() || g_mp.area_key == 0xffffffff)
     return;
   uint8 saved[0x2A0];
   memcpy(saved, &g_ram[0x800], sizeof(saved));
