@@ -11,15 +11,26 @@
 //   expect_alive <p>    fail unless player p is standing
 //   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
 //   hp <p> <health>     set a player's health (1/8 hearts)
+// Session (netplay) commands. "hold" then refers to local players.
+//   host <port> | connect <addr> | disconnect
+//   tick <n>            run n session ticks in real time (16ms apart)
+//   waitplay            tick until connected and playing (max 15s)
+//   localjoin <i> / localleave <i>
+//   corrupt             flip a byte of RAM (to test desync recovery)
+//   expect_players <n>  fail unless n players are in the game
+//   expect_resyncs <n>  fail unless exactly n resyncs happened
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "types.h"
 #include "zelda_rtl.h"
 #include "variables.h"
+#include "features.h"
 #include "mp.h"
 #include "snes/ppu.h"
 #include "sprite.h"
+#include "session.h"
+#include <SDL.h>
 
 static uint16 ParseKeys(const char *s) {
   static const char kKeys[] = "BYsSUDLRAXlr";
@@ -50,8 +61,11 @@ static void WritePpm(const char *file, int width, int height, uint32 *pixels, in
 }
 
 static void PrintStatus(int frame) {
-  printf("[frame %d] module=%d/%d leader=%d resident=%d room=%d ow=%d\n", frame, main_module_index,
-         submodule_index, g_mp.leader, g_mp.resident, dungeon_room_index, overworld_screen_index);
+  const SessionStatus *st = Session_GetStatus();
+  printf("[frame %d] module=%d/%d leader=%d resident=%d room=%d ow=%d hash=%08x | session mode=%d state=%d id=%d ping=%d buf=%d resyncs=%d local_slot0=%d msg='%s'\n",
+         frame, main_module_index, submodule_index, g_mp.leader, g_mp.resident, dungeon_room_index, overworld_screen_index,
+         ZeldaHashState(), st->mode, st->client_state, st->my_id, st->ping_ms, st->frames_buffered, st->resyncs,
+         st->local_slot[0], st->message);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
       continue;
@@ -72,6 +86,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     return 1;
   }
   uint16 held[kMpMaxPlayers] = { 0 };
+  Session_Init("Tester");
   uint32 *pixels = calloc(width * height * 4 * 16, 1);
   char line[256];
   int frame = 0, failures = 0;
@@ -117,6 +132,41 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
     } else if (!strcmp(cmd, "hp")) {
       *Mp_PlayerRam(atoi(arg1) - 1, 0xF36D) = atoi(arg2);
+    } else if (!strcmp(cmd, "host")) {
+      Session_Host(atoi(arg1), false);
+    } else if (!strcmp(cmd, "connect")) {
+      Session_Join(arg1);
+    } else if (!strcmp(cmd, "disconnect")) {
+      Session_Disconnect();
+    } else if (!strcmp(cmd, "localjoin")) {
+      Session_LocalJoin(atoi(arg1) - 1);
+    } else if (!strcmp(cmd, "localleave")) {
+      Session_LocalLeave(atoi(arg1) - 1);
+    } else if (!strcmp(cmd, "tick") || !strcmp(cmd, "waitplay")) {
+      bool wait = !strcmp(cmd, "waitplay");
+      int n = wait ? 15 * 60 : atoi(arg1);
+      for (int i = 0; i < n; i++) {
+        frame += Session_Tick(held, g_wanted_zelda_features);
+        SDL_Delay(16);
+        if (wait && Session_GetStatus()->client_state == 3)
+          break;
+      }
+      if (wait && Session_GetStatus()->client_state != 3) {
+        printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "corrupt")) {
+      g_ram[0xF360] ^= 0x55;  // rupees
+    } else if (!strcmp(cmd, "expect_players")) {
+      if (Mp_NumJoined() != atoi(arg1)) {
+        printf("FAIL: %d players, expected %s\n", Mp_NumJoined(), arg1);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "expect_resyncs")) {
+      if (Session_GetStatus()->resyncs != atoi(arg1)) {
+        printf("FAIL: %d resyncs, expected %s\n", Session_GetStatus()->resyncs, arg1);
+        failures++;
+      }
     } else if (!strcmp(cmd, "expect_alive")) {
       int p = atoi(arg1) - 1;
       if (!Mp_IsAlive(p)) {

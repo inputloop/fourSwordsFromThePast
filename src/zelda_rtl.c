@@ -416,6 +416,39 @@ static void SaveSnesState(SaveLoadFunc *func, void *ctx) {
   ZeldaApuUnlock();
 }
 
+// Snapshots used by netplay. Includes the co-op state.
+void ZeldaSaveStateToBuffer(ByteArray *arr) {
+  SaveSnesState(&saveFunc, arr);
+  Mp_SaveLoad(&saveFunc, arr);
+}
+
+bool ZeldaLoadStateFromBuffer(const uint8 *data, size_t size) {
+  LoadFuncState st = { (uint8 *)data, (uint8 *)data + size };
+  LoadSnesState(&loadFunc, &st);
+  Mp_SaveLoad(&loadFunc, &st);
+  return st.p == st.pend;
+}
+
+uint32 ZeldaHashState() {
+  uint32 h = 2166136261u;
+  for (size_t i = 0; i < 0x20000; i++) {
+    // Skip areas that are written when a snapshot is taken, but never read by the game.
+    if (i == 0x1b00)
+      i += 224 * 2;  // copy of the relocated hdma table
+    if (i == 0x654)
+      i++;  // msu volume
+    if (i == 0x1DB20)
+      i += 0x80;  // msu resume info
+    h = (h ^ g_ram[i]) * 16777619u;
+  }
+  const uint8 *m = (const uint8 *)&g_mp;
+  for (size_t i = 0; i < sizeof(g_mp); i++)
+    h = (h ^ m[i]) * 16777619u;
+  return h;
+}
+
+int g_apui00_override = -1;
+
 typedef struct StateRecorder {
   uint16 last_inputs;
   uint32 frames_since_last;
@@ -709,7 +742,7 @@ bool ZeldaRunFrame(int inputs) {
     StateRecorder_Record(&state_recorder, inputs);
 
     // This is whether APUI00 is true or false, this is used by the ancilla code.
-    uint8 apui00 = ZeldaIsMusicPlaying();
+    uint8 apui00 = g_apui00_override >= 0 ? g_apui00_override : ZeldaIsMusicPlaying();
     if (apui00 != g_ram[kRam_APUI00]) {
       g_ram[kRam_APUI00] = apui00;
       EmuSyncMemoryRegion(&g_ram[kRam_APUI00], 1);
@@ -885,7 +918,12 @@ void ZeldaReadSram() {
   }
 }
 
+bool g_sram_write_disabled;
+
 void ZeldaWriteSram() {
+  // A netplay client plays in the host's world and must not touch its own saves.
+  if (g_sram_write_disabled)
+    return;
   rename("saves/sram.dat", "saves/sram.bak");
   FILE *f = fopen("saves/sram.dat", "wb");
   if (f) {

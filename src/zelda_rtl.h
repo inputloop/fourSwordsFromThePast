@@ -67,7 +67,16 @@ enum {
 
 void SaveLoadSlot(int cmd, int which);
 void ZeldaWriteSram();
+extern bool g_sram_write_disabled;
 void ZeldaReadSram();
+
+typedef struct ByteArray ByteArray;
+void ZeldaSaveStateToBuffer(ByteArray *arr);
+bool ZeldaLoadStateFromBuffer(const uint8 *data, size_t size);
+uint32 ZeldaHashState();
+// When >= 0, replaces the audio thread's "music is playing" flag so netplay stays deterministic.
+extern int g_apui00_override;
+bool ZeldaIsMusicPlaying();
 
 typedef void ZeldaRunFrameFunc(uint16 input, int run_what);
 typedef void ZeldaSyncAllFunc();
