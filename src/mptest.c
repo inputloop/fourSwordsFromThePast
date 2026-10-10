@@ -11,6 +11,7 @@
 //   expect_alive <p>    fail unless player p is standing
 //   expect_downed <p>   fail unless player p is down
 //   clearsprites        remove all enemies
+//   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
 //   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
 //   hp <p> <health>     set a player's health (1/8 hearts)
@@ -210,6 +211,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       for (int i = 0; i < n; i++)
         printf(" %02x", g_ram[addr + i]);
       printf("\n");
+    } else if (!strcmp(cmd, "expect_module")) {
+      if (main_module_index != atoi(arg1)) {
+        printf("FAIL: module %d, expected %s at frame %d\n", main_module_index, arg1, frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "clearsprites")) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;

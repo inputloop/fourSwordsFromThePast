@@ -6,8 +6,14 @@ join 3
 join 4
 expect_players 4
 hold 1 U
+hold 2 U
+hold 3 U
+hold 4 U
 run 200
 hold 1 -
+hold 2 -
+hold 3 -
+hold 4 -
 hold 2 R
 hold 3 L
 hold 4 D

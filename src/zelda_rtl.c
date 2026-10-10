@@ -263,7 +263,7 @@ static void ZeldaRunGameLoop() {
   frame_counter++;
   ClearOamBuffer();
   Mp_BeginFrame();
-  Module_MainRouting();
+  Mp_RunRouting(&Module_MainRouting);
   Mp_EndFrame();
   NMI_PrepareSprites();
   nmi_boolean = 0;

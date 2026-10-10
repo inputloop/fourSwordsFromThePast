@@ -90,6 +90,7 @@ void Mp_Reset() {
   memset(&g_mp_render, 0, sizeof(g_mp_render));
   g_mp.p[0].joined = 1;
   g_mp.friendly_fire = 0;
+  g_mp.group_exits = 1;
   memset(g_mp.ancilla_owner, 0, sizeof(g_mp.ancilla_owner));
 }
 
@@ -755,4 +756,77 @@ void Mp_PrepareRender(Ppu *ppu) {
 void Mp_FinishRender(Ppu *ppu) {
   if (ppu->numExtraSpriteSets || Mp_Active())
     memcpy(&ppu->cgram[0xf0], g_mp_saved_cgram, sizeof(g_mp_saved_cgram));
+}
+
+// ---------------------------------------------------------------------------
+// Group exits: a room/screen change caused by walking only happens when every
+// standing player holds that same direction. The frame is simulated, and if a
+// player walked into an exit alone, it is simulated again from a RAM snapshot
+// with that player standing still, which makes the exit act like a wall.
+
+static bool Mp_IsTravel(uint8 m0, uint8 m1, uint8 s1) {
+  if (m1 != m0) {
+    // dungeon/overworld loads, spotlight exits, falling into a dungeon
+    return m1 == 6 || m1 == 8 || m1 == 10 || m1 == 11 || m1 == 15 || m1 == 17;
+  }
+  if (m1 == 7) {
+    // quadrant scroll, room change, stairs, falling, warp tiles
+    return s1 == 1 || s1 == 2 || s1 == 6 || s1 == 7 || s1 == 8 || s1 == 0x0e ||
+           (s1 >= 0x10 && s1 <= 0x13) || s1 == 0x15;
+  }
+  if (m1 == 9) {
+    // anything but opening doors, mirror warps, drowning, weathervane
+    return s1 != 0 && !(s1 >= 0x09 && s1 <= 0x0c) && s1 != 0x23 && s1 != 0x2a && s1 != 0x2c && s1 != 0x2d;
+  }
+  return false;
+}
+
+static uint8 Mp_HeldDirections(int p) {
+  return *Mp_PlayerRam(p, 0xF0) & 0x0f;  // joypad1H_last: up, down, left, right
+}
+
+static void Mp_ClearDirections(int p) {
+  *Mp_PlayerRam(p, 0xF0) &= 0xf0;  // joypad1H_last
+  *Mp_PlayerRam(p, 0xF4) &= 0xf0;  // filtered_joypad_H
+}
+
+void Mp_RunRouting(void (*routing)(void)) {
+  uint8 m0 = main_module_index, s0 = submodule_index;
+  if (g_mp.exit_blocked_timer)
+    g_mp.exit_blocked_timer--;
+  if (!g_mp.group_exits || !Mp_Active() || !((m0 == 7 || m0 == 9) && s0 == 0)) {
+    routing();
+    return;
+  }
+  // Directions everyone agrees on.
+  uint8 common = 0x0f;
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    if (Mp_IsAlive(p))
+      common &= Mp_HeldDirections(p);
+
+  static uint8 before[0x20000], after[0x20000];
+  static MpState mp_before, mp_after;
+  memcpy(before, g_ram, sizeof(before));
+  mp_before = g_mp;
+  routing();
+  if (common || !Mp_IsTravel(m0, main_module_index, submodule_index))
+    return;
+
+  memcpy(after, g_ram, sizeof(after));
+  mp_after = g_mp;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!Mp_IsAlive(p) || !(*(p == mp_before.resident ? &before[0xF0] : &mp_before.p[p].ctx[Mp_CtxOffset(0xF0)]) & 0x0f))
+      continue;
+    memcpy(g_ram, before, sizeof(before));
+    g_mp = mp_before;
+    Mp_ClearDirections(p);
+    routing();
+    if (!Mp_IsTravel(m0, main_module_index, submodule_index)) {
+      g_mp.exit_blocked_timer = 90;
+      return;
+    }
+  }
+  // Not caused by walking (pits, warps, scripts): let it happen.
+  memcpy(g_ram, after, sizeof(after));
+  g_mp = mp_after;
 }

@@ -32,10 +32,13 @@ Players can drop in and drop out at any time.
   maximum.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
-- **Shared screen.** The camera follows the *leader*. Whoever opens a menu,
-  talks to someone, takes stairs or walks through a door becomes the leader,
-  and everybody else comes along to the new room. Other Links can't leave the
-  screen.
+- **Shared screen, group exits.** The camera follows the *leader*. Rooms and
+  screens only change when every standing player heads the same way: walking
+  into a door, stairs or the screen edge alone acts like a wall (with an
+  "Everyone has to head that way!" hint). When the group goes through,
+  everybody comes along. Pits, warps and scripted scenes aren't blocked.
+  Whoever opens a menu or talks to someone becomes the leader. Other Links
+  can't leave the screen.
 - **Downed, not dead.** A Link that runs out of hearts becomes a flickering
   ghost. Stand next to them for 1.5 seconds to revive them with 3 hearts. It
   is game over only when everyone is down.
@@ -49,6 +52,9 @@ addresses. `src/mp.c` gives each player a private copy of those RAM ranges
 
 - The **leader**'s context is in RAM at frame boundaries, so camera, rooms,
   menus and cutscenes work as in the original game.
+- Group exits (`Mp_RunRouting`): if a frame starts a room change while the
+  players don't all hold that direction, the frame is replayed from a RAM
+  snapshot with the walking player standing still.
 - The gameplay modules run `Mp_RunOtherPlayers()` after the leader's player
   control, which swaps in each other Link and runs the same control code.
   If that code changes the game module, that player becomes the leader.

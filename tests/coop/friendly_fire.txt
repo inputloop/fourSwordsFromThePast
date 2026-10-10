@@ -4,8 +4,12 @@ run 30
 join 2
 join 3
 hold 1 U
+hold 2 U
+hold 3 U
 run 200
 hold 1 -
+hold 2 -
+hold 3 -
 hold 3 L
 run 40
 hold 3 -

@@ -49,6 +49,8 @@ typedef struct MpState {
   uint8 sprite_owner[16];
   uint8 sprite_seen_state[16];
   uint8 module_snapshot[2];
+  uint8 exit_blocked_timer;  // > 0 shows the "everyone must head that way" hint
+  uint8 group_exits;         // 1: rooms change only when everyone heads the same way
   uint16 inputs[kMpMaxPlayers];
   MpPlayer p[kMpMaxPlayers];
 } MpState;
@@ -89,6 +91,8 @@ bool Mp_IsAlive(int p);
 
 // Hooks called from the game code
 void Mp_BeginFrame();
+// Runs one frame of the game's module routing, applying the group exit rule.
+void Mp_RunRouting(void (*routing)(void));
 void Mp_EndFrame();
 void Mp_RunOtherPlayers(void (*control)(void));
 void Mp_DrawOtherPlayers();

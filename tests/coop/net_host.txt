@@ -4,6 +4,7 @@ host 47474
 tick 300
 status
 expect_players 2
+# The client holds right, so the host can't take the group into the palace alone.
 hold 1 U
 tick 300
 hold 1 -

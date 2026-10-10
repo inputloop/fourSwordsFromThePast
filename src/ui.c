@@ -770,6 +770,8 @@ static void DrawNotifications() {
   } else if (st->mode == kSessionClient && st->client_state == 2) {
     snprintf(buf, sizeof(buf), "Downloading the host's game %d%%", st->snapshot_progress);
     msg = buf;
+  } else if (g_mp.exit_blocked_timer && Mp_Active()) {
+    msg = "Everyone has to head that way!";
   } else if (g_ui.last_message[0] && now - g_ui.message_time < 4000) {
     msg = g_ui.last_message;
   }
