@@ -636,6 +636,9 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     if (r->err)
       return;
     NetAddr a = { from->ip, port };
+    // The host on this same machine answers both the broadcast and localhost.
+    if (a.ip == 0x7f000001 && Net_GetLocalIp())
+      a.ip = Net_GetLocalIp();
     char addr[32];
     Net_AddrToString(&a, addr, sizeof(addr));
     int i;

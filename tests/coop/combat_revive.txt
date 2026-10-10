@@ -1,0 +1,34 @@
+# An enemy downs P2 (no game over), P3 kills an enemy, then P3 revives P2.
+load 2
+run 30
+join 2
+join 3
+hold 1 U
+run 200
+hold 1 -
+hold 2 R
+hold 3 L
+run 30
+hold 2 -
+hold 3 -
+hp 2 2
+spawn 41 2
+run 200
+status
+expect_downed 2
+expect_alive 1
+expect_alive 3
+clearsprites
+spawn 4f 3 -18
+hold 3 B
+run 2
+hold 3 -
+run 30
+status
+clearsprites
+hold 3 R
+run 60
+hold 3 -
+run 120
+status
+expect_alive 2

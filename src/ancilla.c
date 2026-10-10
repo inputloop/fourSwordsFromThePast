@@ -1593,15 +1593,25 @@ void Ancilla_ApplyConveyor(int k) {  // 8897be
   Ancilla_MoveX(k);
 }
 
+static void Bomb_CheckPlayerDamage(int k);
+
 void Bomb_CheckSpriteAndPlayerDamage(int k) {  // 889815
-  static const uint8 kBomb_Dmg_Speed[16] = {32, 32, 32, 32, 32, 32, 28, 28, 28, 28, 28, 28, 24, 24, 24, 24};
-  static const uint8 kBomb_Dmg_Zvel[16] = {16, 16, 16, 16, 16, 16, 12, 12, 12, 12, 8, 8, 8, 8, 8, 8};
-  static const uint8 kBomb_Dmg_Delay[16] = {32, 32, 32, 32, 32, 32, 24, 24, 24, 24, 24, 24, 16, 16, 16, 16};
-  static const uint8 kBomb_Dmg_ToLink[3] = {8, 4, 2};
 
   if (ancilla_item_to_link[k] == 0 || ancilla_item_to_link[k] >= 9)
     return;
   Bomb_CheckSpriteDamage(k);
+  // With friendly fire, explosions hurt every Link, not only the bomber.
+  if (Mp_Active() && g_mp.friendly_fire)
+    Mp_ForEachAlivePlayer(k, &Bomb_CheckPlayerDamage);
+  else
+    Bomb_CheckPlayerDamage(k);
+}
+
+static void Bomb_CheckPlayerDamage(int k) {
+  static const uint8 kBomb_Dmg_Speed[16] = {32, 32, 32, 32, 32, 32, 28, 28, 28, 28, 28, 28, 24, 24, 24, 24};
+  static const uint8 kBomb_Dmg_Zvel[16] = {16, 16, 16, 16, 16, 16, 12, 12, 12, 12, 8, 8, 8, 8, 8, 8};
+  static const uint8 kBomb_Dmg_Delay[16] = {32, 32, 32, 32, 32, 32, 24, 24, 24, 24, 24, 24, 16, 16, 16, 16};
+  static const uint8 kBomb_Dmg_ToLink[3] = {8, 4, 2};
   if (link_disable_sprite_damage) {
     if (k + 1 == flag_is_ancilla_to_pick_up && link_state_bits & 0x80) {
       link_state_bits &= ~0x80;

@@ -1,0 +1,16 @@
+# Netplay client: joins, plays, survives a forced desync and leaves.
+connect 127.0.0.1:47474
+waitplay
+expect_players 2
+hold 1 R
+tick 120
+hold 1 -
+tick 300
+status
+expect_resyncs 0
+corrupt
+tick 200
+expect_resyncs 1
+disconnect
+tick 30
+status

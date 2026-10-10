@@ -1,0 +1,21 @@
+# P2 shoots an arrow at P3 with friendly fire on.
+load 2
+run 30
+join 2
+join 3
+hold 1 U
+run 200
+hold 1 -
+hold 3 L
+run 40
+hold 3 -
+ff 1
+hold 2 L
+run 4
+hold 2 -
+run 2
+hold 2 Y
+run 20
+hold 2 -
+run 40
+status

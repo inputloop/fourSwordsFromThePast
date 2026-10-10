@@ -105,6 +105,7 @@ typedef uint8 MpSpriteCheckFuncU8(int k);
 uint8 Mp_AnyPlayerU8(int k, MpSpriteCheckFuncU8 *func);
 void Mp_ClearPerFrameSpriteFlags();
 void Mp_FriendlyFire();
+void Mp_ForEachAlivePlayer(int k, void (*func)(int k));
 
 typedef struct Ppu Ppu;
 void Mp_PrepareRender(Ppu *ppu);

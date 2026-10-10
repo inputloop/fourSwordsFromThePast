@@ -4,6 +4,7 @@
 #include "player.h"
 #include "player_oam.h"
 #include "sprite.h"
+#include "ancilla.h"
 #include "misc.h"
 #include "hud.h"
 #include "features.h"
@@ -523,6 +524,17 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     Mp_FriendlyFire();
 }
 
+void Mp_ForEachAlivePlayer(int k, void (*func)(int k)) {
+  int r = g_mp.resident;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!Mp_IsAlive(p))
+      continue;
+    Mp_SwapTo(p);
+    func(k);
+  }
+  Mp_SwapTo(r);
+}
+
 static void Mp_HitBoxFromLink(SpriteHitBox *hb) {
   uint16 x = link_x_coord + 4, y = link_y_coord + 8;
   hb->r4_spr_xlo = x;
@@ -533,8 +545,49 @@ static void Mp_HitBoxFromLink(SpriteHitBox *hb) {
   hb->r7_spr_ysize = 8;
 }
 
+static void Mp_HurtLink(uint16 from_x, uint16 from_y, uint8 damage) {
+  int dx = (int16)(link_x_coord - from_x), dy = (int16)(link_y_coord - from_y);
+  link_actual_vel_x = abs(dx) >= abs(dy) ? (dx < 0 ? -24 : 24) : 0;
+  link_actual_vel_y = abs(dx) < abs(dy) ? (dy < 0 ? -24 : 24) : 0;
+  link_actual_vel_z = 12;
+  link_z_coord = 0;
+  link_incapacitated_timer = 19;
+  link_auxiliary_state = 1;
+  link_give_damage = damage;
+}
+
+// Projectiles (arrows, rods, sword beams, boomerang, hookshot) hitting teammates.
+static void Mp_FriendlyFireProjectiles() {
+  for (int k = 0; k < 10; k++) {
+    uint8 t = ancilla_type[k];
+    uint8 dmg;
+    switch (t) {
+    case 0x01: case 0x02: case 0x09: case 0x0B: case 0x0C: dmg = 4; break;
+    case 0x05: case 0x1F: dmg = 2; break;
+    default: continue;
+    }
+    int owner = g_mp.ancilla_owner[k];
+    uint16 ax = Ancilla_GetX(k), ay = Ancilla_GetY(k);
+    for (int v = 0; v < kMpMaxPlayers; v++) {
+      if (v == owner || !Mp_IsAlive(v))
+        continue;
+      Mp_SwapTo(v);
+      if (countdown_for_blink || link_disable_sprite_damage || link_auxiliary_state || ancilla_floor[k] != link_is_on_lower_level)
+        continue;
+      if ((uint16)(link_x_coord + 12 - ax) < 24 && (uint16)(link_y_coord + 20 - ay) < 28) {
+        Mp_HurtLink(ax, ay, dmg);
+        if (t == 0x09 || t == 0x02 || t == 0x0B || t == 0x01)
+          ancilla_type[k] = 0;
+        break;
+      }
+    }
+  }
+  Mp_SwapToLeader();
+}
+
 // Sword hits between players.
 void Mp_FriendlyFire() {
+  Mp_FriendlyFireProjectiles();
   for (int a = 0; a < kMpMaxPlayers; a++) {
     if (!Mp_IsAlive(a))
       continue;
@@ -551,16 +604,8 @@ void Mp_FriendlyFire() {
       Mp_SwapTo(v);
       if (link_is_on_lower_level == floor && !countdown_for_blink && !link_disable_sprite_damage) {
         Mp_HitBoxFromLink(&hb);
-        if (CheckIfHitBoxesOverlap(&hb)) {
-          int dx = (int16)(link_x_coord - ax), dy = (int16)(link_y_coord - ay);
-          link_actual_vel_x = abs(dx) >= abs(dy) ? (dx < 0 ? -24 : 24) : 0;
-          link_actual_vel_y = abs(dx) < abs(dy) ? (dy < 0 ? -24 : 24) : 0;
-          link_actual_vel_z = 12;
-          link_z_coord = 0;
-          link_incapacitated_timer = 19;
-          link_auxiliary_state = 1;
-          link_give_damage = 4;
-        }
+        if (CheckIfHitBoxesOverlap(&hb))
+          Mp_HurtLink(ax, ay, 4);
       }
       Mp_SwapTo(a);
     }

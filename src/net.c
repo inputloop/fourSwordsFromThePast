@@ -1,4 +1,3 @@
-#include "net.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +6,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
-typedef int socklen_t;
 #define CLOSESOCKET closesocket
 #else
 #include <sys/types.h>
@@ -23,6 +21,9 @@ typedef int SOCKET;
 #define INVALID_SOCKET (-1)
 #define CLOSESOCKET close
 #endif
+
+// After the system headers: types.h defines a DWORD() macro that clashes with windows.h.
+#include "net.h"
 
 struct NetSocket {
   SOCKET fd;
@@ -50,7 +51,7 @@ static void SetNonBlocking(SOCKET fd) {
 #endif
 }
 
-NetSocket *Net_Open(uint16 port, bool broadcast) {
+NetSocket *Net_Open(uint16_t port, bool broadcast) {
   if (!Net_Init())
     return NULL;
   SOCKET fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -80,7 +81,7 @@ void Net_Close(NetSocket *s) {
   }
 }
 
-uint16 Net_LocalPort(NetSocket *s) {
+uint16_t Net_LocalPort(NetSocket *s) {
   struct sockaddr_in sa;
   socklen_t len = sizeof(sa);
   if (getsockname(s->fd, (struct sockaddr *)&sa, &len) != 0)
@@ -109,16 +110,16 @@ int Net_Recv(NetSocket *s, NetAddr *from, void *data, int maxlen) {
   return n;
 }
 
-bool Net_ParseAddr(const char *str, uint16 default_port, NetAddr *out) {
+bool Net_ParseAddr(const char *str, uint16_t default_port, NetAddr *out) {
   if (!Net_Init())
     return false;
   char host[256];
   snprintf(host, sizeof(host), "%s", str);
-  uint16 port = default_port;
+  uint16_t port = default_port;
   char *colon = strrchr(host, ':');
   if (colon) {
     *colon = 0;
-    port = (uint16)atoi(colon + 1);
+    port = (uint16_t)atoi(colon + 1);
   }
   if (host[0] == 0)
     return false;
@@ -141,7 +142,7 @@ bool Net_AddrEqual(const NetAddr *a, const NetAddr *b) {
   return a->ip == b->ip && a->port == b->port;
 }
 
-uint32 Net_GetLocalIp() {
+uint32_t Net_GetLocalIp() {
   // Connecting a UDP socket sends nothing but makes the OS pick the
   // outgoing interface, whose address we can then read back.
   if (!Net_Init())
@@ -153,7 +154,7 @@ uint32 Net_GetLocalIp() {
   sa.sin_family = AF_INET;
   sa.sin_addr.s_addr = htonl(0x08080808);
   sa.sin_port = htons(53);
-  uint32 ip = 0;
+  uint32_t ip = 0;
   if (connect(fd, (struct sockaddr *)&sa, sizeof(sa)) == 0) {
     socklen_t len = sizeof(sa);
     if (getsockname(fd, (struct sockaddr *)&sa, &len) == 0)

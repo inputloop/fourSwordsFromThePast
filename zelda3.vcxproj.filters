@@ -187,6 +187,24 @@
     <ClCompile Include="src\messaging.c">
       <Filter>Zelda</Filter>
     </ClCompile>
+    <ClCompile Include="src\mp.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mptest.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\net.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\session.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ui.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\upnp.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
     <ClCompile Include="src\misc.c">
       <Filter>Zelda</Filter>
     </ClCompile>
@@ -385,6 +403,21 @@
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\messaging.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mp.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\net.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\session.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ui.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\upnp.h">
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\misc.h">

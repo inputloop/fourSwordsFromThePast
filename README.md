@@ -1,10 +1,17 @@
 # fourSwordsFromThePast
 
-A modding base for *The Legend of Zelda: A Link to the Past*, built on the
-[snesrev/zelda3](https://github.com/snesrev/zelda3) C reimplementation
-(vendored from commit `45a149d8`, MIT licensed). It runs natively on PC.
+*The Legend of Zelda: A Link to the Past* as a native PC game with **four player
+drop-in/drop-out co-op** (same PC, LAN and internet), each Link in its own
+color, per-player hearts in the screen corners, toggleable friendly fire,
+native widescreen and an in-game options menu.
 
-## Quick start (Linux)
+Built on the [snesrev/zelda3](https://github.com/snesrev/zelda3) C
+reimplementation (vendored from commit `45a149d8`, MIT licensed). You need your
+own US ROM to extract the game's assets.
+
+See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
+
+## Quick start (Linux / macOS)
 
 ```sh
 sudo apt-get install libsdl2-dev python3-pil python3-yaml   # or: pip install -r requirements.txt
@@ -13,13 +20,31 @@ make -j                                                     # builds ./zelda3 an
 ./zelda3
 ```
 
+## Windows
+
+Download the `zelda3-windows` build from the GitHub Actions run, or
+cross-compile it with `tools/build_windows_mingw.sh`. Visual Studio
+(`Zelda3.sln`) and `run_with_tcc.bat` also work (see BUILDING.md). Put
+`zelda3_assets.dat` next to `zelda3.exe`: extract it once with
+`python assets/restool.py --extract-from-rom` (or `extract_assets.bat`).
+
 The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
+
+## Controls
+
+- Keyboard: arrows, X = A, Z = B, S = X, A = Y, Enter = Start, Right Shift = Select.
+- `Esc` (or the controller's Guide button, or Back+Start) opens the menu:
+  Multiplayer, Video and HD options (widescreen 16:9/16:10/18:9, HD world map,
+  smooth scaling, no sprite flicker, ...) and Gameplay options.
+- Extra controllers press START to drop in as P2-P4.
 
 ## Where to mod
 
 - `src/` holds the game logic as C: `player.c` (Link), `sprite_main.c` (enemies/NPCs), `dungeon.c`, `overworld.c`, `ancilla.c` (projectiles/effects), `hud.c`.
+- `src/mp.c` (multi-Link engine), `src/session.c` (netplay), `src/ui.c` (overlay and menus).
 - `assets/` holds the extracted resources (overworld/dungeon YAML, images, text). Edit these, then rebuild them with `python3 assets/restool.py` (see BUILDING.md).
-- `zelda3.ini` holds the runtime options (enhancements, controls, scaling).
+- `zelda3.ini` holds the runtime options. The in-game menu saves its changes to `zelda3.coop.ini`.
+- `tests/run_coop_tests.sh` runs headless co-op and netplay regression tests.
 
 ---
 

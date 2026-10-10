@@ -9,6 +9,8 @@
 //   ff <0|1>            friendly fire
 //   status              print player state
 //   expect_alive <p>    fail unless player p is standing
+//   expect_downed <p>   fail unless player p is down
+//   clearsprites        remove all enemies
 //   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
 //   hp <p> <health>     set a player's health (1/8 hearts)
 // Session (netplay) commands. "hold" then refers to local players.
@@ -17,12 +19,14 @@
 //   waitplay            tick until connected and playing (max 15s)
 //   localjoin <i> / localleave <i>
 //   corrupt             flip a byte of RAM (to test desync recovery)
+//   lan [n]             search for LAN games (and expect n)
 //   menu                toggle the overlay menu (navigate with hold + tick)
 //   expect_players <n>  fail unless n players are in the game
 //   expect_resyncs <n>  fail unless exactly n resyncs happened
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <SDL.h>
 #include "types.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -32,7 +36,7 @@
 #include "sprite.h"
 #include "session.h"
 #include "ui.h"
-#include <SDL.h>
+#include "upnp.h"
 
 static uint16 ParseKeys(const char *s) {
   static const char kKeys[] = "BYsSUDLRAXlr";
@@ -163,6 +167,28 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
         failures++;
       }
+    } else if (!strcmp(cmd, "lan")) {
+      Session_RefreshLan();
+      for (int i = 0; i < 30; i++) {
+        Session_Tick(held, g_wanted_zelda_features);
+        SDL_Delay(16);
+      }
+      SessionLanGame games[8];
+      int n = Session_GetLanGames(games, 8);
+      printf("LAN games found: %d\n", n);
+      for (int i = 0; i < n; i++)
+        printf("  %s %s players=%d\n", games[i].name, games[i].addr, games[i].players);
+      if (arg1[0] && n != atoi(arg1)) {
+        printf("FAIL: expected %s LAN games\n", arg1);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "upnp")) {
+      char ip[64] = { 0 };
+      bool ok = Upnp_MapPort(atoi(arg1), ip, sizeof(ip));
+      printf("UPnP map port %s: %s external=%s\n", arg1, ok ? "OK" : "FAILED", ip);
+      if (!ok)
+        failures++;
+      Upnp_UnmapPort();
     } else if (!strcmp(cmd, "menu")) {
       Ui_HandleKey(SDLK_ESCAPE, true);
     } else if (!strcmp(cmd, "corrupt")) {
@@ -175,6 +201,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "expect_resyncs")) {
       if (Session_GetStatus()->resyncs != atoi(arg1)) {
         printf("FAIL: %d resyncs, expected %s\n", Session_GetStatus()->resyncs, arg1);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "clearsprites")) {
+      for (int k = 0; k < 16; k++)
+        sprite_state[k] = 0;
+    } else if (!strcmp(cmd, "expect_downed")) {
+      int p = atoi(arg1) - 1;
+      if (!g_mp.p[p].joined || !g_mp.p[p].downed) {
+        printf("FAIL: P%d not downed at frame %d\n", p + 1, frame);
         failures++;
       }
     } else if (!strcmp(cmd, "expect_alive")) {

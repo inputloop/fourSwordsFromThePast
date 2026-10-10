@@ -35,3 +35,22 @@ jobs:
         brew install sdl2 coreutils
     - name: Build
       run: make -j$(nproc) zelda3
+
+  build-windows:
+    name: on Windows (MinGW cross build)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install MinGW
+      run: |
+        sudo apt update
+        sudo apt install -y gcc-mingw-w64-x86-64
+    - name: Build
+      run: tools/build_windows_mingw.sh
+    - uses: actions/upload-artifact@v4
+      with:
+        name: zelda3-windows
+        path: |
+          build-windows/zelda3.exe
+          build-windows/SDL2.dll
+          build-windows/zelda3.ini

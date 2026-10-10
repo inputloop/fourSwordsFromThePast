@@ -8,7 +8,7 @@ CFLAGS:=${CFLAGS} $(shell sdl2-config --cflags) -DSYSTEM_VOLUME_MIXER_AVAILABLE=
 ifeq (${OS},Windows_NT)
     WINDRES:=windres
     RES:=zelda3.res
-    SDLFLAGS:=-Wl,-Bstatic $(shell sdl2-config --static-libs)
+    SDLFLAGS:=-Wl,-Bstatic $(shell sdl2-config --static-libs) -lws2_32
 else
     SDLFLAGS:=$(shell sdl2-config --libs) -lm
 endif

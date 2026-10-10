@@ -37,3 +37,7 @@ __pycache__
 *.smc
 *.o
 /zelda3_assets.dat
+
+/build-windows/
+/tests/out/
+/zelda3.coop.ini

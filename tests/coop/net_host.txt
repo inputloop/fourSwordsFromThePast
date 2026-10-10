@@ -1,0 +1,11 @@
+# Netplay host. Run together with net_client.txt.
+load 2
+host 47474
+tick 300
+status
+expect_players 2
+hold 1 U
+tick 300
+hold 1 -
+tick 600
+status

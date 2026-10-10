@@ -1,0 +1,23 @@
+# Four local players walk into Eastern Palace and spread out.
+load 2
+run 30
+join 2
+join 3
+join 4
+expect_players 4
+hold 1 U
+run 200
+hold 1 -
+hold 2 R
+hold 3 L
+hold 4 D
+run 40
+hold 2 -
+hold 3 -
+hold 4 -
+status
+shot tests/out/local_coop.ppm
+expect_alive 1
+expect_alive 2
+expect_alive 3
+expect_alive 4
