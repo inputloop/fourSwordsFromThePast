@@ -11,6 +11,7 @@ reimplementation (vendored from commit `45a149d8`, MIT licensed). You need your
 own US ROM to extract the game's assets.
 
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
+See **[docs/HOW_THE_MOD_WORKS.md](docs/HOW_THE_MOD_WORKS.md)** for a plain-language guide to how the whole mod works.
 
 ## Item randomizer
 
