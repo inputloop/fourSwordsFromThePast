@@ -9,6 +9,8 @@
 //   ff <0|1>            friendly fire
 //   status              print player state
 //   expect_alive <p>    fail unless player p is standing
+//   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
+//   hp <p> <health>     set a player's health (1/8 hearts)
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -17,6 +19,7 @@
 #include "variables.h"
 #include "mp.h"
 #include "snes/ppu.h"
+#include "sprite.h"
 
 static uint16 ParseKeys(const char *s) {
   static const char kKeys[] = "BYsSUDLRAXlr";
@@ -52,9 +55,14 @@ static void PrintStatus(int frame) {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
       continue;
-    printf("  P%d x=%d y=%d hp=%d downed=%d oam=%d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p),
-           Mp_PlayerHealth(p), g_mp.p[p].downed, g_mp_render.p[p].count);
+    printf("  P%d x=%d y=%d hp=%d downed=%d oam=%d dir=%d bframes=%d oamy=%x state=%d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p),
+           Mp_PlayerHealth(p), g_mp.p[p].downed, g_mp_render.p[p].count, *Mp_PlayerRam(p, 0x2F),
+           *Mp_PlayerRam(p, 0x3C), *Mp_PlayerRam(p, 0x44), *Mp_PlayerRam(p, 0x5D));
   }
+  for (int k = 0; k < 16; k++)
+    if (sprite_state[k])
+      printf("  sprite %d type=%x state=%d hp=%d x=%d y=%d\n", k, sprite_type[k], sprite_state[k], sprite_health[k],
+             Sprite_GetX(k), Sprite_GetY(k));
 }
 
 int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
@@ -68,8 +76,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   char line[256];
   int frame = 0, failures = 0;
   while (fgets(line, sizeof(line), f)) {
-    char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 };
-    if (sscanf(line, "%31s %199s %63s", cmd, arg1, arg2) < 1 || cmd[0] == '#')
+    char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 }, arg3[64] = { 0 };
+    if (sscanf(line, "%31s %199s %63s %63s", cmd, arg1, arg2, arg3) < 1 || cmd[0] == '#')
       continue;
     if (!strcmp(cmd, "load")) {
       SaveLoadSlot(kSaveLoad_Load, 256 + atoi(arg1) - 1);
@@ -92,6 +100,23 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       printf("wrote %s\n", arg1);
     } else if (!strcmp(cmd, "status")) {
       PrintStatus(frame);
+    } else if (!strcmp(cmd, "spawn")) {
+      for (int j = 15; j >= 0; j--) {
+        if (sprite_state[j] == 0) {
+          sprite_type[j] = strtol(arg1, NULL, 16);
+          sprite_state[j] = 9;
+          SpritePrep_LoadProperties(j);
+          int sp = atoi(arg2) - 1;
+          Sprite_SetX(j, Mp_PlayerX(sp) + (arg3[0] ? atoi(arg3) : 24));
+          Sprite_SetY(j, Mp_PlayerY(sp));
+          sprite_floor[j] = link_is_on_lower_level;
+          if (player_is_indoors) sprite_N[j] = 0xff; else sprite_N_word[j] = 0xffff;
+          printf("spawned sprite %d type %x\n", j, sprite_type[j]);
+          break;
+        }
+      }
+    } else if (!strcmp(cmd, "hp")) {
+      *Mp_PlayerRam(atoi(arg1) - 1, 0xF36D) = atoi(arg2);
     } else if (!strcmp(cmd, "expect_alive")) {
       int p = atoi(arg1) - 1;
       if (!Mp_IsAlive(p)) {

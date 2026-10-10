@@ -332,6 +332,24 @@ void Mp_PreSprite(int k) {
     target = g_mp.sprite_owner[k];
   else
     target = Mp_NearestAlive(sprite_x_lo[k] | sprite_x_hi[k] << 8, sprite_y_lo[k] | sprite_y_hi[k] << 8);
+  // Many enemies have their own sword handling, so an enemy that is inside
+  // some Link's sword swing deals with that Link this frame.
+  if (st >= 9) {
+    for (int p = 0; p < kMpMaxPlayers; p++) {
+      if (!Mp_IsAlive(p))
+        continue;
+      Mp_SwapTo(p);
+      if (player_oam_y_offset != 0x80 && sprite_floor[k] == link_is_on_lower_level) {
+        SpriteHitBox hb;
+        Player_SetupActionHitBox(&hb);
+        Sprite_SetupHitBox(k, &hb);
+        if (CheckIfHitBoxesOverlap(&hb)) {
+          target = p;
+          break;
+        }
+      }
+    }
+  }
   Mp_SwapTo(target);
 }
 
