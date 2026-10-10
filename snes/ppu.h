@@ -45,6 +45,25 @@ enum {
 };
 
 
+// Additional sprite lists drawn on top of the regular 128 OAM entries. Used for
+// the extra players in co-op: each set has its own copy of the dynamically
+// uploaded Link tiles (VRAM 0x4000-0x41FF) and an optional palette bank that
+// replaces sprite palette 7 (Link's palette).
+enum {
+  kPpuMaxExtraSpriteSets = 3,
+  kPpuMaxExtraSprites = 64,
+  kPpuExtraTilesBase = 0x4000,
+  kPpuExtraTilesSize = 0x200,
+};
+
+typedef struct PpuExtraSpriteSet {
+  uint8_t count;
+  uint8_t bank;  // 0 = use cgram, 1..3 = use extraPalettes[bank]
+  uint16_t oam[kPpuMaxExtraSprites * 2];
+  uint8_t high[kPpuMaxExtraSprites];  // bit 0: x bit 8, bit 1: large size
+  uint16_t tiles[kPpuExtraTilesSize];
+} PpuExtraSpriteSet;
+
 struct Ppu {
   bool lineHasSprites;
   uint8_t lastBrightnessMult;
@@ -125,6 +144,12 @@ struct Ppu {
   PpuPixelPrioBufs bgBuffers[2];
   PpuPixelPrioBufs objBuffer;
   uint16_t vram[0x8000];
+
+  // co-op extras (not part of save states)
+  uint8_t numExtraSpriteSets;
+  uint8_t objBank[kPpuXPixels];
+  uint16_t extraPalettes[4][16];
+  PpuExtraSpriteSet extraSprites[kPpuMaxExtraSpriteSets];
 };
 
 Ppu* ppu_init();

@@ -1,3 +1,4 @@
+#include "mp.h"
 #include "nmi.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -153,6 +154,10 @@ void Interrupt_NMI(uint16 joypad_input) {  // 8080c9
 }
 
 void NMI_ReadJoypads(uint16 joypad_input) {  // 8083d1
+  if (Mp_Active()) {
+    Mp_ReadJoypads();
+    return;
+  }
   uint16 both = joypad_input;
   uint16 reversed = 0;
   for (int i = 0; i < 16; i++, both >>= 1)

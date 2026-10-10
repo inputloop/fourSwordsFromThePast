@@ -1,3 +1,4 @@
+#include "mp.h"
 #include "player_oam.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -759,7 +760,12 @@ void CalculateSwordHitBox() {  // 879e63
   player_oam_x_offset = kSwordOamXOffs[i];
 }
 
-void LinkOam_Main() {  // 8da18e
+void LinkOam_Main() {
+  LinkOam_MainOne();
+  Mp_DrawOtherPlayers();
+}
+
+void LinkOam_MainOne() {  // 8da18e
   uint16 y_coord_backup = link_y_coord;
 
   if (submodule_index == 18 || submodule_index == 19) {

@@ -1,4 +1,5 @@
 #include "overworld.h"
+#include "mp.h"
 #include "hud.h"
 #include "load_gfx.h"
 #include "dungeon.h"
@@ -563,7 +564,7 @@ void RecoverPositionAfterDrowning() {  // 829583
   subsubmodule_index = 0;
   overworld_screen_transition = 0;
   submodule_index = 0;
-  if (!link_health_current) {
+  if (!link_health_current && !Mp_OnFatalDamage()) {
     mapbak_TM = TM_copy;
     mapbak_TS = TS_copy;
     saved_module_for_menu = main_module_index;
@@ -747,6 +748,34 @@ void OverworldOverlay_HandleRain() {  // 82a4cd
   BG1VOFS_copy2 += kOverworld_DrawBadWeather_Y[i] << 8;
 }
 
+// Player control for the non-leader Links in co-op.
+static void Overworld_OtherPlayerControl() {
+  if (!(flag_custom_spell_anim_active | flag_is_link_immobilized | flag_block_link_menu | trigger_special_entrance)) {
+    if (filtered_joypad_H & 0x10) {
+      overworld_map_state = 0;
+      submodule_index = 1;
+      saved_module_for_menu = main_module_index;
+      main_module_index = 14;
+      return;
+    }
+    if (DidPressButtonForMap()) {
+      overworld_map_state = 0;
+      submodule_index = 7;
+      saved_module_for_menu = main_module_index;
+      main_module_index = 14;
+      return;
+    }
+    if (joypad1H_last & 0x20) {
+      DisplaySelectMenu();
+      return;
+    }
+    Hud_HandleItemSwitchInputs();
+  }
+  Link_Main();
+  if (main_module_index == 9 && submodule_index == 0)
+    Overworld_UseEntrance();
+}
+
 void Module09_00_PlayerControl() {  // 82a53c
   if (!(flag_custom_spell_anim_active | flag_is_link_immobilized | flag_block_link_menu | trigger_special_entrance)) {
     if (filtered_joypad_H & 0x10) {
@@ -773,6 +802,7 @@ void Module09_00_PlayerControl() {  // 82a53c
   if (trigger_special_entrance)
     Overworld_AnimateEntrance();
   Link_Main();
+  Mp_RunOtherPlayers(&Overworld_OtherPlayerControl);
   if (super_bomb_indicator_unk2 != 0xff)
     Hud_SuperBombIndicator();
   current_area_of_player = (link_y_coord & 0x1e00) >> 5 | (link_x_coord & 0x1e00) >> 8;

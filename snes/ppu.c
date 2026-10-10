@@ -839,6 +839,17 @@ static void PpuDrawBackgrounds(Ppu *ppu, int y, bool sub) {
   }
 }
 
+// Looks up the final color of a pixel, applying the co-op palette banks.
+static FORCEINLINE uint32 PpuLookupColor(Ppu *ppu, PpuZbufType z, size_t i) {
+  if (ppu->numExtraSpriteSets && (z & 0xf0) == 0xf0) {
+    uint32 layer = (z >> 8) & 0xf;
+    uint8 bank = ppu->objBank[i];
+    if ((layer == 4 || layer == 6) && bank)
+      return ppu->extraPalettes[bank][z & 0xf];
+  }
+  return ppu->cgram[z & 0xff];
+}
+
 static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
   if (ppu->forcedBlank) {
     uint8 *dst = &ppu->renderBuffer[(y - 1) * ppu->renderPitch];
@@ -896,7 +907,7 @@ static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
       // Math is disabled (or has no effect), so can avoid the per-pixel maths check
       uint32 i = left;
       do {
-        uint32 color = ppu->cgram[ppu->bgBuffers[0].data[i] & 0xff];
+        uint32 color = PpuLookupColor(ppu, ppu->bgBuffers[0].data[i], i);
         dst[0] = ppu->brightnessMult[color & clip_color_mask] << 16 |
                  ppu->brightnessMult[(color >> 5) & clip_color_mask] << 8 |
                  ppu->brightnessMult[(color >> 10) & clip_color_mask];
@@ -908,7 +919,7 @@ static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
       // Need to check for each pixel whether to use math or not based on the main screen layer.
       uint32 i = left;
       do {
-        uint32 color = ppu->cgram[ppu->bgBuffers[0].data[i] & 0xff], color2;
+        uint32 color = PpuLookupColor(ppu, ppu->bgBuffers[0].data[i], i), color2;
         uint8 main_layer = (ppu->bgBuffers[0].data[i] >> 8) & 0xf;
         uint32 r = color & clip_color_mask;
         uint32 g = (color >> 5) & clip_color_mask;
@@ -917,7 +928,7 @@ static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
         if (math_enabled_cur & (1 << main_layer)) {
           if (math_enabled_cur & 0x100) {  // addSubscreen ?
             if ((ppu->bgBuffers[1].data[i] & 0xff) != 0)
-              color2 = ppu->cgram[ppu->bgBuffers[1].data[i] & 0xff], color_map = half_color_map;
+              color2 = PpuLookupColor(ppu, ppu->bgBuffers[1].data[i], i), color_map = half_color_map;
             else  // Don't halve if ppu->addSubscreen && backdrop
               color2 = fixed_color;
           } else {
@@ -1107,6 +1118,8 @@ static int ppu_getPixel(Ppu *ppu, int x, int y, bool sub, int *r, int *g, int *b
     }
   }
   uint16_t color = ppu->cgram[pixel & 0xff];
+  if (layer == 4 && ppu->numExtraSpriteSets && (pixel & 0xf0) == 0xf0 && ppu->objBank[x + kPpuExtraLeftRight])
+    color = ppu->extraPalettes[ppu->objBank[x + kPpuExtraLeftRight]][pixel & 0xf];
   *r = color & 0x1f;
   *g = (color >> 5) & 0x1f;
   *b = (color >> 10) & 0x1f;
@@ -1236,6 +1249,55 @@ static bool ppu_getWindowState(Ppu* ppu, int layer, int x) {
   return test1 || test2;
 }
 
+// Draws one row of a sprite into the obj buffer. Returns false if the tile
+// limit was reached.
+static bool ppu_drawSpriteRow(Ppu *ppu, int x, int row, int spriteSize, int oam1,
+                              const uint16 *tiles_override, uint8 bank, int *tilesLeft) {
+  int extra_left_right = ppu->extraLeftRight;
+  int objAdr = (oam1 & 0x100) ? ppu->objTileAdr2 : ppu->objTileAdr1;
+  if (oam1 & 0x8000)
+    row = spriteSize - 1 - row;
+  // fetch all tiles in x-range
+  int palette = (oam1 & 0xe00) >> 9;
+  int paletteBase = 0x80 + 16 * palette;
+  int prio = SPRITE_PRIO_TO_PRIO((oam1 & 0x3000) >> 12, (oam1 & 0x800) == 0);
+  PpuZbufType z = paletteBase + (prio << 8);
+  uint8 pixel_bank = (palette == 7) ? bank : 0;
+
+  for (int col = 0; col < spriteSize; col += 8) {
+    if (col + x > -8 - extra_left_right && col + x < 256 + extra_left_right) {
+      // break if we found 34 8*1 slivers already
+      if (--*tilesLeft == 0)
+        return false;
+      // figure out which tile this uses, looping within 16x16 pages, and get it's data
+      int usedCol = oam1 & 0x4000 ? spriteSize - 1 - col : col;
+      int usedTile = ((((oam1 & 0xff) >> 4) + (row >> 3)) << 4) | (((oam1 & 0xf) + (usedCol >> 3)) & 0xf);
+      int vaddr = (objAdr + usedTile * 16 + (row & 0x7)) & 0x7fff;
+      const uint16 *addr = &ppu->vram[vaddr];
+      if (tiles_override && (unsigned)(vaddr - kPpuExtraTilesBase) < kPpuExtraTilesSize - 8)
+        addr = &tiles_override[vaddr - kPpuExtraTilesBase];
+      uint32 plane = addr[0] | addr[8] << 16;
+      // go over each pixel
+      int px_left = IntMax(-(col + x + kPpuExtraLeftRight), 0);
+      int px_right = IntMin(256 + kPpuExtraLeftRight - (col + x), 8);
+      PpuZbufType *dst = ppu->objBuffer.data + col + x + px_left + kPpuExtraLeftRight;
+      uint8 *dst_bank = ppu->objBank + col + x + px_left + kPpuExtraLeftRight;
+
+      for (int px = px_left; px < px_right; px++, dst++, dst_bank++) {
+        int shift = oam1 & 0x4000 ? px : 7 - px;
+        uint32 bits = plane >> shift;
+        int pixel = (bits >> 0) & 1 | (bits >> 7) & 2 | (bits >> 14) & 4 | (bits >> 21) & 8;
+        // draw it in the buffer if there is a pixel here, and the buffer there is still empty
+        if (pixel != 0 && (dst[0] & 0xff) == 0) {
+          dst[0] = z + pixel;
+          dst_bank[0] = pixel_bank;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 static bool ppu_evaluateSprites(Ppu* ppu, int line) {
   // TODO: iterate over oam normally to determine in-range sprites,
   //   then iterate those in-range sprites in reverse for tile-fetching
@@ -1247,6 +1309,9 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
   if (ppu->renderFlags & kPpuRenderFlags_NoSpriteLimits)
     spritesLeft = tilesLeft = 1024;
   int tilesLeftOrg = tilesLeft;
+
+  if (ppu->numExtraSpriteSets)
+    memset(ppu->objBank, 0, sizeof(ppu->objBank));
 
   do {
     int yy = ppu->oam[index] >> 8;
@@ -1265,46 +1330,32 @@ static bool ppu_evaluateSprites(Ppu* ppu, int line) {
     if (x <= -(spriteSize + extra_left_right))
       continue;
     // break if we found 32 sprites already
-    if (--spritesLeft == 0) {
+    if (--spritesLeft == 0)
       break;
-    }
-    // get some data for the sprite and y-flip row if needed
-    int oam1 = ppu->oam[index + 1];
-    int objAdr = (oam1 & 0x100) ? ppu->objTileAdr2 : ppu->objTileAdr1;
-    if (oam1 & 0x8000)
-      row = spriteSize - 1 - row;
-    // fetch all tiles in x-range
-    int paletteBase = 0x80 + 16 * ((oam1 & 0xe00) >> 9);
-    int prio = SPRITE_PRIO_TO_PRIO((oam1 & 0x3000) >> 12, (oam1 & 0x800) == 0);
-    PpuZbufType z = paletteBase + (prio << 8);
-    
-    for (int col = 0; col < spriteSize; col += 8) {
-      if (col + x > -8 - extra_left_right && col + x < 256 + extra_left_right) {
-        // break if we found 34 8*1 slivers already
-        if (--tilesLeft == 0) {
-          return true;
-        }
-        // figure out which tile this uses, looping within 16x16 pages, and get it's data
-        int usedCol = oam1 & 0x4000 ? spriteSize - 1 - col : col;
-        int usedTile = ((((oam1 & 0xff) >> 4) + (row >> 3)) << 4) | (((oam1 & 0xf) + (usedCol >> 3)) & 0xf);
-        uint16 *addr = &ppu->vram[(objAdr + usedTile * 16 + (row & 0x7)) & 0x7fff];
-        uint32 plane = addr[0] | addr[8] << 16;
-        // go over each pixel
-        int px_left = IntMax(-(col + x + kPpuExtraLeftRight), 0);
-        int px_right = IntMin(256 + kPpuExtraLeftRight - (col + x), 8);
-        PpuZbufType *dst = ppu->objBuffer.data + col + x + px_left + kPpuExtraLeftRight;
-        
-        for (int px = px_left; px < px_right; px++, dst++) {
-          int shift = oam1 & 0x4000 ? px : 7 - px;
-          uint32 bits = plane >> shift;
-          int pixel = (bits >> 0) & 1 | (bits >> 7) & 2 | (bits >> 14) & 4 | (bits >> 21) & 8;
-          // draw it in the buffer if there is a pixel here, and the buffer there is still empty
-          if (pixel != 0 && (dst[0] & 0xff) == 0)
-            dst[0] = z + pixel;
-        }
-      }
-    }
+    if (!ppu_drawSpriteRow(ppu, x, row, spriteSize, ppu->oam[index + 1], NULL, 0, &tilesLeft))
+      return true;
   } while ((index = (index + 2) & 0xff) != index_end);
+
+  // Extra player sprites. These are not subject to the hardware limits.
+  int extraTilesLeft = 1024;
+  for (int s = 0; s < ppu->numExtraSpriteSets; s++) {
+    PpuExtraSpriteSet *set = &ppu->extraSprites[s];
+    for (int i = 0; i < set->count; i++) {
+      int yy = set->oam[i * 2] >> 8;
+      if (yy == 0xf0)
+        continue;
+      int row = (line - yy) & 0xff;
+      int spriteSize = spriteSizes[(set->high[i] >> 1) & 1];
+      if (row >= spriteSize)
+        continue;
+      int x = (set->oam[i * 2] & 0xff) + (set->high[i] & 1) * 256;
+      x -= (x >= 256 + extra_left_right) * 512;
+      if (x <= -(spriteSize + extra_left_right))
+        continue;
+      tilesLeft--;
+      ppu_drawSpriteRow(ppu, x, row, spriteSize, set->oam[i * 2 + 1], set->tiles, set->bank, &extraTilesLeft);
+    }
+  }
   return (tilesLeft != tilesLeftOrg);
 }
 

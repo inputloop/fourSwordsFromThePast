@@ -306,6 +306,12 @@ int main(int argc, char** argv) {
   ZeldaEnableMsu(g_config.enable_msu);
   ZeldaSetLanguage(g_config.language);
 
+  if (argc >= 2 && strcmp(argv[0], "--mptest") == 0) {
+    int RunMpTest(const char *script, int width, int height, uint32 render_flags);
+    g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
+    return RunMpTest(argv[1], g_snes_width, g_snes_height, g_ppu_render_flags);
+  }
+
   if (g_config.fullscreen == 1)
     g_win_flags ^= SDL_WINDOW_FULLSCREEN_DESKTOP;
   else if (g_config.fullscreen == 2)

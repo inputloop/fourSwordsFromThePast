@@ -1,3 +1,4 @@
+#include "mp.h"
 #include "ancilla.h"
 #include "variables.h"
 #include "sprite.h"
@@ -661,8 +662,12 @@ void Bomb_CheckSpriteDamage(int k) {  // 888287
 void Ancilla_ExecuteAll() {  // 88832b
   for (int i = 9; i >= 0; i--) {
     cur_object_index = i;
-    if (ancilla_type[i])
+    if (ancilla_type[i]) {
+      Mp_PreAncilla(i);
       Ancilla_ExecuteOne(ancilla_type[i], i);
+      if (Mp_Active())
+        Mp_EndObject();
+    }
   }
 }
 

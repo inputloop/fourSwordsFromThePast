@@ -41,6 +41,7 @@ void Module_Unknown0();
 void Module_Unknown1();
 void Module_MainRouting();
 void NMI_PrepareSprites();
+void Link_CalcDmaSources(uint16 *out);
 void Sound_LoadIntroSongBank();
 void LoadOverworldSongs();
 void LoadDungeonSongs();

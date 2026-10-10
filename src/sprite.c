@@ -1,3 +1,4 @@
+#include "mp.h"
 #include "sprite.h"
 #include "dungeon.h"
 #include "hud.h"
@@ -1124,6 +1125,7 @@ void Sprite_Main() {  // 868328
   Follower_Main();
   byte_7E0FB2 = flag_is_sprite_to_pick_up;
   flag_is_sprite_to_pick_up = 0;
+  Mp_ClearPerFrameSpriteFlags();
   HIBYTE(dungmap_var8) = 0x80;
 
   if (set_when_damaging_enemies & 0x7f)
@@ -1140,7 +1142,10 @@ void Sprite_Main() {  // 868328
   archery_game_out_of_arrows = 0;
   for (int i = 15; i >= 0; i--) {
     cur_object_index = i;
+    Mp_PreSprite(i);
     Sprite_ExecuteSingle(i);
+    if (Mp_Active())
+      Mp_EndObject();
   }
   Garnish_ExecuteLowerSlots();
   byte_7E069E[0] = byte_7E069E[1] = 0;
@@ -2520,25 +2525,45 @@ void Sprite_Func3(int k) {  // 86efda
   sprite_flags2[k] = 3;
 }
 
-bool Sprite_CheckDamageToLink(int k) {  // 86f145
+// In co-op, the damage checks below are tried against every Link. The Link
+// that was hit stays resident so the caller reacts to that Link.
+static bool Sprite_CheckDamageToLink_ignore_layer_One(int k);
+
+static bool Sprite_CheckDamageToLink_same_layer_One(int k) {
+  if (link_is_on_lower_level != sprite_floor[k])
+    return false;
+  return Sprite_CheckDamageToLink_ignore_layer_One(k);
+}
+
+static bool Sprite_CheckDamageToPlayer_1_One(int k) {
+  if ((k ^ frame_counter) & 3 | sprite_hit_timer[k])
+    return false;
+  return Sprite_CheckDamageToLink_same_layer_One(k);
+}
+
+static bool Sprite_CheckDamageToLink_One(int k) {
   if (link_disable_sprite_damage)
     return false;
-  return Sprite_CheckDamageToPlayer_1(k);
+  return Sprite_CheckDamageToPlayer_1_One(k);
+}
+
+bool Sprite_CheckDamageToLink(int k) {  // 86f145
+  return Mp_AnyPlayer(k, &Sprite_CheckDamageToLink_One);
 }
 
 bool Sprite_CheckDamageToPlayer_1(int k) {  // 86f14a
-  if ((k ^ frame_counter) & 3 | sprite_hit_timer[k])
-    return false;
-  return Sprite_CheckDamageToLink_same_layer(k);
+  return Mp_AnyPlayer(k, &Sprite_CheckDamageToPlayer_1_One);
 }
 
 bool Sprite_CheckDamageToLink_same_layer(int k) {  // 86f154
-  if (link_is_on_lower_level != sprite_floor[k])
-    return false;
-  return Sprite_CheckDamageToLink_ignore_layer(k);
+  return Mp_AnyPlayer(k, &Sprite_CheckDamageToLink_same_layer_One);
 }
 
 bool Sprite_CheckDamageToLink_ignore_layer(int k) {  // 86f15c
+  return Mp_AnyPlayer(k, &Sprite_CheckDamageToLink_ignore_layer_One);
+}
+
+static bool Sprite_CheckDamageToLink_ignore_layer_One(int k) {
   uint8 carry, t;
   if (sprite_flags4[k]) {
     SpriteHitBox hitbox;
@@ -2599,7 +2624,14 @@ bool Sprite_SetupHitBox00(int k) {  // 86f1f6
          (uint16)(link_y_coord - cur_sprite_y + sprite_z[k] + 16) < 24;
 }
 
+static bool Sprite_ReturnIfLifted_One(int k);
+static bool Sprite_ReturnIfLiftedPermissive_One(int k);
+
 bool Sprite_ReturnIfLifted(int k) {  // 86f228
+  return Mp_AnyPlayer(k, &Sprite_ReturnIfLifted_One);
+}
+
+static bool Sprite_ReturnIfLifted_One(int k) {
   if (submodule_index | button_b_frames | flag_unk1 || sprite_floor[k] != link_is_on_lower_level)
     return false;
   for (int j = 15; j >= 0; j--)
@@ -2609,10 +2641,14 @@ bool Sprite_ReturnIfLifted(int k) {  // 86f228
     return false;
   if (link_is_running)
     return false;
-  return Sprite_ReturnIfLiftedPermissive(k);
+  return Sprite_ReturnIfLiftedPermissive_One(k);
 }
 
 bool Sprite_ReturnIfLiftedPermissive(int k) {  // 86f257
+  return Mp_AnyPlayer(k, &Sprite_ReturnIfLiftedPermissive_One);
+}
+
+static bool Sprite_ReturnIfLiftedPermissive_One(int k) {
   if (link_is_running)
     return false;
   if ((uint8)(flag_is_sprite_to_pick_up_cached - 1) != cur_object_index) {
@@ -2636,7 +2672,13 @@ bool Sprite_ReturnIfLiftedPermissive(int k) {  // 86f257
   }
 }
 
+static uint8 Sprite_CheckDamageFromLink_One(int k);
+
 uint8 Sprite_CheckDamageFromLink(int k) {  // 86f2b4
+  return Mp_AnyPlayerU8(k, &Sprite_CheckDamageFromLink_One);
+}
+
+static uint8 Sprite_CheckDamageFromLink_One(int k) {
   if (sprite_hit_timer[k] & 0x80 || sprite_floor[k] != link_is_on_lower_level || player_oam_y_offset == 0x80)
     return 0;
 
@@ -2711,14 +2753,21 @@ getting_out:
   return kCheckDamageFromPlayer_Carry;
 }
 
-void Sprite_AttemptDamageToLinkWithCollisionCheck(int k) {  // 86f3ca
-  if ((k ^ frame_counter) & 1)
-    return;
+static bool Sprite_AttemptDamageToLinkWithCollisionCheck_One(int k) {
   SpriteHitBox hb;
   Sprite_DoHitBoxesFast(k, &hb);
   Link_SetupHitBox_conditional(&hb);
-  if (CheckIfHitBoxesOverlap(&hb))
+  if (CheckIfHitBoxesOverlap(&hb)) {
     Sprite_AttemptDamageToLinkPlusRecoil(k);
+    return true;
+  }
+  return false;
+}
+
+void Sprite_AttemptDamageToLinkWithCollisionCheck(int k) {  // 86f3ca
+  if ((k ^ frame_counter) & 1)
+    return;
+  Mp_AnyPlayer(k, &Sprite_AttemptDamageToLinkWithCollisionCheck_One);
 }
 
 void Sprite_AttemptDamageToLinkPlusRecoil(int k) {  // 86f3db

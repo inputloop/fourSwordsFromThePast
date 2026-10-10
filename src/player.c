@@ -1,3 +1,4 @@
+#include "mp.h"
 #include "player.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -164,7 +165,9 @@ void Link_ControlHandler() {  // 87807f
         Ancilla_Sfx2_Near(38);
         number_of_times_hurt_by_sprites++;
         uint8 new_dmg = link_health_current - dmg;
-        if (new_dmg == 0 || new_dmg >= 0xa8) {
+        if ((new_dmg == 0 || new_dmg >= 0xa8) && Mp_OnFatalDamage()) {
+          new_dmg = 0;
+        } else if (new_dmg == 0 || new_dmg >= 0xa8) {
           mapbak_TM = TM_copy;
           mapbak_TS = TS_copy;
           saved_module_for_menu = main_module_index;
@@ -6154,6 +6157,8 @@ void ApplyLinksMovementToCamera() {  // 87e9d3
   // Sometimes, when using spin attack, this routine will end up getting
   // called twice in the same frame, which messes up things.
   g_ApplyLinksMovementToCamera_called = true;
+  if (Mp_SuppressCamera())
+    return;
 
   link_y_page_movement_delta = (link_y_coord >> 8) - link_y_coord_safe_return_hi;
   link_x_page_movement_delta = (link_x_coord >> 8) - link_x_coord_safe_return_hi;

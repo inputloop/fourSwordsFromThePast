@@ -2,6 +2,7 @@
 #include "snes/snes_regs.h"
 #include "variables.h"
 #include "dungeon.h"
+#include "mp.h"
 #include "nmi.h"
 #include "hud.h"
 #include "load_gfx.h"
@@ -6591,7 +6592,14 @@ void Dungeon_HandleEdgeTransitionMovement(int dir) {  // 8288c5
   }
 }
 
+static void Dungeon_PlayerControlCore();
+
 void Module07_00_PlayerControl() {  // 8288de
+  Dungeon_PlayerControlCore();
+  Mp_RunOtherPlayers(&Dungeon_PlayerControlCore);
+}
+
+static void Dungeon_PlayerControlCore() {
   if (!(flag_custom_spell_anim_active | flag_is_link_immobilized | flag_block_link_menu)) {
     if (filtered_joypad_H & 0x10) {  // start
       overworld_map_state = 0;

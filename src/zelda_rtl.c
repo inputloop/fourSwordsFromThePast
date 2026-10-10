@@ -1,3 +1,4 @@
+#include "mp.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "misc.h"
@@ -176,6 +177,7 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
   SimpleHdma hdma_chans[2];
 
   PpuBeginDrawing(g_zenv.ppu, pixel_buffer, pitch, render_flags);
+  Mp_PrepareRender(g_zenv.ppu);
 
   dma_startDma(g_zenv.dma, HDMAEN_copy, true);
 
@@ -214,6 +216,7 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
     SimpleHdma_DoLine(&hdma_chans[0]);
     SimpleHdma_DoLine(&hdma_chans[1]);
   }
+  Mp_FinishRender(g_zenv.ppu);
 }
 
 void HdmaSetup(uint32 addr6, uint32 addr7, uint8 transfer_unit, uint8 reg6, uint8 reg7, uint8 indirect_bank) {
@@ -257,7 +260,9 @@ static void ClearOamBuffer() {  // 80841e
 static void ZeldaRunGameLoop() {
   frame_counter++;
   ClearOamBuffer();
+  Mp_BeginFrame();
   Module_MainRouting();
+  Mp_EndFrame();
   NMI_PrepareSprites();
   nmi_boolean = 0;
 }
@@ -272,6 +277,7 @@ void ZeldaInitialize() {
   SpcPlayer_Initialize(g_zenv.player);
   dma_reset(g_zenv.dma);
   ppu_reset(g_zenv.ppu);
+  Mp_Reset();
 }
 
 static void ZeldaRunPolyLoop() {
@@ -399,6 +405,7 @@ static void LoadSnesState(SaveLoadFunc *func, void *ctx) {
   ZeldaRestoreMusicAfterLoad_Locked(false);
   ZeldaApuUnlock();
   EmuSynchronizeWholeState();
+  Mp_OnStateLoaded();
 }
 
 static void SaveSnesState(SaveLoadFunc *func, void *ctx) {
