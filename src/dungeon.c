@@ -5741,6 +5741,10 @@ uint8 OpenChestForItem(uint8 tile, int *chest_position) {  // 81eb66
       chest_room = *(uint16 *)chest_data;
       if ((chest_room & 0x7fff) == dungeon_room_index && --chest_idx < 0) {
         data = Rando_ChestItem(i / 3, chest_data[2]);
+        // Co-op: a teammate in another copy of this room already opened it
+        // (the room's saved flags say so). It opens, but it's empty now.
+        if (save_dung_info[dungeon_room_index] & (kChestOpenMasks[chest_idx_org] >> 4))
+          data = 0xff;
         if (chest_room & 0x8000) {
           if (!(link_bigkey & kUpperBitmasks[cur_palace_index_x2 >> 1])) {
             dialogue_message_index = 0x7a;

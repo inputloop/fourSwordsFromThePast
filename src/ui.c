@@ -229,6 +229,7 @@ static struct {
   char last_message[96];
   uint32 message_time;
   bool dirty_settings;
+  bool headless;  // the test runner: settings files aren't written
   bool want_quit_confirm;
   uint16 last_fallback;
   // Controls screen
@@ -265,6 +266,9 @@ static int Act() {
 }
 
 static void Goto(int screen) {
+  // Settings are kept when the menu closes (zelda3.coop.ini).
+  if (screen == kScreen_None && g_ui.dirty_settings)
+    Ui_SaveSettings();
   g_ui.screen = screen;
   g_ui.cursor = 0;
   g_ui.want_quit_confirm = false;
@@ -343,6 +347,14 @@ static void ScreenMain() {
   }
 }
 
+// Joins a game and remembers the address for next time.
+static void JoinGame(const char *addr) {
+  if (addr != g_ui.join_addr)
+    snprintf(g_ui.join_addr, sizeof(g_ui.join_addr), "%s", addr);
+  if (Session_Join(addr))
+    Ui_SaveSettings();
+}
+
 static void ScreenMultiplayer() {
   const SessionStatus *st = Session_GetStatus();
   char buf[64];
@@ -387,8 +399,8 @@ static void ScreenMultiplayer() {
       g_ui.use_upnp = !g_ui.use_upnp;
       g_ui.dirty_settings = true;
     }
-    else if (a == kAct_Select)
-      Session_Host(g_config.mp_port, g_ui.use_upnp);
+    else if (a == kAct_Select && Session_Host(g_config.mp_port, g_ui.use_upnp))
+      Ui_SaveSettings();
     Item("Join by address", g_ui.join_addr);
     if (Act() == kAct_Select)
       Goto(kScreen_JoinAddress);
@@ -401,6 +413,16 @@ static void ScreenMultiplayer() {
     Item(st->mode == kSessionHost ? "Stop hosting" : "Leave game", NULL);
     if (Act() == kAct_Select)
       Session_Disconnect();
+  }
+  // Input delay (only changed while not online: the frame timing depends on it)
+  snprintf(buf, sizeof(buf), "%d frame%s", g_config.mp_input_delay, g_config.mp_input_delay == 1 ? "" : "s");
+  Item("Online input delay", buf);
+  int ad = Act();
+  if ((ad == kAct_Left || ad == kAct_Right || ad == kAct_Select) && st->mode == kSessionOffline) {
+    int d = g_config.mp_input_delay + (ad == kAct_Left ? -1 : 1);
+    g_config.mp_input_delay = d < 0 ? 8 : d > 8 ? 0 : d;
+    Session_SetInputDelay(g_config.mp_input_delay);
+    g_ui.dirty_settings = true;
   }
   // Local players on this machine
   int next_local = -1;
@@ -448,7 +470,7 @@ static void ScreenJoinAddress() {
   Label(buf);
   Item("Connect", NULL);
   if (Act() == kAct_Select && g_ui.join_addr[0]) {
-    Session_Join(g_ui.join_addr);
+    JoinGame(g_ui.join_addr);
     Goto(kScreen_Multiplayer);
     return;
   }
@@ -474,7 +496,7 @@ static void ScreenLan() {
     snprintf(value, sizeof(value), "%d/4  %s", games[i].players, games[i].addr);
     Item(games[i].name, value);
     if (Act() == kAct_Select) {
-      Session_Join(games[i].addr);
+      JoinGame(games[i].addr);
       Goto(kScreen_Multiplayer);
       return;
     }
@@ -730,6 +752,7 @@ void Ui_Init(const UiHostFuncs *host) {
   memset(&g_ui, 0, sizeof(g_ui));
   if (host)
     g_ui.host = *host;
+  g_ui.headless = host == NULL;
   g_ui.use_upnp = g_config.mp_use_upnp;
   g_ui.capture_button = -1;
   if (g_config.mp_last_join)
@@ -851,7 +874,7 @@ bool Ui_HandleKey(int key, bool pressed) {
     }
     if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
       if (n) {
-        Session_Join(g_ui.join_addr);
+        JoinGame(g_ui.join_addr);
         Goto(kScreen_Multiplayer);
       }
       return true;
@@ -1063,6 +1086,8 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
 }
 
 void Ui_SaveSettings() {
+  if (g_ui.headless)
+    return;
   FILE *f = fopen("zelda3.coop.ini", "w");
   if (!f)
     return;
@@ -1102,6 +1127,7 @@ void Ui_SaveSettings() {
   fprintf(f, "FriendlyFire = %d\n", Session_GetFriendlyFire());
   fprintf(f, "UseUpnp = %d\n", g_ui.use_upnp);
   fprintf(f, "Port = %d\n", g_config.mp_port);
+  fprintf(f, "InputDelay = %d\n", g_config.mp_input_delay);
   if (g_config.mp_player_name)
     fprintf(f, "PlayerName = %s\n", g_config.mp_player_name);
   fprintf(f, "LastJoinAddress = %s\n", g_ui.join_addr);
