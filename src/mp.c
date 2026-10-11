@@ -368,7 +368,13 @@ void Mp_EndFrame() {
   if (main_module_index == 18 || main_module_index == 23)  // death / game over
     g_mp.after_death = 1;
   // A downed leader hands over the camera to someone who is still standing.
-  if (g_mp.p[g_mp.leader].downed) {
+  // (Not in the middle of a screen or room transition: those finish by where
+  // the leader stands, and with someone else's position the camera would
+  // scroll on forever. A text box can't wait, though: a ghost can't close it.)
+  uint8 m = main_module_index;
+  bool in_transition = ((m == 7 || m == 9) && submodule_index != 0) ||
+                       m == 6 || m == 8 || m == 10 || m == 11 || m == 15 || m == 16 || m == 17;
+  if (g_mp.p[g_mp.leader].downed && !in_transition) {
     int nl = Mp_FindNewLeader(g_mp.leader);
     if (nl >= 0 && Mp_IsAlive(nl)) {
       Mp_SwapTo(nl);
@@ -518,10 +524,13 @@ void Mp_CameraCatchUp(void (*scroll)(void)) {
   }
   uint8 vx = link_x_vel, vy = link_y_vel;
   int sx = (int16)(link_x_coord + 8 - BG2HOFS_copy2), sy = (int16)(link_y_coord + 12 - BG2VOFS_copy2);
-  if (vx == 0 && (sx > 136 || sx < 120))
-    link_x_vel = sx > 136 ? 2 : 0xfe;
-  if (vy == 0 && (sy > 124 || sy < 108))
-    link_y_vel = sy > 124 ? 2 : 0xfe;
+  // Near or past the screen's edge (the camera still sliding over after a
+  // split, say), the camera heads for the leader whichever way it walks.
+  bool far_x = sx < 24 || sx > 232, far_y = sy < 24 || sy > 200;
+  if (far_x || (vx == 0 && (sx > 136 || sx < 120)))
+    link_x_vel = sx > 128 ? (far_x ? 3 : 2) : (far_x ? 0xfd : 0xfe);
+  if (far_y || (vy == 0 && (sy > 124 || sy < 108)))
+    link_y_vel = sy > 116 ? (far_y ? 3 : 2) : (far_y ? 0xfd : 0xfe);
   scroll();
   link_x_vel = vx;
   link_y_vel = vy;

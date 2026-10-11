@@ -115,8 +115,9 @@ static void PrintStatus(int frame) {
     if (!Inst_IsActive(i))
       continue;
     Inst_Switch(i);
-    printf("[frame %d] world %d: module=%d/%d leader=%d room=%d ow=%d indoors=%d cam=%d,%d\n", frame, i, main_module_index,
-           submodule_index, g_mp.leader, dungeon_room_index, overworld_screen_index, player_is_indoors, BG2HOFS_copy2, BG2VOFS_copy2);
+    printf("[frame %d] world %d: module=%d/%d leader=%d room=%d ow=%d indoors=%d cam=%d,%d quad=%d,%d off=%d%s\n", frame, i, main_module_index,
+           submodule_index, g_mp.leader, dungeon_room_index, overworld_screen_index, player_is_indoors, BG2HOFS_copy2, BG2VOFS_copy2,
+           link_quadrant_x, link_quadrant_y, g_mp.quad_offset, g_mp.quad_valid ? "" : "?");
   }
   Inst_Switch(r);
   printf("[frame %d] module=%d/%d leader=%d resident=%d room=%d ow=%d hash=%08x | session mode=%d state=%d id=%d ping=%d buf=%d pred=%d rb=%d resyncs=%d local_slot0=%d msg='%s'\n",
@@ -461,6 +462,41 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       printf("wrote %s\n", arg1);
     } else if (!strcmp(cmd, "status")) {
       PrintStatus(frame);
+    } else if (!strcmp(cmd, "down") || !strcmp(cmd, "revive")) {
+      // down <p>: player p goes down right now (0: the leader of the viewed player's world)
+      // revive <p>: player p gets up again
+      // (revive 0: the player the last "down 0" put down)
+      static int last_down = -1;
+      int p = atoi(arg1) - 1;
+      if (p < 0 && !strcmp(cmd, "down")) {
+        SwitchToPlayer(view);
+        p = last_down = g_mp.leader;
+      } else if (p < 0) {
+        p = last_down;
+      }
+      if (p >= 0 && Inst_OfPlayer(p) >= 0) {
+        SwitchToPlayer(p);
+        g_mp.p[p].downed = !strcmp(cmd, "down");
+      }
+    } else if (!strcmp(cmd, "setleader")) {
+      // setleader <p>: player p leads its world (as if it had opened a door)
+      SwitchToPlayer(atoi(arg1) - 1);
+      Mp_SetLeader(atoi(arg1) - 1);
+    } else if (!strcmp(cmd, "check_area")) {
+      // check_area: fail if a standing Link on the overworld is outside the area its world has loaded
+      for (int p = 0; p < kMpMaxPlayers; p++) {
+        if (Inst_OfPlayer(p) < 0)
+          continue;
+        SwitchToPlayer(p);
+        if (main_module_index != 9 || submodule_index != 0 || g_mp.p[p].downed)
+          continue;
+        int a = BYTE(overworld_area_index) & 0x3f, size = kOverworldMapIsSmall[a] ? 512 : 1024;
+        int dx = Mp_PlayerX(p) - kOverworld_OffsetBaseX[a], dy = Mp_PlayerY(p) - kOverworld_OffsetBaseY[a];
+        if (dx < -8 || dx > size + 8 || dy < -16 || dy > size + 8) {
+          printf("FAIL: P%d at (%d,%d) is outside area %02x at frame %d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p), a, frame);
+          failures++;
+        }
+      }
     } else if (!strcmp(cmd, "spawn")) {
       SwitchToPlayer(atoi(arg2) - 1);
       for (int j = 15; j >= 0; j--) {
