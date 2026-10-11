@@ -954,6 +954,22 @@ static void DrawCornerHud() {
   }
 }
 
+// A local player who is down in a paused world watches a teammate.
+static bool SpectateMessage(char *buf, size_t size) {
+  const SessionStatus *st = Session_GetStatus();
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    int p = st->local_slot[i];
+    if (p < 0)
+      continue;
+    int q = Inst_SpectateTarget(p);
+    if (q != p) {
+      snprintf(buf, size, "P%d down: watching P%d until revived", p + 1, q + 1);
+      return true;
+    }
+  }
+  return false;
+}
+
 static void DrawNotifications() {
   const SessionStatus *st = Session_GetStatus();
   uint32 now = SDL_GetTicks();
@@ -971,6 +987,8 @@ static void DrawNotifications() {
     msg = buf;
   } else if (g_mp.exit_blocked_timer && Mp_Active()) {
     msg = "Everyone has to head that way!";
+  } else if (SpectateMessage(buf, sizeof(buf))) {
+    msg = buf;
   } else if (g_ui.last_message[0] && now - g_ui.message_time < 4000) {
     msg = g_ui.last_message;
   }

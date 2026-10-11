@@ -74,6 +74,9 @@ uint8 Inst_PlayerHealth(int p);
 int Inst_PlayerPos(int p, uint16 *x, uint16 *y);
 bool Inst_PlayerDowned(int p);
 uint8 Inst_PlayerReviveCtr(int p);
+// The player whose world p's screen shows: p, or while p is a ghost in a
+// world that is paused (only ghosts there), a standing teammate.
+int Inst_SpectateTarget(int p);
 // Main module of the instance player p is in (0 if not playing).
 uint8 Inst_PlayerModule(int p);
 // Time left on the "everyone has to head that way" hint in p's instance.

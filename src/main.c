@@ -162,7 +162,8 @@ static int GetViews(int *views) {
   const SessionStatus *st = Session_GetStatus();
   int n = 0;
   for (int i = 0; i < kSessionMaxLocal; i++) {
-    int inst = Inst_OfPlayer(st->local_slot[i]);
+    // (A ghost waiting in a paused world watches a standing teammate.)
+    int inst = st->local_slot[i] < 0 ? -1 : Inst_OfPlayer(Inst_SpectateTarget(st->local_slot[i]));
     bool dup = inst < 0;
     for (int j = 0; j < n; j++)
       dup |= views[j] == inst;
@@ -635,7 +636,8 @@ int main(int argc, char** argv) {
 
     bool is_replay = false;
     // Sound comes from the world of the first local player.
-    Inst_SetAudioPlayer(Session_GetStatus()->local_slot[0]);
+    int p0 = Session_GetStatus()->local_slot[0];
+    Inst_SetAudioPlayer(p0 < 0 ? p0 : Inst_SpectateTarget(p0));
     if (!Ui_PausesGame()) {
       SDL_LockMutex(g_audio_mutex);
       Session_Tick(local_inputs, g_config.features0);

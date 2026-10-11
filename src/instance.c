@@ -839,6 +839,16 @@ int Inst_PlayerPos(int p, uint16 *x, uint16 *y) {
   return i;
 }
 
+int Inst_SpectateTarget(int p) {
+  int i = Inst_OfPlayer(p);
+  if (i < 0 || !MpOf(i)->p[p].downed || HasAlive(i))
+    return p;
+  for (int q = 0; q < kMpMaxPlayers; q++)
+    if (q != p && Inst_IsJoined(q) && !Inst_PlayerDowned(q))
+      return q;
+  return p;
+}
+
 bool Inst_PlayerDowned(int p) {
   int i = Inst_OfPlayer(p);
   return i >= 0 && MpOf(i)->p[p].downed;
