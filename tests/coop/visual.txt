@@ -2,6 +2,8 @@
 # tests/baseline/<name>.ppm, made from your own ROM on the first run (never
 # committed). After an intended change to how things look, refresh them with
 # tests/update_baselines.sh. Catches things like the HUD shifting sideways.
+# The 2D-HD shots allow small color differences (its math may round a
+# little differently from one compiler or CPU to the next).
 load 1
 run 30
 expect_shot sanctuary_hud
@@ -16,11 +18,11 @@ expect_shot pause_menu
 menu
 hd2d 1
 run 2
-expect_shot hd2d_outdoors 1
+expect_shot hd2d_outdoors 1 12
 hd2d 0
 load 2
 run 30
 enter f0
 run 200
 hd2d 1
-expect_shot hd2d_dark_room 1
+expect_shot hd2d_dark_room 1 12

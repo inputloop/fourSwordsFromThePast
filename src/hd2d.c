@@ -5,6 +5,8 @@
 #include "variables.h"
 #include "mp.h"
 #include "snes/ppu.h"
+#include <SDL.h>
+#include <stdint.h>
 
 Hd2dSettings g_hd2d = { false, 60, 40, 45, 50, 70 };
 
@@ -16,15 +18,24 @@ enum {
 };
 
 // Layer of each pixel and the Link pixels hidden behind background tiles
-// (from the PPU), and scratch images: the frame and two blurred copies, one
-// channel at a time as 16-bit values.
+// (from the PPU). The blurred copies are made at lower resolution (they are
+// smooth anyway) and read back with bilinear filtering: the out-of-focus
+// picture at half, the bloom at a quarter. One channel at a time, 16-bit.
+enum {
+  kHalfW = kMaxW / 2 + 1, kHalfH = kMaxH / 2 + 1,
+  kQuarterW = kMaxW / 4 + 1, kQuarterH = kMaxH / 4 + 1,
+};
 static uint8 g_layer[kMaxW * kMaxH];
 static uint32 g_hidden[kMaxW * kMaxH];
 static uint16 g_src[3][kMaxW * kMaxH];
-static uint16 g_soft[3][kMaxW * kMaxH];   // a little blurred: the out-of-focus picture
-static uint16 g_glow[3][kMaxW * kMaxH];   // the bright parts, much blurred: the bloom
-static uint16 g_tmp[kMaxW * kMaxH];
+static uint16 g_soft[3][kHalfW * kHalfH];      // the out-of-focus picture
+static uint16 g_glow_half[3][kHalfW * kHalfH];
+static uint16 g_glow[3][kQuarterW * kQuarterH];  // the bright parts, much blurred: the bloom
+static uint16 g_tmp[3][kMaxW * kMaxH];  // blur scratch, one per channel (they run in parallel)
+static uint32 g_colsum[3][kMaxW];
 static float g_light[3][kMaxW * kMaxH];   // light reaching each pixel (lighting only)
+static uint8 g_vignette[kMaxW * kMaxH];    // 255 = unchanged
+static int g_vignette_key = -1;
 
 typedef struct Light {
   float x, y, radius, power;
@@ -49,30 +60,134 @@ static Scene g_scene;
 static float g_focus_y[kMaxViews] = { -1, -1, -1, -1 };
 
 // Box blur of radius r, horizontally then vertically (run twice it is close
-// to a gaussian).
-static void BoxBlur(uint16 *img, int w, int h, int r) {
-  int n = 2 * r + 1;
+// to a gaussian). Both passes go along rows, with running sums.
+static void BoxBlur(uint16 *img, int w, int h, int r, int ch) {
+  uint16 *tmp = g_tmp[ch];
+  uint32 *colsum = g_colsum[ch];
+  uint32 inv = 65536 / (2 * r + 1);
   for (int y = 0; y < h; y++) {
-    uint16 *row = img + y * w, *out = g_tmp + y * w;
-    int sum = 0;
-    for (int i = -r; i <= r; i++)
-      sum += row[i < 0 ? 0 : i >= w ? w - 1 : i];
+    uint16 *row = img + y * w, *out = tmp + y * w;
+    uint32 sum = row[0] * (r + 1);
+    for (int i = 1; i <= r; i++)
+      sum += row[i < w ? i : w - 1];
     for (int x = 0; x < w; x++) {
-      out[x] = sum / n;
+      out[x] = (sum * inv + 32768) >> 16;
       int add = x + r + 1, sub = x - r;
-      sum += row[add >= w ? w - 1 : add] - row[sub < 0 ? 0 : sub];
+      sum += row[add < w ? add : w - 1] - row[sub > 0 ? sub : 0];
     }
   }
-  for (int x = 0; x < w; x++) {
-    int sum = 0;
-    for (int i = -r; i <= r; i++)
-      sum += g_tmp[(i < 0 ? 0 : i >= h ? h - 1 : i) * w + x];
-    for (int y = 0; y < h; y++) {
-      img[y * w + x] = sum / n;
-      int add = y + r + 1, sub = y - r;
-      sum += g_tmp[(add >= h ? h - 1 : add) * w + x] - g_tmp[(sub < 0 ? 0 : sub) * w + x];
+  for (int x = 0; x < w; x++)
+    colsum[x] = tmp[x] * (r + 1);
+  for (int i = 1; i <= r; i++) {
+    const uint16 *row = tmp + (i < h ? i : h - 1) * w;
+    for (int x = 0; x < w; x++)
+      colsum[x] += row[x];
+  }
+  for (int y = 0; y < h; y++) {
+    uint16 *out = img + y * w;
+    const uint16 *add = tmp + (y + r + 1 < h ? y + r + 1 : h - 1) * w;
+    const uint16 *sub = tmp + (y - r > 0 ? y - r : 0) * w;
+    for (int x = 0; x < w; x++) {
+      out[x] = (colsum[x] * inv + 32768) >> 16;
+      colsum[x] += add[x] - sub[x];
     }
   }
+}
+
+// Halves an image (2x2 averages; the last row/column repeats if odd).
+static void Downsample(const uint16 *src, int w, int h, uint16 *dst, int dw, int dh) {
+  for (int y = 0; y < dh; y++) {
+    const uint16 *r0 = src + (2 * y) * w, *r1 = src + (2 * y + 1 < h ? 2 * y + 1 : h - 1) * w;
+    for (int x = 0; x < dw; x++) {
+      int x0 = 2 * x, x1 = 2 * x + 1 < w ? 2 * x + 1 : w - 1;
+      dst[y * dw + x] = (r0[x0] + r0[x1] + r1[x0] + r1[x1] + 2) >> 2;
+    }
+  }
+}
+
+// Bilinear sampling of an image 2^shift times smaller: where each output
+// column/row reads from, and how much of the second sample it takes (0-256).
+typedef struct Taps { uint16 i0, i1, f; } Taps;
+static Taps g_taps_x[2][kMaxW], g_taps_y[2][kMaxH];
+
+static void MakeTaps(Taps *t, int n, int shift, int small_n) {
+  int scale = 1 << shift;
+  for (int i = 0; i < n; i++) {
+    int pos = (2 * i + 1) * 128 / scale - 128;  // in 1/256 of a small pixel
+    if (pos < 0)
+      pos = 0;
+    int i0 = pos >> 8, f = pos & 255;
+    if (i0 >= small_n - 1)
+      i0 = small_n - 1, f = 0;
+    t[i].i0 = i0, t[i].i1 = i0 + 1 < small_n ? i0 + 1 : i0, t[i].f = f;
+  }
+}
+
+// Bilinear upsampling, done in two steps: each row of the small image is
+// first widened to the full width (all rows, once), then every output row
+// blends the two widened rows around it.
+static uint16 g_wide_soft[3][kHalfH * kMaxW], g_wide_glow[3][kQuarterH * kMaxW];
+
+static void WidenRows(const uint16 *src, int sw, int sh, const Taps *tx, int w, uint16 *dst) {
+  for (int y = 0; y < sh; y++) {
+    const uint16 *row = src + y * sw;
+    uint16 *out = dst + y * w;
+    for (int x = 0; x < w; x++)
+      out[x] = ((row[tx[x].i0] << 8) + (row[tx[x].i1] - row[tx[x].i0]) * tx[x].f) >> 8;
+  }
+}
+
+// A few worker threads: each stage of the pass is split by rows or by color
+// channel. (Display only: nothing here touches the game.)
+enum { kMaxWorkers = 3 };
+typedef void JobFunc(int begin, int end);
+static struct {
+  int workers;  // -1: not started
+  SDL_Thread *thread[kMaxWorkers];
+  SDL_sem *start[kMaxWorkers], *done;
+  JobFunc *func;
+  int count;
+} g_pool = { -1 };
+
+static int PoolWorker(void *arg) {
+  int id = (int)(intptr_t)arg;
+  for (;;) {
+    SDL_SemWait(g_pool.start[id]);
+    int parts = g_pool.workers + 1;
+    g_pool.func(g_pool.count * (id + 1) / parts, g_pool.count * (id + 2) / parts);
+    SDL_SemPost(g_pool.done);
+  }
+  return 0;
+}
+
+static void ParallelFor(int count, JobFunc *func) {
+  if (g_pool.workers < 0) {
+    g_pool.workers = 0;
+    int want = SDL_GetCPUCount() - 1;
+    want = want > kMaxWorkers ? kMaxWorkers : want;
+    if (want > 0 && (g_pool.done = SDL_CreateSemaphore(0)) != NULL) {
+      for (int i = 0; i < want; i++) {
+        g_pool.start[i] = SDL_CreateSemaphore(0);
+        g_pool.thread[i] = g_pool.start[i] ? SDL_CreateThread(PoolWorker, "hd2d", (void *)(intptr_t)i) : NULL;
+        if (!g_pool.thread[i])
+          break;
+        g_pool.workers = i + 1;
+      }
+    }
+  }
+  int workers = count < 2 ? 0 : g_pool.workers < count - 1 ? g_pool.workers : count - 1;
+  if (workers == 0) {
+    func(0, count);
+    return;
+  }
+  // (The workers split the work as if all of them ran: the ones not needed
+  // get an empty range.)
+  g_pool.func = func, g_pool.count = count;
+  for (int i = 0; i < g_pool.workers; i++)
+    SDL_SemPost(g_pool.start[i]);
+  func(0, count / (g_pool.workers + 1));
+  for (int i = 0; i < g_pool.workers; i++)
+    SDL_SemWait(g_pool.done);
 }
 
 static float SmoothStep(float a, float b, float x) {
@@ -81,30 +196,42 @@ static float SmoothStep(float a, float b, float x) {
   return t * t * (3 - 2 * t);
 }
 
-// Color grade and vignette for one pixel (channels 0-255 as floats).
-static void GradeAndVignette(float *r, float *g, float *b, float vig) {
-  float grade = g_hd2d.grade / 100.0f;
-  float l = 0.299f * *r + 0.587f * *g + 0.114f * *b;
-  float sat = 1 + 0.25f * grade, con = 1 + 0.15f * grade;
-  *r = ((l + (*r - l) * sat) - 128) * con + 128;
-  *g = ((l + (*g - l) * sat) - 128) * con + 128;
-  *b = ((l + (*b - l) * sat) - 128) * con + 128;
-  *r *= 1 + 0.06f * grade;  // warm light
-  *b *= 1 - 0.06f * grade;
-  *r *= vig, *g *= vig, *b *= vig;
+static FORCEINLINE int Clamp255(int v) {
+  return v < 0 ? 0 : v > 255 ? 255 : v;
 }
 
-static uint32 Pack(float r, float g, float b) {
-  int ir = r < 0 ? 0 : r > 255 ? 255 : (int)r;
-  int ig = g < 0 ? 0 : g > 255 ? 255 : (int)g;
-  int ib = b < 0 ? 0 : b > 255 ? 255 : (int)b;
-  return ir << 16 | ig << 8 | ib;
+// The vignette for every pixel (made again when the size or strength changes).
+static void MakeVignette(int w, int h) {
+  int key = w << 20 | h << 8 | g_hd2d.vignette;
+  if (key == g_vignette_key)
+    return;
+  g_vignette_key = key;
+  for (int y = 0; y < h; y++) {
+    for (int x = 0; x < w; x++) {
+      float dx = (x + 0.5f) / w - 0.5f, dy = (y + 0.5f) / h - 0.5f;
+      float d = (dx * dx + dy * dy) * 2;  // 0 in the middle, 1 in the corners
+      g_vignette[y * w + x] = (uint8)(255 * (1 - g_hd2d.vignette / 100.0f * 0.45f * d * d) + 0.5f);
+    }
+  }
 }
 
-static float Vignette(int x, int y, int w, int h) {
-  float dx = (x + 0.5f) / w - 0.5f, dy = (y + 0.5f) / h - 0.5f;
-  float d = (dx * dx + dy * dy) * 2;  // 0 in the middle, 1 in the corners
-  return 1 - g_hd2d.vignette / 100.0f * 0.45f * d * d;
+// Color grade (contrast, saturation, warmth) and vignette, in fixed point.
+typedef struct Grade { int sat, con, warm_r, warm_b; } Grade;
+
+static Grade MakeGrade() {
+  int g = g_hd2d.grade;  // 0-100
+  Grade gr = { 256 + 64 * g / 100, 256 + 38 * g / 100, 256 + 15 * g / 100, 256 - 15 * g / 100 };
+  return gr;
+}
+
+static FORCEINLINE uint32 GradeAndPack(const Grade *gr, int r, int g, int b, int vig) {
+  int l = (77 * r + 150 * g + 29 * b) >> 8;
+  r = (((((l << 8) + (r - l) * gr->sat) >> 8) - 128) * gr->con >> 8) + 128;
+  g = (((((l << 8) + (g - l) * gr->sat) >> 8) - 128) * gr->con >> 8) + 128;
+  b = (((((l << 8) + (b - l) * gr->sat) >> 8) - 128) * gr->con >> 8) + 128;
+  vig += vig >> 7;  // 0-255 -> 0-256
+  r = r * gr->warm_r * vig >> 16, g = g * vig >> 8, b = b * gr->warm_b * vig >> 16;
+  return Clamp255(r) << 16 | Clamp255(g) << 8 | Clamp255(b);
 }
 
 static void AddLight(Scene *sc, float x, float y, float radius, float power, float r, float g, float b) {
@@ -242,83 +369,185 @@ static void FocusBand(const Scene *sc, int view, int h, float *top, float *botto
   *top = *f - half, *bottom = *f + half;
 }
 
-static void Apply(uint8 *pixels, size_t pitch, int w, int h, int view) {
-  const Scene *sc = &g_scene;
-  // The frame, split into channels, with hidden Links showing through.
-  for (int y = 0; y < h; y++) {
-    const uint32 *row = (const uint32 *)(pixels + y * pitch);
-    for (int x = 0; x < w; x++) {
-      uint32 c = row[x], hid = g_hidden[y * kMaxW + x];
-      int i = y * w + x;
+// What the stages of Apply share.
+static struct {
+  uint8 *pixels;
+  size_t pitch;
+  int w, h, hw, hh, qw, qh;
+  bool any_glow, lighting;
+  uint8 row_glow[kHalfH];
+  float top, bottom, dof;
+  int glow_k, haze_k, haze[3];
+  Grade grade;
+} A;
+
+// The frame, split into channels, with hidden Links showing through.
+static void StageSplit(int y0, int y1) {
+  for (int y = y0; y < y1; y++) {
+    const uint32 *row = (const uint32 *)(A.pixels + y * A.pitch);
+    const uint32 *hid = g_hidden + y * kMaxW;
+    for (int x = 0; x < A.w; x++) {
+      uint32 c = row[x];
+      int i = y * A.w + x;
       int r = c >> 16 & 0xff, g = c >> 8 & 0xff, b = c & 0xff;
-      if (hid && sc->reveal) {
-        r = (r * 2 + (hid >> 16 & 0xff) * 3) / 5;
-        g = (g * 2 + (hid >> 8 & 0xff) * 3) / 5;
-        b = (b * 2 + (hid & 0xff) * 3) / 5;
+      if (hid[x] && g_scene.reveal) {
+        r = (r * 2 + (hid[x] >> 16 & 0xff) * 3) / 5;
+        g = (g * 2 + (hid[x] >> 8 & 0xff) * 3) / 5;
+        b = (b * 2 + (hid[x] & 0xff) * 3) / 5;
       }
       g_src[0][i] = r, g_src[1][i] = g, g_src[2][i] = b;
     }
   }
-  float bloom = g_hd2d.bloom / 100.0f, dof = g_hd2d.depth_of_field / 100.0f;
-  for (int ch = 0; ch < 3; ch++) {
-    memcpy(g_soft[ch], g_src[ch], w * h * sizeof(uint16));
-    BoxBlur(g_soft[ch], w, h, 2);
-    BoxBlur(g_soft[ch], w, h, 3);
-    // Bloom: only the brightest parts (not the HUD), spread wide.
-    for (int y = 0; y < h; y++) {
-      for (int x = 0; x < w; x++) {
-        int i = y * w + x, v = g_src[ch][i] - 215;
-        g_glow[ch][i] = v > 0 && g_layer[y * kMaxW + x] != 2 ? v * 4 : 0;
-      }
-    }
-    BoxBlur(g_glow[ch], w, h, 6);
-    BoxBlur(g_glow[ch], w, h, 6);
+}
+
+// The out-of-focus picture, at half resolution.
+static void StageSoft(int c0, int c1) {
+  for (int ch = c0; ch < c1; ch++) {
+    Downsample(g_src[ch], A.w, A.h, g_soft[ch], A.hw, A.hh);
+    BoxBlur(g_soft[ch], A.hw, A.hh, 1, ch);
+    BoxBlur(g_soft[ch], A.hw, A.hh, 1, ch);
   }
-  bool lighting = sc->dark || (g_hd2d.lighting && sc->num_lights);
-  if (lighting)
-    ComputeLight(sc, w, h);
-  // In focus: a band around the players; it fades out of focus above and below.
-  float top, bottom;
-  FocusBand(sc, view, h, &top, &bottom);
-  for (int y = 0; y < h; y++) {
-    uint32 *row = (uint32 *)(pixels + y * pitch);
-    float d = y < top ? top - y : y > bottom ? y - bottom : 0;
-    float blur_row = SmoothStep(0.15f, 0.65f, d / h) * dof;
+}
+
+// Bloom: only the brightest parts (not the HUD), at half resolution first.
+static void StageGlowThreshold(int y0, int y1) {
+  for (int y = y0; y < y1; y++) {
+    int any = 0;
+    for (int x = 0; x < A.hw; x++) {
+      int sum[3] = { 0, 0, 0 };
+      for (int k = 0; k < 4; k++) {
+        int sx = 2 * x + (k & 1), sy = 2 * y + (k >> 1), si = sy * A.w + sx;
+        if (g_layer[sy * kMaxW + sx] == 2)
+          continue;
+        for (int ch = 0; ch < 3; ch++) {
+          int v = g_src[ch][si] - 215;
+          sum[ch] += v > 0 ? v : 0;
+        }
+      }
+      for (int ch = 0; ch < 3; ch++)
+        g_glow_half[ch][y * A.hw + x] = sum[ch];  // (4 pixels' worth: the bloom's strength)
+      any |= sum[0] | sum[1] | sum[2];
+    }
+    A.row_glow[y] = any != 0;
+  }
+}
+
+// ... then spread wide at a quarter.
+static void StageGlowBlur(int c0, int c1) {
+  for (int ch = c0; ch < c1; ch++) {
+    Downsample(g_glow_half[ch], A.hw, A.hh, g_glow[ch], A.qw, A.qh);
+    BoxBlur(g_glow[ch], A.qw, A.qh, 1, ch);
+    BoxBlur(g_glow[ch], A.qw, A.qh, 2, ch);
+  }
+}
+
+static void StageWiden(int c0, int c1) {
+  for (int ch = c0; ch < c1; ch++) {
+    WidenRows(g_soft[ch], A.hw, A.hh, g_taps_x[0], A.w, g_wide_soft[ch]);
+    if (A.any_glow)
+      WidenRows(g_glow[ch], A.qw, A.qh, g_taps_x[1], A.w, g_wide_glow[ch]);
+  }
+}
+
+// Everything together, row by row.
+static void StageCompose(int y0, int y1) {
+  const Scene *sc = &g_scene;
+  int w = A.w;
+  for (int y = y0; y < y1; y++) {
+    uint32 *row = (uint32 *)(A.pixels + y * A.pitch);
+    // In focus: a band around the players; it fades out of focus above and below.
+    float d = y < A.top ? A.top - y : y > A.bottom ? y - A.bottom : 0;
+    int blur_row = (int)(SmoothStep(0.15f, 0.65f, d / A.h) * A.dof * 256);
+    int blur_far = (blur_row >> 1) + (int)(0.6f * A.dof * 256);
+    const Taps *ty0 = &g_taps_y[0][y], *ty1 = &g_taps_y[1][y];
+    const uint16 *soft0[3], *soft1[3], *glow0[3], *glow1[3];
+    for (int ch = 0; ch < 3; ch++) {
+      soft0[ch] = g_wide_soft[ch] + ty0->i0 * w, soft1[ch] = g_wide_soft[ch] + ty0->i1 * w;
+      glow0[ch] = g_wide_glow[ch] + ty1->i0 * w, glow1[ch] = g_wide_glow[ch] + ty1->i1 * w;
+    }
+    int fs = ty0->f, fg = ty1->f;
+    const uint8 *layers = g_layer + y * kMaxW, *vig = g_vignette + y * w;
     for (int x = 0; x < w; x++) {
-      int i = y * w + x;
-      uint8 layer = g_layer[y * kMaxW + x];  // (the PPU writes it kMaxW wide)
+      uint8 layer = layers[x];
       // The HUD (BG3) is left exactly as it is.
       if (layer == 2)
         continue;
+      int i = y * w + x;
       // Sprites (Links, enemies, items) stay sharp; far layers are softer and hazy.
       bool far = layer == 5 || (layer == 1 && sc->far_bg2);
-      float blur = (layer == 4 || layer == 6) ? 0 : far ? blur_row * 0.5f + 0.6f * dof : blur_row;
-      float c[3];
-      for (int ch = 0; ch < 3; ch++) {
-        c[ch] = g_src[ch][i] + (g_soft[ch][i] - g_src[ch][i]) * blur + g_glow[ch][i] * 0.35f * bloom;
-        if (lighting)
-          c[ch] *= g_light[ch][i] < 1.25f ? g_light[ch][i] : 1.25f;
+      int blur = (layer == 4 || layer == 6) ? 0 : far ? blur_far : blur_row;
+      int c[3] = { g_src[0][i], g_src[1][i], g_src[2][i] };
+      if (blur) {
+        for (int ch = 0; ch < 3; ch++) {
+          int t = ((soft0[ch][x] << 8) + (soft1[ch][x] - soft0[ch][x]) * fs) >> 8;
+          c[ch] += (t - c[ch]) * blur >> 8;
+        }
+      }
+      if (A.any_glow) {
+        for (int ch = 0; ch < 3; ch++) {
+          int t = ((glow0[ch][x] << 8) + (glow1[ch][x] - glow0[ch][x]) * fg) >> 8;
+          c[ch] += t * A.glow_k >> 8;
+        }
+      }
+      if (A.lighting) {
+        for (int ch = 0; ch < 3; ch++) {
+          float l = g_light[ch][i];
+          c[ch] = (int)(c[ch] * (l < 1.25f ? l : 1.25f));
+        }
       }
       if (far) {
-        static const float kHaze[3] = { 120, 130, 150 };
         for (int ch = 0; ch < 3; ch++)
-          c[ch] += (kHaze[ch] * (sc->dark ? sc->ambient : 1) - c[ch]) * 0.18f * dof;
+          c[ch] += (A.haze[ch] - c[ch]) * A.haze_k >> 8;
       }
-      GradeAndVignette(&c[0], &c[1], &c[2], Vignette(x, y, w, h));
-      row[x] = Pack(c[0], c[1], c[2]);
+      row[x] = GradeAndPack(&A.grade, c[0], c[1], c[2], vig[x]);
     }
   }
 }
 
+static void Apply(uint8 *pixels, size_t pitch, int w, int h, int view) {
+  const Scene *sc = &g_scene;
+  A.pixels = pixels, A.pitch = pitch, A.w = w, A.h = h;
+  A.hw = w / 2, A.hh = h / 2, A.qw = A.hw / 2, A.qh = A.hh / 2;
+  float bloom = g_hd2d.bloom / 100.0f;
+  A.dof = g_hd2d.depth_of_field / 100.0f;
+  ParallelFor(h, StageSplit);
+  ParallelFor(3, StageSoft);
+  A.any_glow = false;
+  if (bloom > 0) {
+    ParallelFor(A.hh, StageGlowThreshold);
+    for (int y = 0; y < A.hh; y++)
+      A.any_glow |= A.row_glow[y];
+    if (A.any_glow)
+      ParallelFor(3, StageGlowBlur);
+  }
+  A.lighting = sc->dark || (g_hd2d.lighting && sc->num_lights);
+  if (A.lighting)
+    ComputeLight(sc, w, h);
+  MakeVignette(w, h);
+  MakeTaps(g_taps_x[0], w, 1, A.hw), MakeTaps(g_taps_y[0], h, 1, A.hh);
+  MakeTaps(g_taps_x[1], w, 2, A.qw), MakeTaps(g_taps_y[1], h, 2, A.qh);
+  ParallelFor(3, StageWiden);
+  A.grade = MakeGrade();
+  A.glow_k = (int)(0.35f * bloom * 256);
+  A.haze_k = (int)(0.18f * A.dof * 256);
+  static const int kHaze[3] = { 120, 130, 150 };
+  for (int ch = 0; ch < 3; ch++)
+    A.haze[ch] = sc->dark ? (int)(kHaze[ch] * sc->ambient) : kHaze[ch];
+  FocusBand(sc, view, h, &A.top, &A.bottom);
+  ParallelFor(h, StageCompose);
+}
+
 // The HD world map (4x mode 7): just the grade and vignette.
 static void ApplyLight(uint8 *pixels, size_t pitch, int w, int h) {
+  Grade grade = MakeGrade();
+  float k = g_hd2d.vignette / 100.0f * 0.45f;
   for (int y = 0; y < h; y++) {
     uint32 *row = (uint32 *)(pixels + y * pitch);
+    float dy = (y + 0.5f) / h - 0.5f;
     for (int x = 0; x < w; x++) {
       uint32 c = row[x];
-      float r = c >> 16 & 0xff, g = c >> 8 & 0xff, b = c & 0xff;
-      GradeAndVignette(&r, &g, &b, Vignette(x, y, w, h));
-      row[x] = Pack(r, g, b);
+      float dx = (x + 0.5f) / w - 0.5f, d = (dx * dx + dy * dy) * 2;
+      row[x] = GradeAndPack(&grade, c >> 16 & 0xff, c >> 8 & 0xff, c & 0xff, (int)(255 * (1 - k * d * d)));
     }
   }
 }

@@ -294,8 +294,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "benchdraw")) {
+      // benchdraw <n>: times n frames drawn (with the current 2D-HD setting)
+      uint64 t0 = SDL_GetPerformanceCounter();
+      for (int n = atoi(arg1); n > 0; n--)
+        Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
+      double ms = (SDL_GetPerformanceCounter() - t0) * 1000.0 / SDL_GetPerformanceFrequency() / atoi(arg1);
+      printf("benchdraw: %.2f ms per frame\n", ms);
     } else if (!strcmp(cmd, "expect_shot")) {
-      // expect_shot <name> [max %% of pixels that may differ, default 0.5]:
+      // expect_shot <name> [max %% of pixels that may differ, default 0.5]
+      //   [how far a color channel may be off and still count as the same, default 0]:
       // draws the screen like "shot" and compares it with
       // tests/baseline/<name>.ppm. Baselines come from your own ROM, so they
       // are never committed: the first run (or tests/update_baselines.sh)
@@ -313,9 +321,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         WritePpm(base, width, height, pixels, width);
         printf("expect_shot %s: baseline written\n", arg1);
       } else {
-        int diff = 0;
-        for (int i = 0; i < width * height; i++)
-          diff += (pixels[i] & 0xffffff) != ref[i];
+        int diff = 0, tol = arg3[0] ? atoi(arg3) : 0;
+        for (int i = 0; i < width * height; i++) {
+          uint32 a = pixels[i], b = ref[i];
+          diff += abs((int)(a >> 16 & 0xff) - (int)(b >> 16 & 0xff)) > tol ||
+                  abs((int)(a >> 8 & 0xff) - (int)(b >> 8 & 0xff)) > tol || abs((int)(a & 0xff) - (int)(b & 0xff)) > tol;
+        }
         double pct = 100.0 * diff / (width * height), limit = arg2[0] ? atof(arg2) : 0.5;
         if (pct > limit) {
           printf("FAIL: screenshot %s differs from its baseline in %.2f%% of the pixels (limit %.2f%%) at frame %d; see tests/out/%s_diff.ppm\n",
@@ -325,7 +336,10 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           for (int i = 0; i < width * height; i++) {
             uint32 c = ref[i];
             int l = ((c >> 16 & 0xff) + (c >> 8 & 0xff) + (c & 0xff)) / 6;
-            ref[i] = (pixels[i] & 0xffffff) != c ? 0xff0000 : l << 16 | l << 8 | l;
+            uint32 a = pixels[i];
+            bool changed = abs((int)(a >> 16 & 0xff) - (int)(c >> 16 & 0xff)) > tol ||
+                           abs((int)(a >> 8 & 0xff) - (int)(c >> 8 & 0xff)) > tol || abs((int)(a & 0xff) - (int)(c & 0xff)) > tol;
+            ref[i] = changed ? 0xff0000 : l << 16 | l << 8 | l;
           }
           snprintf(out, sizeof(out), "tests/out/%s_diff.ppm", arg1);
           WritePpm(out, width, height, ref, width);
