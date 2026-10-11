@@ -46,7 +46,7 @@ Players can drop in and drop out at any time.
   magic meter shows the magic of the player whose screen it is.
 - **Lift and throw.** Face a teammate right next to you and press A to lift
   them over your head; press A again to throw them about four tiles the way
-  you face (over gaps, onto the other side of a fence). The one being carried
+  you face, in an arc like a knockback (walls still stop them). The one being carried
   can wriggle free with B. Getting hurt, or either player going down, drops
   the carried Link.
 - **Arrows to teammates.** A teammate off your screen gets an arrow in their
