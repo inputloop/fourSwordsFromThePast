@@ -557,7 +557,7 @@ static void ScreenVideo() {
     g_config.output_method = g_config.output_method == kOutputMethod_OpenGL ? kOutputMethod_SDL : kOutputMethod_OpenGL;
     g_ui.dirty_settings = true;
   }
-  Label("Shaders: set Shader= in zelda3.ini (OpenGL)");
+  Label("Shaders: zelda3.ini Shader= (OpenGL)");
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);
@@ -644,8 +644,9 @@ static void ScreenControls() {
   Label("Change them in Pause menu > Controls");
   Label("Menu: Esc, controller Guide, or");
   Label("  Back+Start on any controller");
-  Label("Drop in: press Start on a new controller");
+  Label("Drop in: Start on a new controller");
   Label("Revive: stand next to a downed Link");
+  Label("While down: L/R picks who to watch");
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);
