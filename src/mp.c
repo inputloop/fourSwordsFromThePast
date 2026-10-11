@@ -274,6 +274,8 @@ static void Mp_ReadJoypadInto(uint16 input, uint8 *last_h, uint8 *last_l, uint8 
   *last2_h = r1;
 }
 
+static void Mp_HandleCarry();
+
 void Mp_ReadJoypads() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
@@ -281,6 +283,125 @@ void Mp_ReadJoypads() {
     Mp_ReadJoypadInto(g_mp.p[p].downed ? 0 : g_mp.inputs[p],
                       Mp_PlayerRam(p, 0xF0), Mp_PlayerRam(p, 0xF2), Mp_PlayerRam(p, 0xF4),
                       Mp_PlayerRam(p, 0xF6), Mp_PlayerRam(p, 0xF8), Mp_PlayerRam(p, 0xFA));
+  }
+  Mp_HandleCarry();
+}
+
+// ---------------------------------------------------------------------------
+// Lifting and throwing teammates (like Four Swords): A next to a teammate
+// you face lifts it over your head, A again throws it the way you face. The
+// Link being carried can wriggle free with B.
+
+enum {
+  kMpCarryHeight = 14,  // how high a carried Link is held
+  kMpThrowSpeed = 40,   // horizontal speed of a throw (like a knockback, only stronger)
+  kMpThrowZSpeed = 24,
+  kMpThrowTime = 30,
+};
+
+// Can p do something with its hands right now?
+static bool Mp_IsFreeToCarry(int p) {
+  return Mp_IsAlive(p) && !g_mp.carried_by[p] &&
+         *Mp_PlayerRam(p, 0x5D) == 0 &&             // link_player_handler_state: on the ground
+         *Mp_PlayerRam(p, 0x4D) == 0 &&             // link_auxiliary_state: not hurt
+         (uint16)(WORD(*Mp_PlayerRam(p, 0x24)) + 1) <= 1 &&  // link_z_coord: 0 or 0xffff on the ground
+         *Mp_PlayerRam(p, 0x308) == 0 &&            // link_state_bits: not carrying anything
+         *Mp_PlayerRam(p, 0x301) == 0 &&            // link_item_in_hand
+         *Mp_PlayerRam(p, 0x345) == 0;              // not swimming
+}
+
+static int Mp_CarriedBy(int carrier) {
+  for (int q = 0; q < kMpMaxPlayers; q++)
+    if (g_mp.carried_by[q] == carrier + 1)
+      return q;
+  return -1;
+}
+
+// The teammate right in front of p, if any.
+static int Mp_TeammateInFront(int p) {
+  uint16 x = Mp_PlayerX(p), y = Mp_PlayerY(p);
+  uint8 dir = *Mp_PlayerRam(p, 0x2F);  // link_direction_facing: 0 up, 2 down, 4 left, 6 right
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    if (q == p || !Mp_IsFreeToCarry(q) || Mp_CarriedBy(q) >= 0)
+      continue;
+    int dx = (int16)(Mp_PlayerX(q) - x), dy = (int16)(Mp_PlayerY(q) - y);
+    int along = dir == 0 ? -dy : dir == 2 ? dy : dir == 4 ? -dx : dx;
+    int across = dir < 4 ? dx : dy;
+    if (along > 0 && along <= 20 && abs(across) <= 10 && *Mp_PlayerRam(q, 0xEE) == *Mp_PlayerRam(p, 0xEE))
+      return q;
+  }
+  return -1;
+}
+
+static void Mp_Release(int q, bool throw_it) {
+  int c = g_mp.carried_by[q] - 1;
+  g_mp.carried_by[q] = 0;
+  uint8 dir = c >= 0 ? *Mp_PlayerRam(c, 0x2F) : 2;
+  int r = g_mp.resident;
+  Mp_SwapTo(q);
+  // Off it goes, in the arc of a knockback (which also handles walls, pits
+  // and ledges), or with a little hop when it wriggles free.
+  int speed = throw_it ? kMpThrowSpeed : 8;
+  link_actual_vel_x = dir == 4 ? -speed : dir == 6 ? speed : 0;
+  link_actual_vel_y = dir == 0 ? -speed : dir == 2 ? speed : 0;
+  link_actual_vel_z = throw_it ? kMpThrowZSpeed : 12;
+  link_incapacitated_timer = throw_it ? kMpThrowTime : 12;
+  link_auxiliary_state = 1;
+  link_give_damage = 0;
+  link_direction_facing = dir;
+  Mp_SwapTo(r);
+}
+
+static void Mp_HandleCarry() {
+  bool stable = Mp_Active() && submodule_index == 0 && (main_module_index == 7 || main_module_index == 9);
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    int c = g_mp.carried_by[q] - 1;
+    if (c < 0)
+      continue;
+    // Let go when either one is gone, down or hurt, or the game isn't in
+    // plain gameplay (a transition, a cutscene).
+    if (!stable || !g_mp.p[q].joined || !Mp_IsAlive(c) || g_mp.p[q].downed ||
+        *Mp_PlayerRam(c, 0x4D) != 0 || *Mp_PlayerRam(c, 0x5D) != 0 || *Mp_PlayerRam(q, 0x4D) != 0) {
+      g_mp.carried_by[q] = 0;
+      if (g_mp.p[q].joined && *Mp_PlayerRam(q, 0x4D) == 0)
+        WORD(*Mp_PlayerRam(q, 0x24)) = 0;  // set down where it is
+      continue;
+    }
+    // The carried Link can only wriggle free.
+    bool b = *Mp_PlayerRam(q, 0xF4) & 0x80;  // filtered_joypad_H: B
+    *Mp_PlayerRam(q, 0xF0) = *Mp_PlayerRam(q, 0xF2) = *Mp_PlayerRam(q, 0xF4) = *Mp_PlayerRam(q, 0xF6) = 0;
+    if (b)
+      Mp_Release(q, false);
+  }
+  if (!stable)
+    return;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!Mp_IsAlive(p) || !(*Mp_PlayerRam(p, 0xF6) & 0x80))  // filtered_joypad_L: A
+      continue;
+    int q = Mp_CarriedBy(p);
+    if (q >= 0) {
+      *Mp_PlayerRam(p, 0xF6) &= ~0x80;
+      Mp_Release(q, true);
+    } else if (Mp_IsFreeToCarry(p) && (q = Mp_TeammateInFront(p)) >= 0) {
+      *Mp_PlayerRam(p, 0xF6) &= ~0x80;
+      g_mp.carried_by[q] = p + 1;
+    }
+  }
+}
+
+// After everybody moved: carried Links are where their carriers hold them.
+static void Mp_PlaceCarried() {
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    int c = g_mp.carried_by[q] - 1;
+    if (c < 0)
+      continue;
+    uint16 x = Mp_PlayerX(c), y = Mp_PlayerY(c);
+    uint8 floor = *Mp_PlayerRam(c, 0xEE), dir = *Mp_PlayerRam(c, 0x2F);
+    WORD(*Mp_PlayerRam(q, 0x22)) = x;
+    WORD(*Mp_PlayerRam(q, 0x20)) = y + 1;  // drawn in front of the carrier
+    WORD(*Mp_PlayerRam(q, 0x24)) = kMpCarryHeight;
+    *Mp_PlayerRam(q, 0xEE) = floor;
+    *Mp_PlayerRam(q, 0x2F) = dir;
   }
 }
 
@@ -784,6 +905,7 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     Mp_EndObject();
   }
   Mp_SwapToLeader();
+  Mp_PlaceCarried();
   Mp_HandleRevives();
   if (g_mp.friendly_fire)
     Mp_FriendlyFire();
@@ -1213,6 +1335,7 @@ void Mp_ImportPlayer(int p, const uint8 *ctx, uint8 downed, uint8 revive_ctr) {
     return;
   memcpy(g_mp.p[p].ctx, ctx, Mp_CtxSize());
   g_mp.p[p].joined = 1;
+  g_mp.carried_by[p] = 0;
   g_mp.p[p].downed = downed;
   g_mp.p[p].revive_ctr = revive_ctr;
   if (p == g_mp.resident) {
@@ -1225,6 +1348,13 @@ void Mp_ImportPlayer(int p, const uint8 *ctx, uint8 downed, uint8 revive_ctr) {
 void Mp_RemovePlayer(int p) {
   if (!g_mp.p[p].joined)
     return;
+  g_mp.carried_by[p] = 0;
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    if (g_mp.carried_by[q] == p + 1) {
+      g_mp.carried_by[q] = 0;
+      WORD(*Mp_PlayerRam(q, 0x24)) = 0;  // the carrier left: set down where it is
+    }
+  }
   if (p == g_mp.leader) {
     int nl = Mp_FindNewLeader(p);
     if (nl < 0)

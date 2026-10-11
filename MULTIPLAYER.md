@@ -44,6 +44,11 @@ Players can drop in and drop out at any time.
   (top right), P3 (bottom left) and P4 (bottom right), each with a small magic
   bar under the hearts. Heart containers raise everyone's maximum. The HUD's
   magic meter shows the magic of the player whose screen it is.
+- **Lift and throw.** Face a teammate right next to you and press A to lift
+  them over your head; press A again to throw them about four tiles the way
+  you face (over gaps, onto the other side of a fence). The one being carried
+  can wriggle free with B. Getting hurt, or either player going down, drops
+  the carried Link.
 - **Arrows to teammates.** A teammate off your screen gets an arrow in their
   color at the screen's edge pointing their way (grey while down), when you
   are both on the same overworld, in the same dungeon or in the same room.

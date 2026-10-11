@@ -708,6 +708,7 @@ static void ScreenControls() {
   Label("Drop in: Start on a new controller");
   Label("Revive: stand next to a downed Link");
   Label("While down: L/R picks who to watch");
+  Label("Lift teammate: A, A again throws");
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);

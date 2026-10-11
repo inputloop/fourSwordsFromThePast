@@ -1,0 +1,47 @@
+# Lifting and throwing teammates: P1 faces P2 and presses A to lift P2 over
+# its head, walks with it, and presses A again to throw it about four tiles.
+# Then P1 lifts P2 again and P2 wriggles free with B.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3860 1690
+pos 2 3860 1705
+pram 1 2f 02
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+expect_near 2 3860 1691
+hold 1 R
+run 10
+hold 1 -
+run 2
+expect_near 2 3875 1691
+hold 1 A
+run 2
+hold 1 -
+run 70
+expect_near 2 3950 1691
+expect_alive 2
+expect_hp 2 40
+# Again, and this time P2 wriggles free.
+pos 2 3891 1690
+pram 1 2f 06
+run 10
+hold 1 A
+run 2
+hold 1 -
+run 10
+expect_near 2 3875 1691
+hold 2 B
+run 2
+hold 2 -
+run 40
+expect_alive 2
+hold 1 L
+run 20
+hold 1 -
+expect_near 2 3885 1691

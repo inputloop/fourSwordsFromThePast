@@ -105,6 +105,8 @@ flowchart LR
 
 A few things stay per world: each player's health and magic, the key count of the dungeon you are in, light or dark world, and the follower (like Zelda). Enemies and pots in a room can also differ between two worlds until they merge. A chest can only be emptied once: if a teammate opened it in another copy of the room, it may still look closed in yours, but it is empty.
 
+**Lifting and throwing teammates.** Like in Four Swords, you can pick up a teammate: face them while they stand right next to you and press A. They ride over your head and go wherever you go. Press A again to throw them about four tiles the way you face; they fly in an arc and land, which can carry them over a gap. The carried player can wriggle free with B. In the code, a throw is the game's own knockback (the arc Link flies in when an enemy hits him), only stronger and without damage, so walls, ledges and pits work the way they always do. Who carries whom is part of the shared co-op state, so it plays out the same on every computer online.
+
 **Arrows to teammates.** When a teammate is off your screen, a small arrow in their color at the edge of the screen points their way, with their player number. It works across worlds too, as long as the direction means something: you are both on the same overworld (light or dark), in the same dungeon, or in the same house or cave. A downed teammate's arrow is grey. The arrows are only drawn on your screen and change nothing in the game.
 
 **Split screen.** If two or more players on the same computer are in different worlds, the window shows each world side by side (2 players) or in a 2×2 grid (3 or 4). Online players always see their own world. The sound comes from the world of the first player on that computer.
@@ -283,7 +285,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 39 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 40 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
