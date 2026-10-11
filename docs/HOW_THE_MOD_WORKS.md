@@ -1,6 +1,6 @@
 # How the Four Swords From the Past Mod Works
 
-*Last updated October 10, 2026.* A plain-language guide to how the mod works.
+*Last updated October 11, 2026.* A plain-language guide to how the mod works.
 
 ## What this mod is
 
@@ -112,6 +112,11 @@ Each player has their own hearts, but nobody dies alone. A player who runs out o
 
 **A ghost alone in a room.** If a ghost is the only player left in its world, that world is paused. It waits, frozen, until a standing teammate walks into the same room or screen. Then the worlds merge and the ghost is right where it fell.
 
+Two special cases make sure a ghost can always be revived:
+
+- **Stuck on a text box.** Sometimes a ghost's world is showing a message when it freezes (for example, Zelda calling out). Nobody in that world can press A to close it. The mod still lets that world merge, so the ghost can be revived.
+- **A follower with the ghost.** If Zelda (or another follower) was following the player who went down, the reviver moves into the ghost's world, instead of the ghost being pulled out of it. That way the follower isn't lost.
+
 **Fairies.** If the team has a fairy in a bottle, a player who would become a ghost is saved instead. The bottle empties and the player gets back up to 7 hearts. Bottles are shared like all items, so it is the team's fairy.
 
 **Game over.** It is only game over when the last standing player goes down with no fairy. Then any ghosts in other worlds are pulled into that world, so everyone continues together from the same place.
@@ -124,15 +129,15 @@ Online play works because the game is **deterministic**: if two computers start 
 
 ```mermaid
 flowchart LR
-    C["Clients<br/>send button presses"] --> H["Host<br/>builds one frame of inputs"]
-    H --> E["Every machine<br/>runs the same frame"]
-    E --> F{"Fingerprint (hash)<br/>check once a second"}
-    F -- "same" --> E
+    C["Client<br/>stamps its buttons<br/>with a frame number"] --> H["Host<br/>runs that frame<br/>with everyone's buttons"]
+    H --> K["Client<br/>compares with its guess"]
+    K -- "guess was right" --> OK["Nothing to fix"]
+    K -- "guess was wrong" --> RB["Roll back and<br/>replay the frames"]
+    H --> F{"Fingerprint (hash)<br/>check once a second"}
     F -- "different" --> R["Client downloads<br/>a fresh snapshot"]
-    R --> E
 ```
 
-**The host and the clients.** One player hosts; up to three others join as clients. Each frame, the host gathers everyone's newest controller input and builds a *frame* that holds:
+**The host and the clients.** One player hosts; up to three others join as clients. The host is the boss of the game: it decides what really happens in every *frame*. A frame holds:
 
 - the buttons of all four player slots,
 - who joined or left this frame,
@@ -140,6 +145,23 @@ flowchart LR
 - whether music is playing (the only thing in the original game that depends on timing).
 
 The host sends each frame to every client, and every computer runs it. The host never waits for a slow connection; it keeps going at 60 frames per second.
+
+**The problem: lag.** Messages over the internet take time. If it takes 50 milliseconds for a message to go each way, a client's button press needs 100 milliseconds to reach the host and come back. If the client waited for that, its own Link would react late every time, which feels sluggish. The mod uses three tricks so that doesn't happen.
+
+**Trick 1: buttons are sent ahead of time.** Every button press a client sends is stamped with the number of the frame it is meant for, like writing a date on a letter. The client aims to have each stamp arrive 1 to 3 frames *before* the host needs it. The host tells each client how early its buttons are arriving, and the client runs a tiny bit faster or slower until the timing is right. So the host almost always has the real buttons and never has to guess. Each button state is sent 8 times, in case some messages get lost on the way.
+
+**Trick 2: the client predicts, and rolls back when it guessed wrong.** A client does not wait for the host. It shows its own Link moving right away. For the other players it makes a guess: *they are still holding the same buttons as last time*. That guess is usually right, because people hold a direction for many frames in a row.
+
+- While guessing, the client saves a copy of the whole game after every frame, in memory.
+- When the host's real frame arrives, the client compares it with its guess.
+- If the guess was right, nothing changes.
+- If it was wrong (someone changed direction), the client **rolls back**: it goes back to the last frame it knows is correct and quickly plays the frames again with the real buttons. A frame takes about 45 millionths of a second to run, so replaying even 15 frames happens far too fast to see.
+
+This idea is called *rollback*. Fighting games use it too. Sounds from replayed frames are not played twice.
+
+**Trick 3: corrections slide instead of jumping.** After a rollback, another player's Link may now be in a slightly different place than the client showed a moment ago. Instead of jumping there, it slides over a few frames. This only changes where the Link is drawn, never where it really is. (The Link that leads a world isn't slid, because the camera follows it.)
+
+**Input delay.** Online, your buttons take effect 2 frames (about 1/30 of a second) after you press them. Most people can't feel that. Because of it, every computer learns everyone's buttons 2 frames sooner, so guesses are wrong less often and the corrections are smaller. You can change it with `InputDelay` in `zelda3.ini` (0 to 8).
 
 **Joining a game in progress.** A new client first downloads a *snapshot*, a compressed copy of the whole game (every world, the save data and the co-op state). Then it fast-forwards through the frames that happened while it was downloading, and starts playing.
 
@@ -221,16 +243,17 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 20 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 26 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
 **What the tests cover:**
 
 - co-op basics, combat, reviving, friendly fire and falling into holes,
-- free roaming: splitting, merging, ghosts waiting in their room, game over,
+- free roaming: splitting, merging, ghosts waiting in their room (also when stuck on a text box, or with Zelda following), game over,
 - a stress test: four players wander randomly for 20,000 frames, and the test fails if any standing Link jumps (teleports), any ghost moves, or any visible Link is not drawn,
 - online play: a real host and client talk over the network, and the client checks it stays in sync,
+- online play over a bad connection: a *lag simulator* (`ZELDA3_NETSIM`) delays messages by 60 milliseconds, randomly adds up to 30 more and throws away 3% of them. Both players wander around, and the test fails if the game ever goes out of sync or the client's own Link ever jumps,
 - the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game.
 
 **Building.** The code is built with a C compiler using the `Makefile` on Linux and Mac. For Windows there are three ways: Visual Studio (`zelda3.vcxproj`), a cross-build script (`tools/build_windows_mingw.sh`), or `run_with_tcc.bat`, which downloads a tiny compiler and builds the game on the player's own PC.
@@ -250,6 +273,10 @@ The mod has 20 automatic tests that play the game with no window, by following w
 **If players are in different worlds, why do they still share items?** Every frame, the save-file part of memory is compared across all worlds, and any change is copied to every world.
 
 **Why doesn't online play send the whole game screen?** The game is deterministic, so sending only button presses is enough. Every computer runs the same frames and gets the same result.
+
+**How does online play hide lag?** Each client shows its own moves right away and guesses the other players' buttons. When a guess turns out wrong, it rolls back and replays the frames with the real buttons, and other Links slide to their corrected spot. Buttons are also sent ahead of time, stamped with the frame they are for, so the host doesn't have to guess.
+
+**Why does another player's Link sometimes slide a little online?** That is a correction: your computer guessed they kept holding the same direction, and they didn't. The higher the ping, the bigger the slide.
 
 **What if two computers drift apart online?** Once a second they compare a hash, one number that sums up the game state. If it differs, the client downloads the host's game again.
 
@@ -275,13 +302,16 @@ The mod has 20 automatic tests that play the game with no window, by following w
 | Ghost | A player with no hearts, waiting to be revived |
 | Hash | One number that sums up a lot of data; it changes if any part changes |
 | Host | The player whose computer runs the online game and sends frames to everyone |
+| Input delay | Online, how many frames after a press it takes effect (2 by default) |
 | LAN | A local network, such as everyone on the same home Wi-Fi |
 | Leader | The player the camera, rooms and menus follow in a shared world |
 | Link context | The roughly 400 bytes of memory that describe one Link |
 | Merge | Two worlds becoming one when their players meet |
+| Prediction | The client's guess at what the other players are pressing |
 | Progressive item | An item that always gives the next level of what you have |
 | RAM | The game's working memory; here a 128 KB block called `g_ram` |
 | ROM | The game cartridge's data, saved as a file; each player supplies their own |
+| Rollback | Going back to the last frame known to be right and replaying with the real buttons |
 | Seed | The number that decides one randomized item placement |
 | Snapshot | A compressed copy of the whole game, sent to players who join online |
 | Split | A player getting their own world when they leave their group |
