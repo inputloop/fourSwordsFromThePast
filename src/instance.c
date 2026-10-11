@@ -882,6 +882,7 @@ int Inst_LinksFromOtherWorlds(InstRemoteLink *out, int max) {
       if (!rp->visible || !rp->count)
         continue;
       out[n].player = p;
+      out[n].downed = m->p[p].downed;
       out[n].rp = rp;
       out[n].tiles = leader ? &g_inst[i].ppu->vram[0x4000] : rp->tiles;
       out[n].dx = (int16)(x - x0);

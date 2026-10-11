@@ -1,0 +1,38 @@
+# A ghost stays a ghost, where it fell, when the worlds are saved and loaded
+# the way netplay sends them to a joining or resyncing client: the loaded
+# state must be exactly the saved one, or the client falls out of sync.
+load 2
+# No fairy in the bottle, so going down is not prevented.
+poke f35c 2
+run 30
+join 2
+hold 1 D
+hold 2 D
+run 260
+hold 1 L
+hold 2 R
+run 150
+hold 1 -
+hold 2 -
+run 30
+expect_instances 2
+expect_apart 1 2
+hp 2 2
+spawn 41 2 0
+run 40
+status
+run 40
+status
+expect_downed 2
+expect_alive 1
+# The ghost stays where it fell; P1 walks over and revives it.
+expect_near 2 4048 1800
+clearsprites
+run 100
+expect_near 2 4048 1800
+expect_same 1 2
+reload
+run 30
+expect_downed 2
+expect_near 2 4048 1800
+expect_same 1 2

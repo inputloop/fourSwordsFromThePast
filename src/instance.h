@@ -60,6 +60,7 @@ void Inst_SetAudioPlayer(int p);
 // (dx, dy) moves them to the current world's camera.
 typedef struct InstRemoteLink {
   int player;
+  bool downed;
   const MpRenderPlayer *rp;
   const uint16 *tiles;  // Link tiles (0x200 words of VRAM from 0x4000)
   int dx, dy;

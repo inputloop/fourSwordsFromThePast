@@ -829,12 +829,9 @@ void Mp_DrawOtherPlayers() {
     g_mp.in_other_update = 1;
     LinkOam_MainOne();
     g_mp.in_other_update = 0;
-    bool flicker = g_mp.p[p].downed && (frame_counter & 4);
     for (int i = 0; i < 128 && rp->count < kMpMaxExtraOam; i++) {
       OamEnt *e = &oam_buf[i];
       if (e->y == 0xf0)
-        continue;
-      if (flicker)
         continue;
       rp->oam[rp->count * 2 + 0] = e->x | e->y << 8;
       rp->oam[rp->count * 2 + 1] = e->charnum | e->flags << 8;
@@ -903,6 +900,26 @@ static void Mp_MakePalette(uint16 *dst, const uint16 *src, int player) {
     }
     dst[i] = c;
   }
+}
+
+// A downed Link is drawn steadily as a pale ghost. (It used to blink, which
+// looked like the ghost kept popping up out of nowhere.)
+static void Mp_MakeGhostPalette(uint16 *dst, const uint16 *src, int player) {
+  Mp_MakePalette(dst, src, player);
+  for (int i = 1; i < 16; i++) {
+    uint16 c = dst[i];
+    int r = c & 0x1f, g = (c >> 5) & 0x1f, b = (c >> 10) & 0x1f;
+    int l = (r * 3 + g * 6 + b) / 10;
+    r = (l * 2 + r) / 3 + 5, g = (l * 2 + g) / 3 + 6, b = (l * 2 + b) / 3 + 9;
+    dst[i] = (r > 31 ? 31 : r) | (g > 31 ? 31 : g) << 5 | (b > 31 ? 31 : b) << 10;
+  }
+}
+
+static void Mp_MakePlayerPalette(uint16 *dst, const uint16 *src, int player, bool downed) {
+  if (downed)
+    Mp_MakeGhostPalette(dst, src, player);
+  else
+    Mp_MakePalette(dst, src, player);
 }
 
 uint8 g_mp_local_mask = 1;
@@ -974,7 +991,7 @@ void Mp_PrepareRender(Ppu *ppu) {
       }
     }
     memcpy(set->tiles, rp->tiles, sizeof(set->tiles));
-    Mp_MakePalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, p);
+    Mp_MakePlayerPalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, p, g_mp.p[p].downed);
     n++;
   }
   // Links of other worlds in this same room or area, so players approaching
@@ -1001,12 +1018,12 @@ void Mp_PrepareRender(Ppu *ppu) {
     if (!set->count)
       continue;
     memcpy(set->tiles, rl[k].tiles, sizeof(set->tiles));
-    Mp_MakePalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, rl[k].player);
+    Mp_MakePlayerPalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, rl[k].player, rl[k].downed);
     n++;
   }
   ppu->numExtraSpriteSets = n;
   // Recolor the leader, who is drawn through the regular OAM.
-  Mp_MakePalette(&ppu->cgram[0xf0], g_mp_saved_cgram, g_mp.leader);
+  Mp_MakePlayerPalette(&ppu->cgram[0xf0], g_mp_saved_cgram, g_mp.leader, g_mp.p[g_mp.leader].downed);
 }
 
 void Mp_FinishRender(Ppu *ppu) {

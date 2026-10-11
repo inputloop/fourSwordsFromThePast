@@ -59,6 +59,7 @@
 #include "features.h"
 #include "mp.h"
 #include "instance.h"
+#include "util.h"
 #include "randomizer.h"
 #include "story.h"
 #include "config.h"
@@ -200,6 +201,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: P%s %s P%s at frame %d\n", arg1, seen ? "sees" : "does not see", arg2, frame);
         failures++;
       }
+    } else if (!strcmp(cmd, "reload")) {
+      // reload: save and load every world the way netplay sends them; nothing may change.
+      ByteArray arr = { 0 };
+      uint32 before = Inst_HashState();
+      Inst_SaveState(&arr);
+      if (!Inst_LoadState(arr.data, arr.size) || Inst_HashState() != before) {
+        printf("FAIL: the state changed when reloaded at frame %d\n", frame);
+        failures++;
+      }
+      ByteArray_Destroy(&arr);
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         Inst_RunFrame(held);
@@ -306,6 +317,21 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           pdown[p] = g_mp.p[p].downed;
         }
         Inst_RunFrame(held);
+        // A player in two worlds at once.
+        for (int p = 0; p < kMpMaxPlayers && (checks || together); p++) {
+          int r0 = Inst_Current(), worlds = 0;
+          for (int i = 0; i < kInstMax; i++) {
+            if (!Inst_IsActive(i))
+              continue;
+            Inst_Switch(i);
+            worlds += g_mp.p[p].joined;
+          }
+          Inst_Switch(r0);
+          if (worlds > 1) {
+            printf("[frame %d] DUPLICATE P%d in %d worlds\n", frame, p + 1, worlds);
+            runaways++;
+          }
+        }
         // A world whose camera lost its leader.
         static int lost[kInstMax];
         for (int i = 0; i < kInstMax && (checks || together); i++) {
@@ -387,7 +413,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
                    px[p], py[p], Mp_PlayerX(p), Mp_PlayerY(p), pw[p], Inst_Current(), g_mp.leader, g_mp.p[p].downed, main_module_index, *Mp_PlayerRam(p, 0x5D), *Mp_PlayerRam(p, 0x46));
             jumps++;
           }
-          if (g_mp.p[p].downed && pdown[p] && d != 0 && stable && main_module_index == pm[p] >> 8) {
+          if (g_mp.p[p].downed && pdown[p] && d != 0) {
             printf("[frame %d] GHOST MOVED P%d by %d world %d->%d\n", frame, p + 1, d, pw[p], Inst_Current());
             jumps++;
           }
