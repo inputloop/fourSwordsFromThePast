@@ -1,0 +1,26 @@
+# A Link that goes down while carrying a bush lets go of it (it used to stay
+# in the ghost's hands, the ghost drawn in the carrying pose).
+load 1
+poke f35c 2
+run 30
+hold 1 D
+run 420
+hold 1 -
+join 2
+run 30
+clearsprites
+pos 1 1970 1146
+pos 2 1940 1176
+pram 1 2f 06
+run 60
+expect_instances 1
+hold 1 A
+run 2
+hold 1 -
+run 30
+expect_pram 1 308 80
+hp 1 2
+pram 1 373 08
+run 30
+expect_downed 1
+expect_pram 1 308 00

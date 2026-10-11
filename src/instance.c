@@ -184,10 +184,19 @@ static bool HasAlive(int i) {
   return false;
 }
 
+
+// Is someone standing in another world? (A player in the item menu counts
+// where its Link is, not in the menu's world: if that Link goes down, the
+// menu doesn't keep the game going.)
 static bool Inst_OtherInstanceAlive() {
-  for (int i = 0; i < kInstMax; i++)
-    if (i != g_cur && g_inst[i].active && HasAlive(i))
-      return true;
+  for (int i = 0; i < kInstMax; i++) {
+    if (i == g_cur || !g_inst[i].active)
+      continue;
+    MpState *m = MpOf(i);
+    for (int p = 0; p < kMpMaxPlayers; p++)
+      if (m->p[p].joined && !m->p[p].downed && (m->away[p] || FindPlayer(p, true) < 0))
+        return true;
+  }
   return false;
 }
 
@@ -251,8 +260,9 @@ static void CloseMenu(int p, bool keep_choices) {
 // Menus that were closed this frame.
 static void CloseFinishedMenus() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    int menu = FindPlayer(p, false);
-    if (menu < 0 || FindPlayer(p, true) < 0 || g_inst[menu].ram[0x10] == 14)  // main_module_index: still in it
+    int menu = FindPlayer(p, false), body = FindPlayer(p, true);
+    // (Also when its Link went down meanwhile: the player sees the ghost.)
+    if (menu < 0 || body < 0 || (g_inst[menu].ram[0x10] == 14 && !MpOf(body)->p[p].downed))  // main_module_index: still in it
       continue;
     TRACE("  P%d closed its menu in world %d\n", p + 1, menu);
     CloseMenu(p, true);

@@ -781,6 +781,27 @@ void Mp_ClearPerFrameSpriteFlags() {
 // handled it (the Link went down, or a bottled fairy saved it); the Link's
 // new health is in link_health_current. Returns false for a regular death,
 // which also handles fairies the original way.
+// A Link going down lets go of what it holds: a lifted bush or pot falls
+// (the game's own drop, as when a carrying Link gets hit), a carried teammate
+// is set down, and the Link is in no carrying pose any more.
+static void Mp_LetGo(int me) {
+  uint8 timer = link_incapacitated_timer;
+  link_incapacitated_timer = 1;  // (what makes the game drop a carried object)
+  for (int k = 0; k < 16; k++)
+    if (sprite_state[k] == 10 && g_mp.sprite_owner[k] == me)
+      CarriedSprite_CheckForThrow(k);
+  link_incapacitated_timer = timer;
+  int q = Mp_CarriedBy(me);
+  if (q >= 0) {
+    g_mp.carried_by[q] = 0;
+    WORD(*Mp_PlayerRam(q, 0x24)) = 0;
+  }
+  link_state_bits = 0;
+  link_picking_throw_state = 0;
+  link_item_in_hand = 0;
+  link_position_mode = 0;
+}
+
 bool Mp_OnFatalDamage() {
   int me = g_mp.resident;
   bool other_alive = g_mp_other_instance_alive && g_mp_other_instance_alive();
@@ -800,6 +821,8 @@ bool Mp_OnFatalDamage() {
       }
       g_mp.p[me].downed = 1;
       g_mp.p[me].revive_ctr = 0;
+      // Whatever the Link carried (a bush, a pot, a teammate) is let go.
+      Mp_LetGo(me);
       // A ghost lies still where it fell: no knockback, no hop.
       link_player_handler_state = 0;
       link_auxiliary_state = 0;

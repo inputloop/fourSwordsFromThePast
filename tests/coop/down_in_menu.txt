@@ -1,0 +1,22 @@
+# P1 is down, and P2's Link is killed while P2 is in the item menu: that is
+# game over. (The menu's world used to count P2 as standing, so P2 became a
+# ghost too and nobody was left to revive anyone.) P2's menu closes as its
+# Link goes down.
+load 2
+poke f35c 2
+run 30
+join 2
+run 30
+down 1
+run 10
+expect_downed 1
+hold 2 S
+run 1
+hold 2 -
+run 30
+expect_instances 2
+hp 2 2
+pram 2 373 08
+run 60
+expect_instances 1
+expect_module 18
