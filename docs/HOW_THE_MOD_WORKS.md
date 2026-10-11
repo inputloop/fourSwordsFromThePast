@@ -143,6 +143,8 @@ Each player has their own hearts, but nobody dies alone. A player who runs out o
 
 **Sending a heart.** A ghost can still help: pressing A sends a small heart that flutters down onto the nearest standing teammate in its world, like a heart an enemy drops. Then the ghost has to wait 20 seconds; a small heart in its corner of the screen shows when it is ready again. This happens inside the game's simulation (`Mp_GhostHelp`), driven by the ghost's own button presses, so online it plays out the same on every computer.
 
+**Letting go.** A Link that goes down drops whatever it carried (a bush or pot falls the way it does when a carrying Link gets hit; a carried teammate is set down). If its player was in the item menu, the menu closes. Standing players are counted where their Link is, never in a menu's world, so if that was the last Link standing, it is game over.
+
 **A ghost alone in a room.** If a ghost is the only player left in its world, that world is paused. It waits, frozen, until a standing teammate walks into the same room or screen. Then the worlds merge and the ghost is right where it fell.
 
 Two special cases make sure a ghost can always be revived:
@@ -310,7 +312,7 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 
 ## How it is tested and built
 
-The mod has 51 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 53 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
