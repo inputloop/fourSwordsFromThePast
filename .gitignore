@@ -40,6 +40,8 @@ __pycache__
 
 /build-windows/
 /tests/out/
+# Screenshot baselines are made from your own ROM: never commit them.
+/tests/baseline/
 /zelda3.coop.ini
 /third_party/tcc/
 /third_party/SDL2-*/

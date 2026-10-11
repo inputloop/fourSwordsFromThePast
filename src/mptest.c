@@ -88,6 +88,21 @@ static uint16 ParseKeys(const char *s) {
   return v;
 }
 
+static bool ReadPpm(const char *file, int width, int height, uint32 *pixels) {
+  FILE *f = fopen(file, "rb");
+  if (!f)
+    return false;
+  int w = 0, h = 0, maxv = 0;
+  bool ok = fscanf(f, "P6 %d %d %d", &w, &h, &maxv) == 3 && w == width && h == height && fgetc(f) != EOF;
+  for (int i = 0; ok && i < width * height; i++) {
+    uint8 rgb[3];
+    ok = fread(rgb, 1, 3, f) == 3;
+    pixels[i] = rgb[0] << 16 | rgb[1] << 8 | rgb[2];
+  }
+  fclose(f);
+  return ok;
+}
+
 static void WritePpm(const char *file, int width, int height, uint32 *pixels, int pitch_px) {
   FILE *f = fopen(file, "wb");
   if (!f) {
@@ -279,6 +294,44 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "expect_shot")) {
+      // expect_shot <name> [max %% of pixels that may differ, default 0.5]:
+      // draws the screen like "shot" and compares it with
+      // tests/baseline/<name>.ppm. Baselines come from your own ROM, so they
+      // are never committed: the first run (or tests/update_baselines.sh)
+      // makes them. On a mismatch tests/out/<name>.ppm and <name>_diff.ppm
+      // (changed pixels in red) show what changed.
+      g_mp_local_mask = 1 << view;
+      Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+      Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
+      Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
+      char base[256], out[256];
+      snprintf(base, sizeof(base), "tests/baseline/%s.ppm", arg1);
+      snprintf(out, sizeof(out), "tests/out/%s.ppm", arg1);
+      uint32 *ref = malloc(width * height * 4);
+      if (getenv("ZELDA3_UPDATE_BASELINES") || !ReadPpm(base, width, height, ref)) {
+        WritePpm(base, width, height, pixels, width);
+        printf("expect_shot %s: baseline written\n", arg1);
+      } else {
+        int diff = 0;
+        for (int i = 0; i < width * height; i++)
+          diff += (pixels[i] & 0xffffff) != ref[i];
+        double pct = 100.0 * diff / (width * height), limit = arg2[0] ? atof(arg2) : 0.5;
+        if (pct > limit) {
+          printf("FAIL: screenshot %s differs from its baseline in %.2f%% of the pixels (limit %.2f%%) at frame %d; see tests/out/%s_diff.ppm\n",
+                 arg1, pct, limit, frame, arg1);
+          failures++;
+          WritePpm(out, width, height, pixels, width);
+          for (int i = 0; i < width * height; i++) {
+            uint32 c = ref[i];
+            int l = ((c >> 16 & 0xff) + (c >> 8 & 0xff) + (c & 0xff)) / 6;
+            ref[i] = (pixels[i] & 0xffffff) != c ? 0xff0000 : l << 16 | l << 8 | l;
+          }
+          snprintf(out, sizeof(out), "tests/out/%s_diff.ppm", arg1);
+          WritePpm(out, width, height, ref, width);
+        }
+      }
+      free(ref);
     } else if (!strcmp(cmd, "randocheck")) {
       // randocheck <first seed> <count> [verbose]: every seed must give a beatable placement
       int bad = 0;

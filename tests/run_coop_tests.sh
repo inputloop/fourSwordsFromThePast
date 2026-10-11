@@ -1,9 +1,9 @@
 #!/bin/sh
 # Runs the headless co-op regression tests. Requires zelda3_assets.dat (make).
 cd "$(dirname "$0")/.."
-mkdir -p tests/out
+mkdir -p tests/out tests/baseline
 status=0
-for t in local_coop combat_revive friendly_fire group_exits fall_holes free_roam roam_downed roam_wander roam_together chest_once private_menu stairs_visible fairy ghost_world ghost_textbox ghost_follower game_over randomizer randomizer_sword randomizer_sword0 randomizer_uncle randomizer_open randomizer_oldsave randomizer_off story story_off see_other_world magic_meters ghost_reload leave_after_leader_change house_camera menu_hud title_join randomizer_progressive randomizer_spoiler lift_throw edge_camera_behind throw_to_edge offscreen_teammate hd2d_light ghost_heart throw_gaps heavy_lift; do
+for t in local_coop combat_revive friendly_fire group_exits fall_holes free_roam roam_downed roam_wander roam_together chest_once private_menu stairs_visible fairy ghost_world ghost_textbox ghost_follower game_over randomizer randomizer_sword randomizer_sword0 randomizer_uncle randomizer_open randomizer_oldsave randomizer_off story story_off see_other_world magic_meters ghost_reload leave_after_leader_change house_camera menu_hud title_join randomizer_progressive randomizer_spoiler lift_throw edge_camera_behind throw_to_edge offscreen_teammate hd2d_light ghost_heart throw_gaps heavy_lift visual; do
   if ./zelda3 --mptest tests/coop/$t.txt > tests/out/$t.log 2>&1; then echo "PASS $t"; else echo "FAIL $t (see tests/out/$t.log)"; status=1; fi
 done
 ./zelda3 --mptest tests/coop/net_host.txt > tests/out/net_host.log 2>&1 &
