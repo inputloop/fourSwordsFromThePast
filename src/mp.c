@@ -1399,7 +1399,15 @@ void Mp_RunRouting(void (*routing)(void)) {
   if (g_mp.independent && (Mp_Active() || g_mp_coop) && (m0 == 7 || m0 == 9) && s0 == 0) {
     routing();
     // Someone went through an exit: they continue in a world of their own.
-    if (Mp_IsTravel(m0, main_module_index, submodule_index)) {
+    // So does a leader starting anything else that might take the world
+    // elsewhere (a mirror warp, the flute...) while a ghost lies here: the
+    // ghost stays where it fell.
+    bool ghost = false;
+    for (int p = 0; p < kMpMaxPlayers; p++)
+      ghost |= p != g_mp.leader && g_mp.p[p].joined && g_mp.p[p].downed;
+    bool moved_on = main_module_index != m0 || submodule_index != s0;
+    if (Mp_IsTravel(m0, main_module_index, submodule_index) ||
+        (ghost && moved_on && main_module_index != 14 && Mp_IsAlive(g_mp.leader))) {
       g_mp.split_request = g_mp.leader;
       g_mp.split_travel = 1;
     }

@@ -267,7 +267,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         failures++;
       }
     } else if (!strcmp(cmd, "expect_hd2d")) {
-      // expect_hd2d <min hidden> <max hidden> <dark 0|1>: draws the frame
+      // expect_hd2d <min hidden> <max hidden> <dark 0|1> [min lights]: draws the frame
       // with the 2D-HD look and checks how many Link pixels hidden behind
       // scenery it showed, and whether it lit a dark room itself.
       bool on = g_hd2d.enabled;
@@ -275,9 +275,10 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
       g_hd2d.enabled = on;
       int n = Hd2d_HiddenPixels();
-      if (n < atoi(arg1) || n > atoi(arg2) || Hd2d_LitDarkRoom() != atoi(arg3)) {
-        printf("FAIL: 2D-HD showed %d hidden pixels (expected %s-%s), dark room %d at frame %d\n",
-               n, arg1, arg2, Hd2d_LitDarkRoom(), frame);
+      // [min lights]: how many light sources (Lamps, torches, fire) it found
+      if (n < atoi(arg1) || n > atoi(arg2) || Hd2d_LitDarkRoom() != atoi(arg3) || Hd2d_NumLights() < atoi(arg4)) {
+        printf("FAIL: 2D-HD showed %d hidden pixels (expected %s-%s), dark room %d, %d lights at frame %d\n",
+               n, arg1, arg2, Hd2d_LitDarkRoom(), Hd2d_NumLights(), frame);
         failures++;
       }
     } else if (!strcmp(cmd, "hd2d")) {

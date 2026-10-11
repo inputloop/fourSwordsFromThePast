@@ -102,6 +102,8 @@ Players can drop in and drop out at any time.
   everyone is down; then everybody continues together.
   - A fairy in a bottle (shared by the team, like all items) saves a Link
     that would go down: the bottle empties and the Link gets up to 7 hearts.
+  - A ghost never moves, also when the others warp away (mirror, flute):
+    whoever leads the world then continues in a world of their own.
   - A ghost lying alone in some room keeps its world, paused, until a
     standing teammate enters that room or screen; then the ghost is there,
     right where it fell. That also works when the ghost's world got stuck on

@@ -34,5 +34,6 @@ void Hd2d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int 
 // and whether it lit a dark room itself.
 int Hd2d_HiddenPixels(void);
 bool Hd2d_LitDarkRoom(void);
+int Hd2d_NumLights(void);
 
 #endif  // ZELDA3_HD2D_H_

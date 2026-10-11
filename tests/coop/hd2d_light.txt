@@ -19,3 +19,20 @@ hd2d 0 70 1
 expect_hd2d 100 400 0
 run 84
 expect_hd2d 0 0 0
+# P2 alone in its own world in a dark cave (P1 down elsewhere): P2's Lamp
+# lights it. (The pass used to look only for P1 in a world of one player.)
+load 2
+run 30
+poke f34a 1
+join 2
+run 20
+hold 1 U
+run 300
+hold 1 -
+expect_instances 2
+view 2
+enter f0
+run 200
+down 1
+run 60
+expect_hd2d 0 999 1 1

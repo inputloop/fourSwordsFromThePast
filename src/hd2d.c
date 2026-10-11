@@ -273,7 +273,7 @@ static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
   bool have_lamp = link_item_torch != 0;
   float flicker = 0.93f + 0.07f * sinf(frame_counter * 0.37f);
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    if (Mp_Active() ? !Mp_IsAlive(p) : p != 0)
+    if (!Mp_IsAlive(p))  // (the players in this world: alone it need not be P1)
       continue;
     float x = (uint16)(Mp_PlayerX(p) - cam_x) + 8.0f, y = (int16)(Mp_PlayerY(p) - cam_y) + 14.0f;
     if (x < -64 || x > w + 64)
@@ -589,6 +589,10 @@ int Hd2d_HiddenPixels(void) {
     for (int i = 0; i < kMaxW * kMaxH; i++)
       n += g_hidden[i] != 0;
   return n;
+}
+
+int Hd2d_NumLights(void) {
+  return g_scene.num_lights;
 }
 
 bool Hd2d_LitDarkRoom(void) {
