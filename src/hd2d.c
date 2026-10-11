@@ -1,12 +1,13 @@
-#include "hd2d.h"
+// (SDL first: on Windows its headers clash with variables.h's short names.)
+#include <SDL.h>
 #include <math.h>
+#include <stdint.h>
 #include <string.h>
+#include "hd2d.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "mp.h"
 #include "snes/ppu.h"
-#include <SDL.h>
-#include <stdint.h>
 
 Hd2dSettings g_hd2d = { false, 60, 40, 45, 50, 70 };
 
