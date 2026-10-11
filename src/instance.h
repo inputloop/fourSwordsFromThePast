@@ -58,8 +58,20 @@ void Inst_SaveState(ByteArray *arr);
 bool Inst_LoadState(const uint8 *data, size_t size);
 uint32 Inst_HashState();
 
+// Fast in-memory copies of every world, for rolling back predicted frames.
+typedef struct InstSnapshot InstSnapshot;
+InstSnapshot *Inst_SnapshotNew();
+void Inst_SnapshotFree(InstSnapshot *s);
+void Inst_SnapshotSave(InstSnapshot *s);
+void Inst_SnapshotLoad(const InstSnapshot *s);
+// false: frames don't send their sound to the audio thread (frames that are
+// simulated again after a rollback were already heard).
+void Inst_SetAudioOutput(bool on);
+
 // Per player queries that work whatever instance the player is in.
 uint8 Inst_PlayerHealth(int p);
+// Where player p is: returns the world, or -1 if p isn't playing.
+int Inst_PlayerPos(int p, uint16 *x, uint16 *y);
 bool Inst_PlayerDowned(int p);
 uint8 Inst_PlayerReviveCtr(int p);
 // Main module of the instance player p is in (0 if not playing).

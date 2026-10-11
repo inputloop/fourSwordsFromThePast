@@ -67,7 +67,10 @@ Players can drop in and drop out at any time.
     that would go down: the bottle empties and the Link gets up to 7 hearts.
   - A ghost lying alone in some room keeps its world, paused, until a
     standing teammate enters that room or screen; then the ghost is there,
-    right where it fell.
+    right where it fell. That also works when the ghost's world got stuck on
+    a text box (nobody there can press A).
+  - If Zelda (or another follower) was following the ghost, the reviver
+    joins the ghost's world instead, so the follower isn't lost.
 - **Enemies** go after the nearest Link and can be hurt by anyone.
 
 ## How it works (for modders)
@@ -129,8 +132,29 @@ joypads, join/leave events, friendly fire, the enabled game features, and the
 otherwise depends on timing). The game is deterministic, so feeding the same
 frames gives the same game everywhere.
 
-- The host runs at 60 fps using the newest input from each client and streams
-  the frames to everyone. It never waits for a slow connection.
+- The host runs at 60 fps and streams the frames to everyone. It never waits
+  for a slow connection.
+- **Inputs are scheduled.** A client stamps every joypad state with the frame
+  it is meant for and sends it ahead of time (each one 8 times, against packet
+  loss). The host tells each client how early its inputs arrive, and the client
+  runs a little faster or slower so they arrive 1-3 frames before the host
+  needs them. So the host almost never has to guess a client's buttons.
+- **Clients predict and roll back.** A client doesn't wait for the host: it
+  runs ahead using its own buttons right away and guesses that everyone else
+  keeps holding what they held. Each predicted frame's state is kept in memory
+  (`Inst_SnapshotSave`). When the host's real frame differs from the guess, the
+  client goes back to the last confirmed frame and simulates again (a game
+  frame takes about 45 microseconds, so this is invisible). Sounds of frames
+  that are simulated again aren't played twice.
+- **Corrections are smoothed.** When a rollback moves another player's Link,
+  it slides there over a few frames instead of jumping (`g_mp_draw_offset`,
+  drawing only). The Link that leads a world isn't smoothed, since the camera
+  follows it.
+- **Input delay.** Online, button presses take effect `InputDelay` frames
+  later (default 2, about 33 ms). Every computer then learns everyone's
+  buttons 2 frames sooner, so guesses are wrong less often and for less time.
+- `ZELDA3_NETSIM=delay_ms,jitter_ms,loss_percent` simulates a bad connection
+  for testing (it delays and drops received packets).
 - A joining client downloads a compressed snapshot (RAM, VRAM, SRAM, APU and
   co-op state) and fast-forwards through the frames since.
 - Every second the host sends a hash of the game state. A client that differs
@@ -160,7 +184,8 @@ runs the regression tests, including a real host/client pair over UDP.
 - The original game has 10 projectile slots and some items allow only one at a
   time (one boomerang, one hookshot). These limits are shared by the team.
 - Followers (Zelda, the old man, ...) follow the leader of their world.
-- Netplay clients feel one round trip of input latency. There is no rollback
-  yet, so it plays best on LAN or under about 80 ms ping.
+- Online, other players' Links can still be corrected a little when they
+  change direction, more so on high ping. The host's own view never needs
+  corrections.
 - Some cutscenes and bosses were designed for one Link. During them, the
   other Links wait and then regroup with the leader.

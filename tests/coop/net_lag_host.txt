@@ -1,0 +1,11 @@
+# Netplay over a bad connection (run with ZELDA3_NETSIM, together with
+# net_lag_client.txt): both players wander around. The client predicts ahead
+# and rolls back; it must never desync and its own Link must never jump.
+inputdelay 2
+load 2
+poke f35c 2
+host 47475
+tick 300
+expect_players 2
+tickwander 1500 7
+tick 200

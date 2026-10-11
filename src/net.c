@@ -25,9 +25,52 @@ typedef int SOCKET;
 // After the system headers: types.h defines a DWORD() macro that clashes with windows.h.
 #include "net.h"
 
+// Network conditions can be simulated for testing:
+// ZELDA3_NETSIM=delay_ms,jitter_ms,loss_percent delays (and drops) received packets.
+typedef struct SimPacket {
+  uint32_t due;
+  NetAddr from;
+  int len;
+  uint8_t data[1500];
+} SimPacket;
+
+enum { kSimMax = 512 };
+
 struct NetSocket {
   SOCKET fd;
+  SimPacket *sim;
+  int nsim;
 };
+
+static int g_sim_delay = -1, g_sim_jitter, g_sim_loss;
+static uint32_t g_sim_rand = 12345;
+
+static uint32_t NowMs() {
+#ifdef _WIN32
+  return GetTickCount();
+#else
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (uint32_t)(tv.tv_sec * 1000 + tv.tv_usec / 1000);
+#endif
+}
+
+static uint32_t SimRand() {
+  g_sim_rand = g_sim_rand * 1103515245 + 12345;
+  return g_sim_rand >> 8;
+}
+
+static void SimInit() {
+  if (g_sim_delay != -1)
+    return;
+  g_sim_delay = 0;
+  const char *e = getenv("ZELDA3_NETSIM");
+  if (e && sscanf(e, "%d,%d,%d", &g_sim_delay, &g_sim_jitter, &g_sim_loss) >= 1)
+    fprintf(stderr, "Simulating network: %d ms delay, %d ms jitter, %d%% loss\n", g_sim_delay, g_sim_jitter, g_sim_loss);
+  if (g_sim_delay < 0)
+    g_sim_delay = 0;
+  g_sim_rand ^= NowMs();
+}
 
 bool Net_Init() {
 #ifdef _WIN32
@@ -71,12 +114,16 @@ NetSocket *Net_Open(uint16_t port, bool broadcast) {
   SetNonBlocking(fd);
   NetSocket *s = (NetSocket *)calloc(1, sizeof(NetSocket));
   s->fd = fd;
+  SimInit();
+  if (g_sim_delay || g_sim_jitter || g_sim_loss)
+    s->sim = (SimPacket *)malloc(sizeof(SimPacket) * kSimMax);
   return s;
 }
 
 void Net_Close(NetSocket *s) {
   if (s) {
     CLOSESOCKET(s->fd);
+    free(s->sim);
     free(s);
   }
 }
@@ -97,7 +144,36 @@ bool Net_Send(NetSocket *s, const NetAddr *to, const void *data, int len) {
   return sendto(s->fd, (const char *)data, len, 0, (struct sockaddr *)&sa, sizeof(sa)) == len;
 }
 
+static int RealRecv(NetSocket *s, NetAddr *from, void *data, int maxlen);
+
 int Net_Recv(NetSocket *s, NetAddr *from, void *data, int maxlen) {
+  if (!s->sim)
+    return RealRecv(s, from, data, maxlen);
+  uint32_t now = NowMs();
+  SimPacket *p;
+  while (s->nsim < kSimMax && (p = &s->sim[s->nsim], (p->len = RealRecv(s, &p->from, p->data, sizeof(p->data))) >= 0)) {
+    if ((int)(SimRand() % 100) < g_sim_loss)
+      continue;
+    p->due = now + g_sim_delay + (g_sim_jitter ? SimRand() % (g_sim_jitter + 1) : 0);
+    s->nsim++;
+  }
+  // Packets arrive in the order of their due times, so jitter reorders them.
+  int best = -1;
+  for (int i = 0; i < s->nsim; i++)
+    if ((int32_t)(now - s->sim[i].due) >= 0 && (best < 0 || (int32_t)(s->sim[i].due - s->sim[best].due) < 0))
+      best = i;
+  if (best < 0)
+    return -1;
+  p = &s->sim[best];
+  int n = p->len < maxlen ? p->len : maxlen;
+  memcpy(data, p->data, n);
+  if (from)
+    *from = p->from;
+  s->sim[best] = s->sim[--s->nsim];
+  return n;
+}
+
+static int RealRecv(NetSocket *s, NetAddr *from, void *data, int maxlen) {
   struct sockaddr_in sa;
   socklen_t len = sizeof(sa);
   int n = recvfrom(s->fd, (char *)data, maxlen, 0, (struct sockaddr *)&sa, &len);

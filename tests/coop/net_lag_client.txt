@@ -1,0 +1,9 @@
+# See net_lag_host.txt.
+inputdelay 2
+connect 127.0.0.1:47475
+waitplay
+expect_players 2
+tickwander 1400 9
+status
+expect_resyncs 0
+disconnect

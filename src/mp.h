@@ -72,6 +72,9 @@ typedef struct MpRenderState {
 
 extern MpState g_mp;
 extern MpRenderState g_mp_render;
+// Display only: shifts how another player's Link is drawn (netplay smooths
+// out corrections of predicted movement with it).
+extern int16 g_mp_draw_offset[kMpMaxPlayers][2];
 
 void Mp_Reset();
 // True when more than one player is in the game.

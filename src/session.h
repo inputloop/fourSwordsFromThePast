@@ -55,6 +55,8 @@ typedef struct SessionStatus {
   int frames_buffered;
   int snapshot_progress;  // percent
   int resyncs;
+  int predicted;  // clients: frames shown ahead of what the host confirmed
+  int rollbacks;  // clients: how often a guess about other players was wrong
   char host_addr[48];
   char public_addr[48];
   char message[96];
@@ -73,6 +75,8 @@ void Session_LocalLeave(int local_index);
 bool Session_IsLocalJoined(int local_index);
 void Session_SetFriendlyFire(bool on);
 bool Session_GetFriendlyFire();
+// Online play: local button presses take effect this many frames later.
+void Session_SetInputDelay(int frames);
 // Randomizer for games created from now on: kRando_Off, kRando_RandomSeed or a seed (the host decides).
 void Session_SetRandomizer(uint32 setting);
 uint32 Session_GetRandomizer();

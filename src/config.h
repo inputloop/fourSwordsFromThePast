@@ -73,6 +73,7 @@ typedef struct Config {
   bool mp_friendly_fire;
   uint32 randomizer;  // for new games: 0 off, 1 random seed, else this seed
   bool mp_use_upnp;
+  int mp_input_delay;  // frames (online only)
   uint16 mp_port;
   const char *mp_player_name;
   const char *mp_last_join;

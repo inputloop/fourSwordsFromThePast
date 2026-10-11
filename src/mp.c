@@ -12,6 +12,7 @@
 
 MpState g_mp;
 MpRenderState g_mp_render;
+int16 g_mp_draw_offset[kMpMaxPlayers][2];
 bool (*g_mp_other_instance_alive)(void);
 void (*g_mp_state_loaded_hook)(void);
 bool g_mp_coop;
@@ -849,6 +850,16 @@ void Mp_PrepareRender(Ppu *ppu) {
     set->bank = n + 1;
     memcpy(set->oam, rp->oam, rp->count * 4);
     memcpy(set->high, rp->high, rp->count);
+    int dx = g_mp_draw_offset[p][0], dy = g_mp_draw_offset[p][1];
+    if (dx | dy) {
+      for (int i = 0; i < rp->count; i++) {
+        int x = (set->oam[i * 2] & 0xff) | (set->high[i] & 1) << 8;
+        int y = set->oam[i * 2] >> 8;
+        x = (x + dx) & 0x1ff, y = (y + dy) & 0xff;
+        set->oam[i * 2] = x & 0xff | y << 8;
+        set->high[i] = (set->high[i] & ~1) | x >> 8;
+      }
+    }
     memcpy(set->tiles, rp->tiles, sizeof(set->tiles));
     Mp_MakePalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, p);
     n++;

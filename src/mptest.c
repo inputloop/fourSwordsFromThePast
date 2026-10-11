@@ -36,6 +36,8 @@
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart)
 //   waitplay            tick until connected and playing (max 15s)
+//   inputdelay <frames> online input delay
+//   tickwander <n> <seed>  tick n times with local players walking around randomly
 //   localjoin <i> / localleave <i>
 //   corrupt             flip a byte of RAM (to test desync recovery)
 //   lan [n]             search for LAN games (and expect n)
@@ -109,9 +111,9 @@ static void PrintStatus(int frame) {
            submodule_index, g_mp.leader, dungeon_room_index, overworld_screen_index, player_is_indoors, BG2HOFS_copy2, BG2VOFS_copy2);
   }
   Inst_Switch(r);
-  printf("[frame %d] module=%d/%d leader=%d resident=%d room=%d ow=%d hash=%08x | session mode=%d state=%d id=%d ping=%d buf=%d resyncs=%d local_slot0=%d msg='%s'\n",
+  printf("[frame %d] module=%d/%d leader=%d resident=%d room=%d ow=%d hash=%08x | session mode=%d state=%d id=%d ping=%d buf=%d pred=%d rb=%d resyncs=%d local_slot0=%d msg='%s'\n",
          frame, main_module_index, submodule_index, g_mp.leader, g_mp.resident, dungeon_room_index, overworld_screen_index,
-         Inst_HashState(), st->mode, st->client_state, st->my_id, st->ping_ms, st->frames_buffered, st->resyncs,
+         Inst_HashState(), st->mode, st->client_state, st->my_id, st->ping_ms, st->frames_buffered, st->predicted, st->rollbacks, st->resyncs,
          st->local_slot[0], st->message);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!Inst_IsJoined(p))
@@ -361,6 +363,61 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
       if (wait && Session_GetStatus()->client_state != 3) {
         printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "inputdelay")) {
+      Session_SetInputDelay(atoi(arg1));
+    } else if (!strcmp(cmd, "tickwander")) {
+      // tickwander <n> <seed>: like tick, but local players walk around randomly.
+      // Reports Links that jump (move further than they can walk).
+      uint32 seed = atoi(arg2) * 2654435761u + 1;
+      int jumps = 0, remote_jumps = 0;
+      for (int i = 0, n = atoi(arg1); i < n; i++) {
+        if (i % 24 == 0) {
+          for (int p = 0; p < kMpMaxPlayers; p++) {
+            seed = seed * 1103515245 + 12345;
+            held[p] = ParseKeys((const char *[]){ "U", "D", "L", "R", "UL", "UR", "DL", "DR", "B" }[(seed >> 16) % 9]);
+          }
+        }
+        int pw[kMpMaxPlayers], px[kMpMaxPlayers], py[kMpMaxPlayers], pm[kMpMaxPlayers];
+        for (int p = 0; p < kMpMaxPlayers; p++) {
+          if ((pw[p] = Inst_OfPlayer(p)) < 0)
+            continue;
+          SwitchToPlayer(p);
+          // Where it is drawn: other players' corrections are smoothed out.
+          px[p] = Mp_PlayerX(p) + g_mp_draw_offset[p][0], py[p] = Mp_PlayerY(p) + g_mp_draw_offset[p][1];
+          pm[p] = main_module_index << 8 | submodule_index;
+        }
+        uint16 in[kMpMaxPlayers];
+        memcpy(in, held, sizeof(in));
+        int ran = Session_Tick(in, g_wanted_zelda_features);
+        frame += ran;
+        for (int p = 0; p < kMpMaxPlayers && ran > 0 && ran < 4; p++) {
+          if (pw[p] < 0 || Inst_OfPlayer(p) != pw[p])
+            continue;
+          SwitchToPlayer(p);
+          int x = Mp_PlayerX(p) + g_mp_draw_offset[p][0], y = Mp_PlayerY(p) + g_mp_draw_offset[p][1];
+          int d = abs(x - px[p]) + abs(y - py[p]);
+          bool stable = pm[p] == (7 << 8) || pm[p] == (9 << 8);
+          bool local = false;
+          for (int i = 0; i < kSessionMaxLocal; i++)
+            local |= Session_GetStatus()->local_slot[i] == p;
+          // The leader of a world isn't smoothed (the camera follows it).
+          if (d > 12 * ran && stable && main_module_index == pm[p] >> 8 && submodule_index == 0 && *Mp_PlayerRam(p, 0x5D) == 0) {
+            printf("[frame %d] %s P%d by %d (%d,%d)->(%d,%d) in %d frames%s\n", frame, local ? "JUMP" : "remote jump", p + 1, d, px[p], py[p], x, y, ran,
+                   p == g_mp.leader ? " (leader)" : "");
+            if (local)
+              jumps++;
+            else
+              remote_jumps++;
+          }
+        }
+        SDL_Delay(16);
+      }
+      memset(held, 0, sizeof(held));
+      printf("tickwander: %d jumps of local players, %d of other players, %d rollbacks\n", jumps, remote_jumps, Session_GetStatus()->rollbacks);
+      if (jumps) {
+        printf("FAIL: %d jumps\n", jumps);
         failures++;
       }
     } else if (!strcmp(cmd, "lan")) {

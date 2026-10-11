@@ -44,6 +44,8 @@ static MpState g_snap_mp;
 static MpRenderState g_snap_render;
 static uint8 g_snap_ports[4];
 
+static bool g_audio_output = true;
+
 bool g_inst_trace;
 #define TRACE(...) do { if (g_inst_trace) printf(__VA_ARGS__); } while (0)
 static bool Inst_OtherInstanceAlive();
@@ -598,7 +600,8 @@ bool Inst_RunFrame(const uint16 *inputs) {
   }
   g_audio_inst = ai;
   Inst_Switch(ai);
-  ZeldaPushApuState();
+  if (g_audio_output)
+    ZeldaPushApuState();
   return replay;
 }
 
@@ -731,6 +734,86 @@ uint32 Inst_HashState() {
 }
 
 // ---------------------------------------------------------------------------
+// Rollback snapshots
+
+struct InstSnapshot {
+  uint8 active[kInstMax];
+  uint8 *ram[kInstMax];
+  Ppu *ppu[kInstMax];
+  Dma dma[kInstMax];
+  MpState mp[kInstMax];
+  MpRenderState render[kInstMax];
+  uint8 ports[kInstMax][4];
+  int cur, audio_inst;
+  uint8 shared[kSharedEnd - kSharedStart];
+  uint8 sram[0x2000];
+};
+
+InstSnapshot *Inst_SnapshotNew() {
+  return (InstSnapshot *)calloc(1, sizeof(InstSnapshot));
+}
+
+void Inst_SnapshotFree(InstSnapshot *s) {
+  if (!s)
+    return;
+  for (int i = 0; i < kInstMax; i++) {
+    free(s->ram[i]);
+    free(s->ppu[i]);
+  }
+  free(s);
+}
+
+void Inst_SnapshotSave(InstSnapshot *s) {
+  Unbind();  // the current world's co-op state lives in g_mp
+  for (int i = 0; i < kInstMax; i++) {
+    Instance *n = &g_inst[i];
+    s->active[i] = n->active;
+    if (!n->active)
+      continue;
+    if (!s->ram[i]) {
+      s->ram[i] = (uint8 *)malloc(kRamSize);
+      s->ppu[i] = (Ppu *)malloc(sizeof(Ppu));
+    }
+    memcpy(s->ram[i], n->ram, kRamSize);
+    *s->ppu[i] = *n->ppu;
+    s->dma[i] = *n->dma;
+    s->mp[i] = n->mp;
+    s->render[i] = n->render;
+    memcpy(s->ports[i], n->apu_ports, 4);
+  }
+  s->cur = g_cur;
+  s->audio_inst = g_audio_inst;
+  memcpy(s->shared, g_shared, sizeof(g_shared));
+  memcpy(s->sram, g_zenv.sram, sizeof(s->sram));
+}
+
+void Inst_SnapshotLoad(const InstSnapshot *s) {
+  for (int i = 0; i < kInstMax; i++) {
+    Instance *n = &g_inst[i];
+    n->active = s->active[i];
+    n->born = 0;
+    if (!n->active)
+      continue;
+    Alloc(i);
+    memcpy(n->ram, s->ram[i], kRamSize);
+    *n->ppu = *s->ppu[i];
+    *n->dma = s->dma[i];
+    n->mp = s->mp[i];
+    n->render = s->render[i];
+    memcpy(n->apu_ports, s->ports[i], 4);
+  }
+  Bind(s->cur);
+  g_audio_inst = s->audio_inst;
+  memcpy(g_shared, s->shared, sizeof(g_shared));
+  memcpy(g_zenv.sram, s->sram, sizeof(s->sram));
+  UpdateCoopFlag();
+}
+
+void Inst_SetAudioOutput(bool on) {
+  g_audio_output = on;
+}
+
+// ---------------------------------------------------------------------------
 // Queries
 
 uint8 Inst_PlayerHealth(int p) {
@@ -741,6 +824,16 @@ uint8 Inst_PlayerHealth(int p) {
   uint8 v = Mp_PlayerHealth(p);
   Inst_Switch(r);
   return v;
+}
+
+int Inst_PlayerPos(int p, uint16 *x, uint16 *y) {
+  int i = Inst_OfPlayer(p), r = g_cur;
+  if (i < 0)
+    return -1;
+  Inst_Switch(i);
+  *x = Mp_PlayerX(p), *y = Mp_PlayerY(p);
+  Inst_Switch(r);
+  return i;
 }
 
 bool Inst_PlayerDowned(int p) {

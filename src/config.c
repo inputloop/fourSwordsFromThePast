@@ -466,6 +466,10 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.mp_friendly_fire);
     } else if (StringEqualsNoCase(key, "SharedScreen")) {
       return true;  // no longer used: players always roam freely
+    } else if (StringEqualsNoCase(key, "InputDelay")) {
+      int v = atoi(value);
+      g_config.mp_input_delay = v < 0 ? 0 : v > 8 ? 8 : v;
+      return true;
     } else if (StringEqualsNoCase(key, "UseUpnp")) {
       return ParseBool(value, &g_config.mp_use_upnp);
     } else if (StringEqualsNoCase(key, "Port")) {
@@ -566,6 +570,7 @@ void ParseConfigFile(const char *filename) {
   Bindings_SetDefaults();
   g_config.mp_use_upnp = true;
   g_config.mp_port = 47474;
+  g_config.mp_input_delay = 2;
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)
