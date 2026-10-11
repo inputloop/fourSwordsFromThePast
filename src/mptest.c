@@ -17,6 +17,7 @@
 //   expect_downed <p>   fail unless player p is down
 //   expect_hp <p> <n>   fail unless player p has n health (1/8 hearts)
 //   clearsprites        remove all enemies
+//   message <hexid>     open a text box
 //   holecheck           verify every overworld fall hole resolves correctly in co-op
 //   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
 //   peek <hexaddr> [n]  print RAM bytes
@@ -54,6 +55,7 @@
 #include "randomizer.h"
 #include "select_file.h"
 #include "messaging.h"
+#include "misc.h"
 #include "snes/ppu.h"
 #include "sprite.h"
 #include "overworld.h"
@@ -455,6 +457,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       printf("holecheck: %d of %d positions resolved to the wrong hole\n", bad, total);
       if (bad)
         failures++;
+    } else if (!strcmp(cmd, "message")) {
+      dialogue_message_index = strtol(arg1, NULL, 16);
+      Main_ShowTextMessage();
     } else if (!strcmp(cmd, "clearsprites")) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;

@@ -1,0 +1,34 @@
+# Free roaming: P1 goes into the palace alone with Zelda following and goes
+# down there. P2 comes by to revive P1, and Zelda keeps following.
+load 2
+# No fairy in the bottle, so going down is not prevented.
+poke f35c 2
+poke f3cc 1
+run 30
+join 2
+hold 1 U
+run 200
+hold 1 -
+run 20
+hp 1 2
+spawn 41 1 0
+run 150
+expect_downed 1
+expect_alive 2
+expect_apart 1 2
+view 1
+expect_ram f3cc 1
+clearsprites
+view 2
+expect_ram f3cc 0
+clearsprites
+hold 2 U
+run 200
+hold 2 -
+run 150
+status
+expect_same 1 2
+expect_alive 1
+expect_hp 1 4
+view 2
+expect_ram f3cc 1

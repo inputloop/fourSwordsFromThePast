@@ -347,6 +347,10 @@ typedef struct InstView {
 static void GetView(int i, InstView *v) {
   Inst_Switch(i);
   v->stable = Mp_InStableGameplay() && !flag_is_link_immobilized;
+  // A world of ghosts can't press A: one stuck on a text box (Zelda calling
+  // out, say) is still ready to be joined.
+  if (!v->stable && !HasAlive(i) && main_module_index == 14)
+    v->stable = true;
   v->has_follower = follower_indicator != 0;
   v->key = Mp_AreaKeyPublic();
   v->cam_x = BG2HOFS_copy2;
@@ -356,7 +360,10 @@ static void GetView(int i, InstView *v) {
 // Can everyone in instance b join instance a? They must be standing in a's
 // room, in view of a's camera, and not in the middle of something.
 static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
-  if (!va->stable || !vb->stable || va->key != vb->key || !HasAlive(a))
+  if (!va->stable || !vb->stable || va->key != vb->key)
+    return false;
+  // A world of ghosts only takes in the living to keep its follower.
+  if (!HasAlive(a) && !(va->has_follower && HasAlive(b)))
     return false;
   // Ghosts lying in this room show up as soon as someone standing is here.
   if (!HasAlive(b))
@@ -381,6 +388,26 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
       return false;
   }
   return true;
+}
+
+// Is a standing player of world o within reviving distance of a ghost of world f?
+static bool ReviverNearby(int o, int f) {
+  uint16 gx[kMpMaxPlayers], gy[kMpMaxPlayers];
+  bool ghost[kMpMaxPlayers] = { 0 };
+  Inst_Switch(f);
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (g_mp.p[p].joined && g_mp.p[p].downed)
+      ghost[p] = true, gx[p] = Mp_PlayerX(p), gy[p] = Mp_PlayerY(p);
+  }
+  Inst_Switch(o);
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    if (!Mp_IsAlive(q))
+      continue;
+    for (int p = 0; p < kMpMaxPlayers; p++)
+      if (ghost[p] && abs((int16)(Mp_PlayerX(q) - gx[p])) < 24 && abs((int16)(Mp_PlayerY(q) - gy[p])) < 24)
+        return true;
+  }
+  return false;
 }
 
 static void MergeAndCleanUp() {
@@ -410,8 +437,25 @@ static void MergeAndCleanUp() {
       GetView(a, &va);
       GetView(b, &vb);
       // The world with a follower (Zelda, the old man...) is the one that
-      // stays, and a world of standing players always outlasts one of ghosts.
-      bool b_first = !HasAlive(a) || (vb.has_follower && !va.has_follower && HasAlive(b));
+      // stays, even when only a ghost is left there. Otherwise a world of
+      // standing players always outlasts one of ghosts.
+      if (va.has_follower != vb.has_follower) {
+        int f = va.has_follower ? a : b, o = f == a ? b : a;
+        const InstView *vf = f == a ? &va : &vb, *vo = f == a ? &vb : &va;
+        if (CanMerge(f, vf, o, vo)) {
+          TRACE("  merge %d into %d key=%x (follower)\n", o, f, vf->key);
+          MovePlayers(o, f);
+        } else if (HasAlive(f) || !ReviverNearby(o, f)) {
+          // Wait until the living get close enough to the follower's world.
+        } else if (CanMerge(o, vo, f, vf)) {
+          // Someone is right next to the ghost but the views won't line up:
+          // reviving matters more than the follower.
+          TRACE("  merge %d into %d key=%x (follower lost)\n", f, o, vf->key);
+          MovePlayers(f, o);
+        }
+        continue;
+      }
+      bool b_first = !HasAlive(a);
       if (!b_first && CanMerge(a, &va, b, &vb)) {
         TRACE("  merge %d into %d key=%x\n", b, a, va.key);
         MovePlayers(b, a);

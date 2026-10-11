@@ -294,7 +294,11 @@ void Mp_EndFrame() {
   // A Link playing alone in a world keeps track of where it is, so players
   // who join this world later aren't mistaken for a group that just arrived.
   if (!Mp_Active()) {
-    if (g_mp.area_key != 0xffffffff && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0)
+    // (Also once a regroup was pending when it split off, or it would never
+    // count as settled and could never meet up with anyone again.)
+    bool in_bed = link_player_handler_state == kPlayerState_AsleepInBed ||
+                  (g_mp.area_key == 0xffffffff && link_auxiliary_state);
+    if (!in_bed && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0)
       g_mp.area_key = Mp_AreaKey();
     return;
   }
