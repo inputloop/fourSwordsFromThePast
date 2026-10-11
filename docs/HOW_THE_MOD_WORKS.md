@@ -16,6 +16,7 @@ Here is everything it adds to the original game:
 - **Ghosts and revives.** A Link that runs out of hearts becomes a ghost. A teammate can stand next to it to bring it back.
 - **Friendly fire** can be turned on or off.
 - **An item randomizer** that shuffles where items are found, and still makes sure the game can be beaten.
+- **A Four Swords opening.** The title says "Four Swords of the Past", and the legend that plays after it tells how four heroes were born from one blade.
 - **Widescreen and HD options**, and an in-game menu for all settings and controls.
 
 The project is called *fourSwordsFromThePast*. The name mixes *Four Swords* (Nintendo's own four-player Zelda) with *A Link to the Past*.
@@ -217,6 +218,24 @@ The check is careful on purpose. For example, it treats every chest in a dungeon
 
 To be safe, a few chests in unknown or hard-to-reach spots (like the castle basement, which normally opens during the escape) only ever get filler items.
 
+## The Four Swords story and title
+
+The mod gives the game a new opening that fits its four heroes. Both parts can be turned off in *Pause menu > Gameplay*.
+
+**The title.** "FOUR SWORDS" in big gold letters, with "OF THE PAST" below it, sits in the black band above the title picture. It is drawn on top of the finished picture by the same code that draws the menus (`src/ui.c`), so the original title graphics are untouched. It fades in and out with the screen.
+
+**The story.** After the title screen waits a while, the game plays its legend: pictures of the Golden Land, then Agahnim in the throne room, then Zelda in prison. The mod tells a new story over the same pictures:
+
+1. Long ago, seven wise men hid the Golden Power in a secret land. Beside it they laid the Four Sword, a blade that could split one hero into four.
+2. The thief Ganon broke into the Golden Land and seized its power, and darkness flowed over Hyrule. A young knight drew the Four Sword and became four heroes in green, red, blue and purple.
+3. Together they sealed Ganon away, and the four heroes faded into legend.
+4. Ages later, the wizard Agahnim came to break the seal, struck down the King, and made the heirs of the wise men and the four knights vanish.
+5. Princess Zelda is next, but the Four Sword stirs again, calling for four heroes.
+
+**How it works.** All of the game's text is stored in one list of messages, and one function reads a message before it is shown (`Text_LoadCharacterBuffer`). When the story is on, that function gets the new text for the four legend messages from `src/story.c` instead. The new text is written as plain English with the game's own commands in brackets, like `[Scroll]` and `[Wait 09]`. When the game starts, the mod turns it into the game's text code. The text contains `[NextPic]` commands that move the legend on to its next picture, so the new story keeps the same picture changes as the original. The legend also ends on a timer, so the new text is no longer than the old.
+
+**Online.** The length of the story changes how long the opening takes, so every computer must use the same setting. The host's setting travels with every frame it sends.
+
 ## Menus, controls and settings
 
 Everything can be changed from an in-game menu that is drawn on top of the game. Open it with `Esc`, a controller's Guide button, or Back+Start. The code is in `src/ui.c`.
@@ -225,7 +244,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 | --- | --- |
 | Multiplayer | Host a game, join by address, find LAN games, add or remove local players, friendly fire |
 | Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen |
-| Gameplay | Randomizer, plus the original project's extras (switch items with L/R, bug fixes and more) |
+| Gameplay | Randomizer, the Four Swords story and title, plus the original project's extras (switch items with L/R, bug fixes and more) |
 | Controls | Set up each of the four players |
 | Controls help | A short list of the default keys |
 
@@ -243,7 +262,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 26 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 28 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -254,6 +273,7 @@ The mod has 26 automatic tests that play the game with no window, by following w
 - a stress test: four players wander randomly for 20,000 frames, and the test fails if any standing Link jumps (teleports), any ghost moves, or any visible Link is not drawn,
 - online play: a real host and client talk over the network, and the client checks it stays in sync,
 - online play over a bad connection: a *lag simulator* (`ZELDA3_NETSIM`) delays messages by 60 milliseconds, randomly adds up to 30 more and throws away 3% of them. Both players wander around, and the test fails if the game ever goes out of sync or the client's own Link ever jumps,
+- the opening: the new story's text really reaches the game's text buffer, and the original comes back when it is turned off,
 - the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game.
 
 **Building.** The code is built with a C compiler using the `Makefile` on Linux and Mac. For Windows there are three ways: Visual Studio (`zelda3.vcxproj`), a cross-build script (`tools/build_windows_mingw.sh`), or `run_with_tcc.bat`, which downloads a tiny compiler and builds the game on the player's own PC.

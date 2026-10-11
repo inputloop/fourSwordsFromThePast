@@ -528,6 +528,7 @@ int main(int argc, char** argv) {
   Session_Init(g_config.mp_player_name);
   Session_SetFriendlyFire(g_config.mp_friendly_fire);
   Session_SetInputDelay(g_config.mp_input_delay);
+  Session_SetStory(g_config.four_swords_story);
   Session_SetRandomizer(g_config.randomizer);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);

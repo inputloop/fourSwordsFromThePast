@@ -1,0 +1,7 @@
+# The Four Swords opening story replaces the legend after the title screen,
+# and turning it off brings back the original.
+story 1
+run 1700
+expect_module 20
+# The decoded text: "Long ago, in the kingdom of" ('k' = 24)
+expect_ram 11216 24

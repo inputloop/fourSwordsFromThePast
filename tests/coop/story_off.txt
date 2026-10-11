@@ -1,0 +1,6 @@
+# With the Four Swords story off, the original legend plays.
+story 0
+run 1700
+expect_module 20
+# The decoded text: "Long ago, in the beautiful" ('b' = 1b)
+expect_ram 11216 1b

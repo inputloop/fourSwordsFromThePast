@@ -72,6 +72,8 @@ typedef struct Config {
   // [Multiplayer]
   bool mp_friendly_fire;
   uint32 randomizer;  // for new games: 0 off, 1 random seed, else this seed
+  bool four_swords_story;  // the opening legend tells the Four Swords story
+  bool four_swords_title;  // "Four Swords of the Past" on the title screen
   bool mp_use_upnp;
   int mp_input_delay;  // frames (online only)
   uint16 mp_port;

@@ -13,6 +13,21 @@ own US ROM to extract the game's assets.
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 See **[docs/HOW_THE_MOD_WORKS.md](docs/HOW_THE_MOD_WORKS.md)** for a plain-language guide to how the whole mod works.
 
+## Four Swords of the Past
+
+The title screen says **Four Swords of the Past**, and the legend that plays
+after it is retold: long ago the seven wise men hid the Golden Power and,
+beside it, the Four Sword, a blade that splits one hero into four. When the
+thief Ganon seized the Golden Power, a young knight drew the Four Sword,
+became four heroes in green, red, blue and purple, and sealed Ganon away. Ages
+later Agahnim comes to break the seal, and the Four Sword stirs again, calling
+for four heroes.
+
+Both can be turned off in *Pause menu > Gameplay* (`FourSwordsStory` and
+`FourSwordsTitle` in `zelda3.ini`). Online, the host's story setting is used.
+The story is written in English, so with another `Language` the original text
+plays.
+
 ## Item randomizer
 
 *Pause menu > Gameplay > Randomize new games* turns on a basic item

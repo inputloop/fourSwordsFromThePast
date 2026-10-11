@@ -32,7 +32,7 @@ enum SessionEventType {
 typedef struct MpFrameInput {
   uint16 inputs[kMpMaxPlayers];
   uint8 flags;  // bit0: friendly fire, bit1: music playing (apui00),
-                // bit3: randomizer setting follows, bit7: hash valid
+                // bit2: Four Swords story, bit3: randomizer setting follows, bit7: hash valid
   uint8 nevents;
   uint32 features;
   uint32 hash;  // hash of the state after this frame, if flags bit7
@@ -77,6 +77,9 @@ void Session_SetFriendlyFire(bool on);
 bool Session_GetFriendlyFire();
 // Online play: local button presses take effect this many frames later.
 void Session_SetInputDelay(int frames);
+// The Four Swords opening story (the host decides).
+void Session_SetStory(bool on);
+bool Session_GetStory();
 // Randomizer for games created from now on: kRando_Off, kRando_RandomSeed or a seed (the host decides).
 void Session_SetRandomizer(uint32 setting);
 uint32 Session_GetRandomizer();

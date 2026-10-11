@@ -1,4 +1,5 @@
 #include "randomizer.h"
+#include "story.h"
 #include "messaging.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -2268,6 +2269,7 @@ void Text_LoadCharacterBuffer() {  // 8ec4e2
   MemBlk dictionary = FindIndexInMemblk(g_zenv.dialogue_blk, 0);
   MemBlk dialogue = FindIndexInMemblk(g_zenv.dialogue_blk, 1);
   MemBlk text_str = FindIndexInMemblk(dialogue, dialogue_message_index);
+  Story_GetMessage(dialogue_message_index, (const uint8 **)&text_str.ptr, &text_str.size);
   const uint8 *src = text_str.ptr, *src_end = src + text_str.size, *src_org = src;
   uint8 *dst = messaging_text_buffer;
   while (src < src_end) {

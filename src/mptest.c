@@ -36,6 +36,8 @@
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart)
 //   waitplay            tick until connected and playing (max 15s)
+//   story <0|1>         the Four Swords opening story
+//   title <0|1>         "Four Swords of the Past" on the title screen
 //   inputdelay <frames> online input delay
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
 //   localjoin <i> / localleave <i>
@@ -55,6 +57,8 @@
 #include "mp.h"
 #include "instance.h"
 #include "randomizer.h"
+#include "story.h"
+#include "config.h"
 #include "select_file.h"
 #include "messaging.h"
 #include "misc.h"
@@ -365,6 +369,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
         failures++;
       }
+    } else if (!strcmp(cmd, "story")) {
+      Story_SetEnabled(atoi(arg1));
+      Session_SetStory(atoi(arg1));
+    } else if (!strcmp(cmd, "title")) {
+      g_config.four_swords_title = atoi(arg1);
     } else if (!strcmp(cmd, "inputdelay")) {
       Session_SetInputDelay(atoi(arg1));
     } else if (!strcmp(cmd, "tickwander")) {

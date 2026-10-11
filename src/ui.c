@@ -587,6 +587,17 @@ static void ScreenGameplay() {
     snprintf(buf, sizeof(buf), "not randomized");
   Label("This game");
   snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s", buf);
+  Item("Four Swords opening story", OnOff(Session_GetStory()));
+  if (Act() != kAct_None && !client) {
+    g_config.four_swords_story = !g_config.four_swords_story;
+    Session_SetStory(g_config.four_swords_story);
+    g_ui.dirty_settings = true;
+  }
+  Item("Four Swords title", OnOff(g_config.four_swords_title));
+  if (Act() != kAct_None) {
+    g_config.four_swords_title = !g_config.four_swords_title;
+    g_ui.dirty_settings = true;
+  }
   for (size_t i = 0; i < countof(kFeatures); i++) {
     Item(kFeatures[i].name, OnOff(g_config.features0 & kFeatures[i].bit));
     if (!client)
@@ -948,6 +959,68 @@ static void DrawNotifications() {
   }
 }
 
+static uint32 ScaleRgb(uint32 c, int num, int den) {
+  return ((c >> 16 & 0xff) * num / den) << 16 | ((c >> 8 & 0xff) * num / den) << 8 | (c & 0xff) * num / den;
+}
+
+// Big outlined letters with a color per font row (a gradient).
+static void DrawBigText(int x, int y, const char *s, int scale, const uint32 *row_colors, uint32 outline) {
+  for (int pass = 0; pass < 2; pass++) {
+    int cx = x;
+    for (const char *t = s; *t; t++, cx += 6 * scale) {
+      uint8 c = (uint8)*t;
+      if (c >= 'a' && c <= 'z')
+        c -= 32;
+      if (c >= 128)
+        continue;
+      for (int r = 0; r < 7; r++) {
+        for (int b = 0; b < 5; b++) {
+          if (!(g_font[c][r] & (0x10 >> b)))
+            continue;
+          int px = cx + b * scale, py = y + r * scale;
+          if (pass == 0)
+            FillRect(px - 1, py - 1, scale + 2, scale + 2, outline);
+          else
+            FillRect(px, py, scale, scale, row_colors[r]);
+        }
+      }
+    }
+  }
+}
+
+// "Four Swords of the Past" in the black band above the title picture.
+static void DrawTitleBanner() {
+  if (!g_config.four_swords_title || main_module_index != 0 ||
+      submodule_index < 6 || submodule_index > 8)  // from the sword coming down to the finished title
+    return;
+  int bright = INIDISP_copy & 0x80 ? 0 : INIDISP_copy & 0xf;
+  if (bright == 0)
+    return;
+  static const uint32 kGold[7] = { 0xfff8c0, 0xfff070, 0xf8d838, 0xf0c020, 0xe0a010, 0xc88008, 0xa86000 };
+  static const uint32 kSilver[7] = { 0xffffff, 0xf0f0f8, 0xe0e0f0, 0xd0d0e8, 0xc0c0e0, 0xa8a8d0, 0x9090c0 };
+  uint32 gold[7], silver[7];
+  for (int i = 0; i < 7; i++) {
+    gold[i] = ScaleRgb(kGold[i], bright, 15);
+    silver[i] = ScaleRgb(kSilver[i], bright, 15);
+  }
+  uint32 outline = ScaleRgb(0x301000, bright, 15);
+  // The game picture is centered in the window (widescreen adds columns on both sides).
+  const char *top = "FOUR SWORDS", *bottom = "OF THE PAST";
+  int top_w = (int)strlen(top) * 12 - 2, bottom_w = TextWidth(bottom);
+  int cx = g_cv.width / 2;
+  DrawBigText(cx - top_w / 2, 3, top, 2, gold, outline);
+  int by = 21;
+  DrawBigText(cx - bottom_w / 2, by, bottom, 1, silver, outline);
+  // A small sword on either side of "of the past".
+  for (int side = -1; side <= 1; side += 2) {
+    int x0 = side < 0 ? cx - bottom_w / 2 - 34 : cx + bottom_w / 2 + 6;
+    FillRect(x0, by + 3, 28, 1, silver[2]);  // blade
+    int hilt = side < 0 ? x0 + 22 : x0 + 4;
+    FillRect(hilt, by + 1, 1, 5, gold[3]);   // cross-guard
+    FillRect(side < 0 ? x0 + 23 : x0, by + 3, 5, 1, gold[5]);  // grip
+  }
+}
+
 static void DrawMenu() {
   if (!Ui_IsOpen())
     return;
@@ -983,6 +1056,7 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   g_cv.scale = scale;
   g_cv.width = width / scale;
   g_cv.height = height / scale;
+  DrawTitleBanner();
   DrawCornerHud();
   DrawNotifications();
   DrawMenu();
@@ -1016,6 +1090,8 @@ void Ui_SaveSettings() {
   };
   for (size_t i = 0; i < countof(kKeys); i++)
     fprintf(f, "%s = %d\n", kKeys[i].key, (g_config.features0 & kKeys[i].bit) != 0);
+  fprintf(f, "FourSwordsStory = %d\n", g_config.four_swords_story);
+  fprintf(f, "FourSwordsTitle = %d\n", g_config.four_swords_title);
   uint32 rando = Session_GetRandomizer();
   if (rando > kRando_RandomSeed)
     fprintf(f, "Randomizer = seed:%08X\n", rando);

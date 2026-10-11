@@ -10,9 +10,10 @@
 #include "features.h"
 #include "instance.h"
 #include "randomizer.h"
+#include "story.h"
 
 enum {
-  kProtoVersion = 6,
+  kProtoVersion = 7,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -102,6 +103,7 @@ static struct {
   bool ff;
   uint32 rando;
   int input_delay;
+  bool story;
   uint16 host_in[16][kSessionMaxLocal];  // host: local joypads by frame, for the input delay
   uint8 slot_owner[kMpMaxPlayers];
   uint8 slot_local[kMpMaxPlayers];
@@ -228,6 +230,7 @@ static bool g_last_was_replay;
 static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   ApplyEvents(fi);
   Inst_SetFriendlyFire(fi->flags & 1);
+  Story_SetEnabled(fi->flags & 4);
   Rando_SetNewGameSetting(fi->flags & 8 ? fi->rando : kRando_Off);
   g_wanted_zelda_features = fi->features;
   g_apui00_override = deterministic_audio ? (fi->flags >> 1) & 1 : -1;
@@ -283,7 +286,7 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
   memset(fi, 0, sizeof(*fi));
   memcpy(g_s.host_in[(g_s.frame + 1) & 15], local_inputs, sizeof(g_s.host_in[0]));
   fi->features = features;
-  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.rando ? 8 : 0);
+  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.story ? 4 : 0) | (g_s.rando ? 8 : 0);
   fi->rando = g_s.rando;
   uint8 reserved[kMpMaxPlayers] = { 0 };
   QueueJoinLeave(fi, 0, &g_s.pending_join_mask, &g_s.pending_leave_mask, reserved);
@@ -380,6 +383,14 @@ bool Session_AllowsLocalStateChanges() {
 
 void Session_SetFriendlyFire(bool on) {
   g_s.ff = on;
+}
+
+void Session_SetStory(bool on) {
+  g_s.story = on;
+}
+
+bool Session_GetStory() {
+  return g_s.story;
 }
 
 void Session_SetInputDelay(int frames) {

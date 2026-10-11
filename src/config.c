@@ -509,6 +509,10 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBoolBit(value, &g_config.features0, kFeatures0_MiscBugFixes);
     } else if (StringEqualsNoCase(key, "GameChangingBugFixes")) {
       return ParseBoolBit(value, &g_config.features0, kFeatures0_GameChangingBugFixes);
+    } else if (StringEqualsNoCase(key, "FourSwordsStory")) {
+      return ParseBool(value, &g_config.four_swords_story);
+    } else if (StringEqualsNoCase(key, "FourSwordsTitle")) {
+      return ParseBool(value, &g_config.four_swords_title);
     } else if (StringEqualsNoCase(key, "Randomizer")) {
       // off | random | seed:XXXXXXXX (hex)
       const char *seed_str = StringStartsWithNoCase(value, "seed:");
@@ -571,6 +575,8 @@ void ParseConfigFile(const char *filename) {
   g_config.mp_use_upnp = true;
   g_config.mp_port = 47474;
   g_config.mp_input_delay = 2;
+  g_config.four_swords_story = true;
+  g_config.four_swords_title = true;
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)

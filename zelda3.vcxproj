@@ -240,6 +240,7 @@
     <ClCompile Include="src\mp.c" />
     <ClCompile Include="src\instance.c" />
     <ClCompile Include="src\randomizer.c" />
+    <ClCompile Include="src\story.c" />
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\session.c" />
@@ -465,6 +466,7 @@
     <ClInclude Include="src\mp.h" />
     <ClInclude Include="src\instance.h" />
     <ClInclude Include="src\randomizer.h" />
+    <ClInclude Include="src\story.h" />
     <ClInclude Include="src\net.h" />
     <ClInclude Include="src\session.h" />
     <ClInclude Include="src\ui.h" />
