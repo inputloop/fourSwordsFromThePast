@@ -230,6 +230,9 @@ static struct {
   uint32 message_time;
   bool dirty_settings;
   bool headless;  // the test runner: settings files aren't written
+  // Spectating while down: the player each local player watches (-1: the
+  // default), and whether it was picked with L/R.
+  int8 watch[4];
   bool want_quit_confirm;
   uint16 last_fallback;
   // Controls screen
@@ -753,6 +756,7 @@ void Ui_Init(const UiHostFuncs *host) {
   if (host)
     g_ui.host = *host;
   g_ui.headless = host == NULL;
+  memset(g_ui.watch, -1, sizeof(g_ui.watch));
   g_ui.use_upnp = g_config.mp_use_upnp;
   g_ui.capture_button = -1;
   if (g_config.mp_last_join)
@@ -786,6 +790,42 @@ static void MoveCursor(int dir) {
   }
 }
 
+// Players that can be watched by p while p is down: p's own Link and every
+// teammate who is standing.
+static bool CanWatch(int p, int q) {
+  return q == p || (Inst_IsJoined(q) && !Inst_PlayerDowned(q));
+}
+
+int Ui_WatchedPlayer(int local_index) {
+  int p = Session_GetStatus()->local_slot[local_index];
+  if (p < 0 || !Inst_PlayerDowned(p)) {
+    if (local_index >= 0 && local_index < 4)
+      g_ui.watch[local_index] = -1;  // back up: the next time starts fresh
+    return p;
+  }
+  int w = g_ui.watch[local_index];
+  if (w >= 0 && w < kMpMaxPlayers && CanWatch(p, w))
+    return w;
+  // By default a ghost in a paused world (nobody standing there) watches a
+  // standing teammate, otherwise its own Link.
+  return Inst_SpectateTarget(p);
+}
+
+// L / R flip through who a downed player watches.
+static void UpdateWatch(int i, uint16 pressed) {
+  int p = Session_GetStatus()->local_slot[i];
+  if (p < 0 || !Inst_PlayerDowned(p) || !(pressed & 0xc00))
+    return;
+  int cur = Ui_WatchedPlayer(i), dir = (pressed & 0x400) ? -1 : 1;
+  for (int k = 1; k <= kMpMaxPlayers; k++) {
+    int q = (cur + dir * k + kMpMaxPlayers * 2) % kMpMaxPlayers;
+    if (CanWatch(p, q)) {
+      g_ui.watch[i] = q;
+      return;
+    }
+  }
+}
+
 void Ui_Update(uint16 *local_inputs, uint16 fallback) {
   // Back + Start on any controller toggles the menu.
   uint16 all = 0, pressed = 0;
@@ -794,6 +834,8 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
     g_ui.raw_inputs[i] = now;
     if ((now & 0xc) == 0xc && (g_ui.prev_inputs[i] & 0xc) != 0xc)
       Toggle();
+    if (!Ui_IsOpen())
+      UpdateWatch(i, now & ~g_ui.prev_inputs[i]);
     pressed |= now & ~g_ui.prev_inputs[i];
     all |= now;
     g_ui.prev_inputs[i] = now;
@@ -954,18 +996,19 @@ static void DrawCornerHud() {
   }
 }
 
-// A local player who is down in a paused world watches a teammate.
+// A local player who is down watches someone; L/R switches.
 static bool SpectateMessage(char *buf, size_t size) {
   const SessionStatus *st = Session_GetStatus();
   for (int i = 0; i < kSessionMaxLocal; i++) {
     int p = st->local_slot[i];
-    if (p < 0)
+    if (p < 0 || !Inst_PlayerDowned(p))
       continue;
-    int q = Inst_SpectateTarget(p);
-    if (q != p) {
-      snprintf(buf, size, "P%d down: watching P%d until revived", p + 1, q + 1);
-      return true;
-    }
+    int q = Ui_WatchedPlayer(i);
+    if (q != p)
+      snprintf(buf, size, "P%d down: watching P%d  (L/R: switch)", p + 1, q + 1);
+    else
+      snprintf(buf, size, "P%d down: wait for a revive  (L/R: watch)", p + 1);
+    return true;
   }
   return false;
 }

@@ -18,6 +18,9 @@ void Ui_Init(const UiHostFuncs *host);
 // Processes menu navigation. Clears inputs that the menu consumed.
 // fallback holds menu-only inputs from keys/buttons that work regardless of bindings.
 void Ui_Update(uint16 *local_inputs, uint16 fallback);
+// The player whose world local player i's screen shows: itself, or while it
+// is down, whoever it chose to watch with L/R (display only).
+int Ui_WatchedPlayer(int local_index);
 // A controller button press; returns true if the menu used it (e.g. while assigning buttons).
 bool Ui_HandlePadButton(int controller, int pad_button);
 // Keyboard/text events (used for the menu toggle key and typing addresses).
