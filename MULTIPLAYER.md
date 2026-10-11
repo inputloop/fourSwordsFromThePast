@@ -35,15 +35,18 @@ Players can drop in and drop out at any time.
 ## Rules of the shared world
 
 - **One shared inventory.** Every item, key, rupee, bomb and arrow belongs to
-  the team. Each player picks their own Y item in the item menu, and Start
-  opens the menu for whoever pressed it.
+  the team. Each player picks their own Y item in the item menu, and the
+  HUD's item box shows the item of the player whose screen it is.
+- **Private menus and maps.** Start (item menu) and the map open for whoever
+  pressed them, in a world of their own: the others keep playing, and when
+  the menu is closed the worlds merge again.
 - **Hearts are personal.** The four corners show P1 (top left), P2 (top right),
   P3 (bottom left) and P4 (bottom right). Heart containers raise everyone's
   maximum.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
 - **Free roaming (default).** Everybody goes wherever they want. Players who
-  are close together share a screen. A player who walks out of view or
+  are close together share a screen. A player who walks (mostly) out of view or
   through a door, stairs or a pit on their own continues in a world of their
   own with their own camera. When players meet again (same room or screen,
   close enough that their cameras line up), they share a screen again. Players on the same
@@ -69,6 +72,8 @@ Players can drop in and drop out at any time.
     standing teammate enters that room or screen; then the ghost is there,
     right where it fell. That also works when the ghost's world got stuck on
     a text box (nobody there can press A).
+  - While down, your screen shows a standing teammate (if your world is
+    paused) or your own Link; L and R switch between them.
   - If Zelda (or another follower) was following the ghost, the reviver
     joins the ghost's world instead, so the follower isn't lost.
 - **Enemies** go after the nearest Link and can be hurt by anyone.
