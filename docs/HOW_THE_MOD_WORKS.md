@@ -61,7 +61,7 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Who is the leader?** Whoever does something that changes the game's mode becomes the leader: opening the menu, talking to someone, opening a chest or going through a door. A downed leader hands the job to a standing player.
 
-**Screen transitions with a camera that is still catching up.** When Link walks off the edge of an overworld area, the game slides the camera to the next area a few pixels per frame and stops when the camera exactly reaches its target. With one Link the camera is always stopped at the area's edge when that happens. In co-op it can still be sliding over to its Link (after the worlds split, or after the leader changed because someone went down), so the slide used to step right past its target and scroll on forever, dragging Link across the map. Now, in co-op, the slide starts from where a single Link's camera would be, and it stops once it reaches or passes its target.
+**Screen transitions with a camera that is still catching up.** When Link walks off the edge of an overworld area, the game slides the camera to the next area a few pixels per frame and stops when the camera exactly reaches its target. With one Link the camera is always stopped at the area's edge when that happens. In co-op it can still be sliding over to its Link (after the worlds split, or after the leader changed because someone went down), so the slide used to step right past its target and scroll on forever, dragging Link across the map. Now, in co-op, a Link at the edge waits there until the camera has caught up and stopped at the edge too, and then the slide runs exactly as in the original game. (Jumping the camera there at once would leave parts of the map undrawn.) The slide also stops once it reaches or passes its target.
 
 **Teammates at the edge of an area.** The game only checks the leader for walking off the edge of an overworld area, and only at the moment it crosses the line. A teammate who isn't leading (or is thrown) could walk right past the edge with no screen transition and end up outside the area, where the camera can't follow. Now a teammate who reaches the edge is held there and gets a world of their own, as its leader, so their next step there takes them on to the next area. A Link flying through the air from a knockback or a throw is also kept inside the area.
 
@@ -74,6 +74,8 @@ The original code never knows other players exist. It just runs once per Link.
 **Your own magic meter.** Magic power is part of each player's Link context too, so every player has their own magic. Using the Fire Rod or the Cape uses up only your magic, and a magic jar only fills the meter of whoever picks it up. The HUD's magic meter is swapped in for each screen the same way as the item box, and each corner panel shows a small green magic bar under the hearts.
 
 **Private menus and maps.** Opening the item menu or a map would normally pause the whole game. Instead, the player who opens it gets a world of their own for it, the same way as going through a door alone. The others keep playing. When the menu closes, that player is standing in the same spot with the same camera, so the worlds merge right away.
+
+**Teammates off to the side.** The game's code for drawing Link only expects Link near the middle of the screen. For a teammate far off to the right it got the sprites' position wrong, and they appeared wrapped around onto the left side of the screen. The mod works out each sprite's real position again and leaves out the ones that are off screen.
 
 **Projectiles drawn with the right picture.** Some items, like the hookshot, draw their chain with pictures from Link's own graphics. The game only loads those for one Link, so another player's hookshot used to show the wrong pictures. The mod now draws those parts together with that player's own Link sprites, which have the right pictures.
 
@@ -289,7 +291,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 42 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 43 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

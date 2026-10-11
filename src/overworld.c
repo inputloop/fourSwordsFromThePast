@@ -835,8 +835,27 @@ void OverworldHandleTransitions() {  // 82a9c4
     t = link_x_coord - kOverworld_OffsetBaseX[BYTE(current_area_of_player) >> 1];
     if ((y = 2, x = 2, t < 6) || (y = 0, x = 1, t >= (uint16)(overworld_right_bottom_bound_for_scroll + 4))) {
 compare:
-      if (x == dir && !Link_CheckForEdgeScreenTransition())
+      if (x == dir && !Link_CheckForEdgeScreenTransition()) {
+        // A single Link only reaches the area's edge with the camera stopped
+        // at that edge, which the screen transition counts on. In co-op the
+        // camera may still be catching up with its Link (after the worlds
+        // split, or the leader changed): Link waits at the edge until the
+        // camera is there too (moving it there all at once would leave tiles
+        // of the map undrawn).
+        if (g_mp_coop) {
+          uint16 cam = dir & 12 ? BG2VOFS_copy2 : BG2HOFS_copy2;
+          uint16 edge = dir == 8 ? ow_scroll_vars0.ystart : dir == 4 ? ow_scroll_vars0.yend :
+                        dir == 2 ? ow_scroll_vars0.xstart : ow_scroll_vars0.xend;
+          if (cam != edge) {
+            if (dir & 12)
+              link_y_coord = link_y_coord_prev;
+            else
+              link_x_coord = link_x_coord_prev;
+            return;
+          }
+        }
         goto after;
+      }
     }
   }
   Overworld_CheckSpecialSwitchArea();
@@ -1692,16 +1711,6 @@ int OverworldScrollTransition() {  // 82c001
   transition_counter++;
   int y = overworld_screen_transition;
   int d = kOverworld_Func6B_Tab1[y], rv;
-  // A single Link only reaches the area's edge with the camera stopped at
-  // that edge. In co-op the camera may still be sliding over to its Link
-  // (after the worlds split, or the leader changed), so start the scroll
-  // from where it would have been, or it runs too long and drags Link along.
-  if (transition_counter == 1 && g_mp_coop) {
-    if (y < 2)
-      BG2VOFS_copy2 = d < 0 ? ow_scroll_vars0.ystart : ow_scroll_vars0.yend;
-    else
-      BG2HOFS_copy2 = d < 0 ? ow_scroll_vars0.xstart : ow_scroll_vars0.xend;
-  }
   if (y < 2) {
     byte_7E069E[0] = d;
     rv = (BG2VOFS_copy2 += d);

@@ -1054,13 +1054,25 @@ void Mp_DrawOtherPlayers() {
     g_mp.in_other_update = 1;
     LinkOam_MainOne();
     g_mp.in_other_update = 0;
-    for (int i = 0; i < 128 && rp->count < kMpMaxExtraOam; i++) {
+    // The game's Link drawing only handles a Link near the screen; for one
+    // off to the side it gets the 9th bit of the sprites' x wrong, and they
+    // wrapped around onto the screen. Each sprite's x is worked out again
+    // from where this Link really is, and sprites off the screen are left out.
+    int sx = (int16)(link_x_coord - BG2HOFS_copy2), sy = (int16)(link_y_coord - BG2VOFS_copy2);
+    bool far = sy < -48 || sy > 224 + 32;
+    for (int i = 0; i < 128 && rp->count < kMpMaxExtraOam && !far; i++) {
       OamEnt *e = &oam_buf[i];
       if (e->y == 0xf0)
         continue;
-      rp->oam[rp->count * 2 + 0] = e->x | e->y << 8;
+      int x = e->x | (bytewise_extended_oam[i] & 1) << 8;
+      x = x >= 256 ? x - 512 : x;
+      while (x < sx - 128) x += 256;
+      while (x > sx + 128) x -= 256;
+      if (x < -32 || x >= 256)
+        continue;
+      rp->oam[rp->count * 2 + 0] = (x & 0xff) | e->y << 8;
       rp->oam[rp->count * 2 + 1] = e->charnum | e->flags << 8;
-      rp->high[rp->count] = bytewise_extended_oam[i];
+      rp->high[rp->count] = (bytewise_extended_oam[i] & ~1) | (x < 0);
       rp->count++;
     }
     rp->visible = 1;

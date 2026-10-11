@@ -185,6 +185,33 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: P%s and P%s are %s at frame %d\n", arg1, arg2, same ? "together" : "apart", frame);
         failures++;
       }
+    } else if (!strcmp(cmd, "expect_drawn_right")) {
+      // expect_drawn_right <a> <b>: wherever player b is drawn on player a's screen (from
+      // another world), it is drawn where b really is
+      int a = atoi(arg1) - 1, b = atoi(arg2) - 1;
+      uint16 bx, by;
+      Inst_PlayerPos(b, &bx, &by);
+      SwitchToPlayer(a);
+      uint16 cx = BG2HOFS_copy2, cy = BG2VOFS_copy2;
+      InstRemoteLink rl[kMpMaxPlayers * 2 + 1];
+      int nr = Inst_LinksFromOtherWorlds(rl, countof(rl) - 1);
+      if (Inst_OfPlayer(a) == Inst_OfPlayer(b) && b != g_mp.leader && g_mp_render.p[b].visible && g_mp_render.p[b].count) {
+        // (in the same world: the sprites drawn for it this frame)
+        rl[nr].player = b, rl[nr].rp = &g_mp_render.p[b], rl[nr].dx = rl[nr].dy = 0;
+        nr++;
+      }
+      for (int k = 0; k < nr; k++) {
+        if (rl[k].player != b)
+          continue;
+        int x = (rl[k].rp->oam[0] & 0xff) | (rl[k].rp->high[0] & 1) << 8, y = rl[k].rp->oam[0] >> 8;
+        x = (x >= 256 ? x - 512 : x) + rl[k].dx;
+        y = (y >= 240 ? y - 256 : y) + rl[k].dy;
+        int ex = (int16)(bx - cx), ey = (int16)(by - cy);
+        if (abs(x - ex) > 24 || abs(y - ey) > 32) {
+          printf("FAIL: P%s is drawn at %d,%d on P%s's screen but is at %d,%d at frame %d\n", arg2, x, y, arg1, ex, ey, frame);
+          failures++;
+        }
+      }
     } else if (!strcmp(cmd, "expect_sees") || !strcmp(cmd, "expect_not_sees")) {
       // expect_sees <a> <b>: player a's screen shows player b, who is in another world.
       int a = atoi(arg1) - 1, b = atoi(arg2) - 1;
