@@ -1,0 +1,29 @@
+# The map button goes round: mini map (the game doesn't see that press), the
+# full screen map, then (after closing it; in the game X first zooms out,
+# then closes) no map.
+load 2
+run 30
+localjoin 2
+tick 10
+pos 1 3110 2450
+pos 2 3150 2470
+tick 300
+hold 1 X
+tick 2
+hold 1 -
+tick 5
+expect_module 9
+hold 1 X
+tick 2
+hold 1 -
+tick 60
+expect_module 14
+hold 1 X
+tick 2
+hold 1 -
+tick 40
+hold 1 X
+tick 2
+hold 1 -
+tick 90
+expect_module 9

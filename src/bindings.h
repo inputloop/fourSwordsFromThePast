@@ -54,8 +54,9 @@ void Bindings_OnPadButton(int controller, int pad_button, bool pressed);
 void Bindings_OnPadAxis(int controller, int axis_x, int axis_y);
 void Bindings_ResetController(int controller);
 uint16 Bindings_GetInput(int player);
-// Inputs for the overlay menu from fixed keys/buttons that work regardless of bindings.
-uint16 Bindings_GetMenuFallbackInput();
+// Inputs for the overlay menu from fixed keys/buttons that work regardless of
+// bindings: the arrow keys and the d-pad of that controller (-1: any).
+uint16 Bindings_GetMenuFallbackInput(int controller);
 
 // Config file: keys "P1Keys", "P1Pad", "P1Controller", "P1Deadzone", "P1Stick", "P1Rumble".
 bool Bindings_ParseConfig(const char *key, char *value);

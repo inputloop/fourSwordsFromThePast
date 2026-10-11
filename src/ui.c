@@ -14,6 +14,8 @@
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "bindings.h"
+#include "assets.h"
+#include "messaging.h"
 
 // ---------------------------------------------------------------------------
 // 5x7 pixel font
@@ -239,6 +241,10 @@ static struct {
   // default), and whether it was picked with L/R.
   int8 watch[4];
   bool want_quit_confirm;
+  int owner;  // the local player whose buttons run the menu
+  uint8 minimap[kMpMaxPlayers];   // per player: the mini map is shown
+  uint8 map_btn_held[kSessionMaxLocal];
+  uint8 map_btn_eaten[kSessionMaxLocal];
   uint16 last_fallback;
   // Controls screen
   int bind_player;
@@ -651,6 +657,11 @@ static void ScreenHd2d() {
   Strength("Bloom", &g_config.hd2d_bloom, &g_hd2d.bloom);
   Strength("Color grade", &g_config.hd2d_grade, &g_hd2d.grade);
   Strength("Vignette", &g_config.hd2d_vignette, &g_hd2d.vignette);
+  Item("See Links behind scenery", OnOff(g_config.hd2d_see_through));
+  if (Act() != kAct_None) {
+    g_hd2d.see_through = g_config.hd2d_see_through ^= 1;
+    g_ui.dirty_settings = true;
+  }
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Video);
@@ -894,15 +905,39 @@ bool Ui_IsOpen() {
   return g_ui.screen != kScreen_None;
 }
 
+// The menu only stops the game for someone playing alone on this computer.
+// In co-op (and always online) the game goes on: only the player who opened
+// it stands still, the others keep playing.
 bool Ui_PausesGame() {
-  return Ui_IsOpen() && !Session_IsNetplay();
+  return Ui_IsOpen() && !Session_IsNetplay() && Inst_NumJoined() <= 1;
+}
+
+// owner: the local player opening it (0-3), whose buttons then run the menu.
+static void ToggleBy(int owner) {
+  if (Ui_IsOpen()) {
+    Goto(kScreen_None);
+  } else {
+    g_ui.owner = owner;
+    Goto(kScreen_Main);
+  }
 }
 
 static void Toggle() {
-  if (Ui_IsOpen())
-    Goto(kScreen_None);
-  else
-    Goto(kScreen_Main);
+  ToggleBy(0);
+}
+
+void Ui_ToggleFromController(int controller) {
+  int owner = 0;
+  for (int i = 0; i < kSessionMaxLocal; i++)
+    if (g_bind[i].controller == controller && Session_IsLocalJoined(i)) {
+      owner = i;
+      break;
+    }
+  ToggleBy(owner);
+}
+
+int Ui_MenuController() {
+  return Ui_IsOpen() && g_bind[g_ui.owner].controller != kBindNoController ? g_bind[g_ui.owner].controller : -1;
 }
 
 static void MoveCursor(int dir) {
@@ -952,18 +987,45 @@ static void UpdateWatch(int i, uint16 pressed) {
   }
 }
 
+// The map button (X) goes round: mini map, full screen map, no map. The
+// press that turns the mini map on doesn't reach the game; the next one
+// opens the game's map (and closing that leaves no map).
+static void CycleMapButton(uint16 *local_inputs) {
+  const SessionStatus *st = Session_GetStatus();
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    int p = st->local_slot[i];
+    bool x = (local_inputs[i] & 0x200) != 0, press = x && !g_ui.map_btn_held[i];
+    g_ui.map_btn_held[i] = x;
+    if (p < 0 || p >= kMpMaxPlayers || (Ui_IsOpen() && i == g_ui.owner))
+      continue;
+    if (Inst_PlayerViewModule(p) == 14) {
+      g_ui.minimap[p] = 0;  // in the full map (or the item menu): X is the game's
+    } else if (press && !g_ui.minimap[p]) {
+      g_ui.minimap[p] = 1;
+      g_ui.map_btn_eaten[i] = 1;
+    } else if (press) {
+      g_ui.minimap[p] = 0;  // on to the full map: the game sees this press
+    }
+    if (!x)
+      g_ui.map_btn_eaten[i] = 0;
+    if (g_ui.map_btn_eaten[i])
+      local_inputs[i] &= ~0x200;
+  }
+}
+
 void Ui_Update(uint16 *local_inputs, uint16 fallback) {
+  CycleMapButton(local_inputs);
   // Back + Start on any controller toggles the menu.
   uint16 all = 0, pressed = 0;
   for (int i = 0; i < 4; i++) {
     uint16 now = local_inputs[i];
     g_ui.raw_inputs[i] = now;
-    if ((now & 0xc) == 0xc && (g_ui.prev_inputs[i] & 0xc) != 0xc)
-      Toggle();
-    if (!Ui_IsOpen())
+    if ((now & 0xc) == 0xc && (g_ui.prev_inputs[i] & 0xc) != 0xc && (!Ui_IsOpen() || i == g_ui.owner))
+      ToggleBy(i);
+    if (!Ui_IsOpen() || i != g_ui.owner)
       UpdateWatch(i, now & ~g_ui.prev_inputs[i]);
-    pressed |= now & ~g_ui.prev_inputs[i];
-    all |= now;
+    else
+      pressed |= now & ~g_ui.prev_inputs[i], all |= now;
     g_ui.prev_inputs[i] = now;
   }
   // Arrows/Enter/Backspace and the d-pad always work in the menu.
@@ -974,8 +1036,7 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
     return;
   // While waiting for a key to assign, inputs only go to the assignment.
   if (g_ui.capture_button >= 0) {
-    for (int i = 0; i < 4; i++)
-      local_inputs[i] = 0;
+    local_inputs[g_ui.owner] = 0;
     return;
   }
 
@@ -1010,9 +1071,8 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
     BuildScreen();
     g_ui.action = kAct_None;
   }
-  // The game doesn't see inputs while the menu is open.
-  for (int i = 0; i < 4; i++)
-    local_inputs[i] = 0;
+  // The player using the menu stands still meanwhile; the others play on.
+  local_inputs[g_ui.owner] = 0;
 }
 
 bool Ui_HandleKey(int key, bool pressed) {
@@ -1164,6 +1224,142 @@ static void DrawTeammateArrows() {
       DrawText(lx, ly, label, color);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Mini map. The world map is built once from the game's own mode 7 map
+// (its 8x8 tiles and tilemap): 64x64 tiles, 512x512 pixels, one pixel per
+// 8 pixels of the overworld.
+
+static uint32 *g_world_map[2];  // light, dark (0xRRGGBB)
+
+static uint32 SnesColor(uint16 c) {
+  int r = c & 31, g = c >> 5 & 31, b = c >> 10 & 31;
+  return (r << 3 | r >> 2) << 16 | (g << 3 | g >> 2) << 8 | (b << 3 | b >> 2);
+}
+
+static const uint32 *WorldMapImage(bool dark) {
+  if (g_world_map[dark])
+    return g_world_map[dark];
+  uint32 *img = malloc(512 * 512 * 4);
+  if (!img)
+    return NULL;
+  // The tilemap as the game lays it out in video memory (128 tiles wide):
+  // the light world in four 32x32 quarters; the dark world replaces the
+  // middle 32x32 tiles.
+  static uint8 tilemap[128 * 128];
+  memset(tilemap, 0xef, sizeof(tilemap));
+  static const uint16 kQuarters[4] = { 0, 0x20, 0x1000, 0x1020 };
+  const uint8 *src = kLightOverworldTilemap;
+  for (int q = 0; q < 4; q++)
+    for (int row = 0; row < 32; row++, src += 32)
+      memcpy(tilemap + kQuarters[q] + row * 128, src, 32);
+  if (dark)
+    for (int row = 0; row < 32; row++)
+      memcpy(tilemap + 0x810 + row * 128, kDarkOverworldTilemap + row * 32, 32);
+  const uint16 *pal = kOverworldMapPaletteData + (dark ? 0x80 : 0);
+  for (int y = 0; y < 512; y++) {
+    for (int x = 0; x < 512; x++) {
+      uint8 t = tilemap[(y >> 3) * 128 + (x >> 3)];
+      uint8 c = kOverworldMapGfx[t * 64 + (y & 7) * 8 + (x & 7)];
+      img[y * 512 + x] = SnesColor(pal[c]);
+    }
+  }
+  return g_world_map[dark] = img;
+}
+
+void Ui_DebugWorldMap(const char *file, bool dark) {
+  const uint32 *img = WorldMapImage(dark);
+  FILE *f = fopen(file, "wb");
+  if (!f || !img)
+    return;
+  fprintf(f, "P6\n512 512\n255\n");
+  for (int i = 0; i < 512 * 512; i++) {
+    uint8 rgb[3] = { img[i] >> 16, img[i] >> 8, img[i] };
+    fwrite(rgb, 1, 3, f);
+  }
+  fclose(f);
+}
+
+static void DrawDot(int x, int y, uint32 color, bool me) {
+  FillRect(x - 2, y - 2, 5, 5, me && (SDL_GetTicks() / 250 & 1) ? 0xffffff : 0x000000);
+  FillRect(x - 1, y - 1, 3, 3, color);
+}
+
+enum { kMiniW = 72, kMiniH = 60 };
+
+static void DrawMiniMap(const UiView *view) {
+  int p = view->player;
+  InstPlace me, them;
+  if (p < 0 || !g_ui.minimap[p] || !Inst_PlayerPlace(p, &me))
+    return;
+  int x0 = view->x + view->w - kMiniW - 3, y0 = view->y + 30;
+  ShadeRect(x0 - 2, y0 - 2, kMiniW + 4, kMiniH + 4);
+  if (me.space < 0x10000) {
+    // Overworld: the game's world map (1 pixel = 16), around the player.
+    const uint32 *img = WorldMapImage(me.space & 0x40);
+    if (!img)
+      return;
+    int cx = 128 + me.x / 16, cy = 128 + me.y / 16;  // map pixels
+    int left = cx - kMiniW / 2, top = cy - kMiniH / 2;
+    for (int y = 0; y < kMiniH; y++) {
+      int my = top + y;
+      for (int x = 0; x < kMiniW; x++) {
+        int mx = left + x;
+        FillRect(x0 + x, y0 + y, 1, 1, mx >= 0 && mx < 512 && my >= 0 && my < 512 ? img[my * 512 + mx] : 0);
+      }
+    }
+    for (int q = kMpMaxPlayers - 1; q >= -1; q--) {
+      int who = q < 0 ? p : q;
+      if ((q == p) || !Inst_PlayerPlace(who, &them) || them.space != me.space)
+        continue;
+      int dx = 128 + them.x / 16 - left, dy = 128 + them.y / 16 - top;
+      if (dx >= 2 && dx < kMiniW - 2 && dy >= 2 && dy < kMiniH - 2)
+        DrawDot(x0 + dx, y0 + dy, them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(who), who == p);
+    }
+  } else {
+    // In a dungeon: this floor's rooms as the dungeon map lays them out
+    // (5x5), the ones seen filled in (all of them with the map).
+    const uint8 *ram = Inst_PlayerWorldRam(p);
+    if (!ram || me.space >= 0x20000)
+      return;  // (a house or cave: no map)
+    int palace = me.space & 0xff;
+    const uint8 *rooms = DungMap_FloorRooms(palace, ram[0xA4]);  // dung_cur_floor
+    if (!rooms)
+      return;
+    bool have_map = WORD(ram[0xF368]) & kUpperBitmasks[(palace >> 1) & 15];  // link_dungeon_map
+    uint8 room_here = ram[0xA0];  // dungeon_room_index (low byte)
+    int cw = kMiniW / 5, ch = kMiniH / 5;
+    for (int k = 0; k < 25; k++) {
+      uint8 r = rooms[k];
+      if (r == 0x0f)
+        continue;
+      bool seen = WORD(ram[0xF000 + r * 2]) & 0xf, here = r == room_here;  // save_dung_info: quadrants seen
+      if (seen || here || have_map)
+        FillRect(x0 + (k % 5) * cw + 1, y0 + (k / 5) * ch + 1, cw - 2, ch - 2,
+                 here ? 0x8090c0 : seen ? 0x58607a : 0x30343c);
+    }
+    for (int q = kMpMaxPlayers - 1; q >= -1; q--) {
+      int who = q < 0 ? p : q;
+      const uint8 *qr = Inst_PlayerWorldRam(who);
+      if (q == p || !Inst_PlayerPlace(who, &them) || them.space != me.space || !qr || qr[0xA4] != ram[0xA4])
+        continue;
+      int k = 0;
+      while (k < 25 && rooms[k] != qr[0xA0])
+        k++;
+      if (k == 25)
+        continue;
+      DrawDot(x0 + (k % 5) * cw + 2 + (them.x & 511) * (cw - 4) / 512, y0 + (k / 5) * ch + 2 + (them.y & 511) * (ch - 4) / 512,
+              them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(who), who == p);
+    }
+  }
+}
+
+static void DrawMiniMaps() {
+  if (main_module_index == 0x14 || main_module_index == 0x1a)
+    return;
+  for (int v = 0; v < g_nviews; v++)
+    DrawMiniMap(&g_views[v]);
 }
 
 // A small P1-P4 tag over every Link on screen (an option).
@@ -1399,6 +1595,7 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   DrawSeedNotice();
   DrawTeammateArrows();
   DrawNameTags();
+  DrawMiniMaps();
   DrawCornerHud();
   DrawNotifications();
   DrawMenu();
@@ -1423,6 +1620,7 @@ void Ui_SaveSettings() {
   fprintf(f, "Hd2dDepthOfField = %d\nHd2dLighting = %d\nHd2dBloom = %d\nHd2dGrade = %d\nHd2dVignette = %d\n",
           g_config.hd2d_depth_of_field, g_config.hd2d_lighting, g_config.hd2d_bloom, g_config.hd2d_grade,
           g_config.hd2d_vignette);
+  fprintf(f, "Hd2dSeeThrough = %d\n", g_config.hd2d_see_through);
   fprintf(f, "DimFlashes = %d\n", (g_config.features0 & kFeatures0_DimFlashes) != 0);
   fprintf(f, "OutputMethod = %s\n", g_config.output_method == kOutputMethod_OpenGL ? "OpenGL" :
           g_config.output_method == kOutputMethod_OpenGL_ES ? "OpenGL ES" :

@@ -281,7 +281,7 @@ void Mp_ReadJoypads() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
       continue;
-    Mp_ReadJoypadInto(g_mp.p[p].downed ? 0 : g_mp.inputs[p],
+    Mp_ReadJoypadInto(g_mp.p[p].downed || g_mp.away[p] ? 0 : g_mp.inputs[p],
                       Mp_PlayerRam(p, 0xF0), Mp_PlayerRam(p, 0xF2), Mp_PlayerRam(p, 0xF4),
                       Mp_PlayerRam(p, 0xF6), Mp_PlayerRam(p, 0xF8), Mp_PlayerRam(p, 0xFA));
   }
@@ -1395,7 +1395,8 @@ void Mp_RunRouting(void (*routing)(void)) {
   uint8 m0 = main_module_index, s0 = submodule_index;
   if (g_mp.exit_blocked_timer)
     g_mp.exit_blocked_timer--;
-  if (g_mp.independent && Mp_Active() && (m0 == 7 || m0 == 9) && s0 == 0) {
+  // (Alone in this world in a co-op game too: the menu then still doesn't stop the world.)
+  if (g_mp.independent && (Mp_Active() || g_mp_coop) && (m0 == 7 || m0 == 9) && s0 == 0) {
     routing();
     // Someone went through an exit: they continue in a world of their own.
     if (Mp_IsTravel(m0, main_module_index, submodule_index)) {

@@ -389,6 +389,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     } else if (StringEqualsNoCase(key, "Hd2dGrade")) {
       g_config.hd2d_grade = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
       return true;
+    } else if (StringEqualsNoCase(key, "Hd2dSeeThrough")) {
+      return ParseBool(value, &g_config.hd2d_see_through);
     } else if (StringEqualsNoCase(key, "Hd2dLighting")) {
       g_config.hd2d_lighting = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
       return true;

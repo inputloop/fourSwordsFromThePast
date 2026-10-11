@@ -165,7 +165,7 @@ static int GetViews(int *views) {
   int n = 0;
   for (int i = 0; i < kSessionMaxLocal; i++) {
     // (A ghost waiting in a paused world watches a standing teammate.)
-    int inst = st->local_slot[i] < 0 ? -1 : Inst_OfPlayer(Ui_WatchedPlayer(i));
+    int inst = st->local_slot[i] < 0 ? -1 : Inst_ViewOfPlayer(Ui_WatchedPlayer(i));
     bool dup = inst < 0;
     for (int j = 0; j < n; j++)
       dup |= views[j] == inst;
@@ -208,7 +208,7 @@ static void DrawPpuFrameWithPerf() {
     uv[v].w = g_snes_width, uv[v].h = g_snes_height;
     uv[v].player = -1;
     for (int i = 0; i < kSessionMaxLocal && uv[v].player < 0; i++)
-      if (st->local_slot[i] >= 0 && Inst_OfPlayer(Ui_WatchedPlayer(i)) == views[v])
+      if (st->local_slot[i] >= 0 && Inst_ViewOfPlayer(Ui_WatchedPlayer(i)) == views[v])
         uv[v].player = Ui_WatchedPlayer(i);
   }
   Ui_SetViews(uv, nviews);
@@ -556,6 +556,7 @@ int main(int argc, char** argv) {
   g_hd2d.vignette = g_config.hd2d_vignette;
   g_hd2d.grade = g_config.hd2d_grade;
   g_hd2d.lighting = g_config.hd2d_lighting;
+  g_hd2d.see_through = g_config.hd2d_see_through;
   g_mp_color_scheme = g_config.mp_colorblind;
   Session_SetRandomizer(g_config.randomizer);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
@@ -653,7 +654,7 @@ int main(int argc, char** argv) {
         Session_LocalJoin(i);
     }
     // The overlay menu takes the inputs while it is open.
-    Ui_Update(local_inputs, Bindings_GetMenuFallbackInput());
+    Ui_Update(local_inputs, Bindings_GetMenuFallbackInput(Ui_MenuController()));
 
     bool is_replay = false;
     // Sound comes from the world of the first local player.
@@ -946,7 +947,7 @@ static void HandleGamepadInput(int pad, int button, bool pressed) {
   }
   Bindings_OnPadButton(pad, button, pressed);
   if (button == kGamepadBtn_Guide && pressed)
-    Ui_HandleKey(SDLK_ESCAPE, true);
+    Ui_ToggleFromController(pad);
   g_pad_modifiers[pad] ^= 1 << button;
   if (pressed)
     g_pad_last_cmd[pad][button] = FindCmdForGamepadButton(button, g_pad_modifiers[pad]);

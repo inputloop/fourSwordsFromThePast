@@ -5,7 +5,8 @@
 *The Legend of Zelda: A Link to the Past* as a native PC game with **four player
 drop-in/drop-out co-op** (same PC, LAN and internet), each Link in its own
 color, free roaming (split screen when couch players go separate ways),
-per-player hearts and magic, lifting and throwing teammates (over pits),
+per-player hearts and magic, menus that don't pause co-op, a mini map,
+lifting and throwing teammates (over pits),
 lifting heavy rocks together, arrows pointing to teammates off screen,
 private item menus and maps, rollback netcode, spectating while you're down
 (and sending teammates hearts), name tags, color-blind friendly colors,
@@ -102,7 +103,7 @@ randomizer for save files created from then on (or set `Randomizer` in the
 lens-and-light pass over the pixel art, in the style of Octopath Traveler.
 *Video > 2D-HD settings* sets the strength of each part (0-100, also
 `Hd2dDepthOfField`, `Hd2dLighting`, `Hd2dBloom`, `Hd2dGrade` and
-`Hd2dVignette` in `zelda3.ini`):
+`Hd2dVignette` in `zelda3.ini`, and `Hd2dSeeThrough`):
 
 - **Depth of field**: the players are in focus and the screen goes softly out
   of focus above and below them, like a diorama. In split screen, each pane
@@ -110,9 +111,11 @@ lens-and-light pass over the pixel art, in the style of Octopath Traveler.
   under a pit) are softer and hazy.
 - **Lighting**: dark rooms are lit for real: a warm glow around each Link
   with the Lamp, lit torches, fire and explosions, over a darkness that lifts
-  as torches are lit. Elsewhere fire adds a soft glow.
-- **Seeing through**: a Link hidden behind a roof, door frame or treetop
-  shows through it (not during scripted moments that hide Link on purpose).
+  as torches are lit. Elsewhere fire glows, and so does a Link whose selected
+  item is the Lamp.
+- **Seeing through** (an option, off by default): a Link hidden behind a
+  roof, bridge or door frame shows through it. Off, he stays hidden as in
+  the original.
 - **Bloom, color grade and vignette.**
 
 Links, enemies and the HUD stay sharp, because the PPU reports which layer

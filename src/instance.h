@@ -34,7 +34,11 @@ int Inst_Current();
 // Makes instance i the one the game code (g_ram, g_zenv, g_mp) works on.
 void Inst_Switch(int i);
 // The instance player p is in, or -1 if p isn't playing.
-int Inst_OfPlayer(int p);
+int Inst_OfPlayer(int p);      // where the player's Link is
+int Inst_ViewOfPlayer(int p);  // what the player sees and controls (its item menu or map, if open)
+bool Inst_PlayerInMenu(int p);
+uint8 Inst_PlayerViewModule(int p);       // main_module_index of what p sees
+const uint8 *Inst_PlayerWorldRam(int p);  // the memory of the world p's Link is in (read only)
 bool Inst_IsJoined(int p);
 int Inst_NumJoined();
 

@@ -230,6 +230,17 @@ const uint8 *GetDungmapFloorLayout() {
   return kDungMap_FloorLayout(cur_palace_index_x2 >> 1).ptr;
 }
 
+// The 5x5 rooms (low byte of the room number, 0x0f = none) of one floor
+// (counted like dung_cur_floor) of a dungeon, as its map shows them, or NULL.
+const uint8 *DungMap_FloorRooms(int palace_x2, int floor) {
+  int d = palace_x2 >> 1;
+  if (palace_x2 < 0 || d >= 14)
+    return NULL;
+  MemBlk b = kDungMap_FloorLayout(d);
+  int f = (int8)floor + (kDungMap_Tab5[d] & 0xf);
+  return f >= 0 && (size_t)(f + 1) * 25 <= b.size ? b.ptr + f * 25 : NULL;
+}
+
 uint8 GetOtherDungmapInfo(int count) {
   const uint8 *p = kDungMap_Tiles(cur_palace_index_x2 >> 1).ptr;
   return p[count];

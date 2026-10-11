@@ -1,8 +1,9 @@
 # The 2D-HD look (display only). In a dark cave the PPU draws the room
 # without the game's darkness layer and the pass lights it with the Lamp;
 # a Link walking through the sanctuary's doorway, hidden by the door frame,
-# is shown through it, but not while the game walks Link out of a door on
-# purpose (outside, behind the roof).
+# stays hidden (as in the original) unless "see through" is on; then it's
+# shown through, but not while the game walks Link out of a door on purpose
+# (outside, behind the roof).
 load 2
 run 30
 enter f0
@@ -13,6 +14,8 @@ run 30
 expect_hd2d 0 100 0
 hold 1 D
 run 296
+expect_hd2d 0 0 0
+hd2d 0 70 1
 expect_hd2d 100 400 0
 run 84
 expect_hd2d 0 0 0

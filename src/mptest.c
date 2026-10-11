@@ -175,8 +175,10 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 }, arg3[64] = { 0 }, arg4[64] = { 0 }, arg5[64] = { 0 };
     if (sscanf(line, "%31s %199s %63s %63s %63s %63s", cmd, arg1, arg2, arg3, arg4, arg5) < 1 || cmd[0] == '#')
       continue;
-    // Commands about the game look at the world of the viewed player.
-    SwitchToPlayer(view);
+    // Commands about the game look at the world the viewed player sees (its
+    // menu, if it has one open; commands about a player use where its Link is).
+    if (Inst_ViewOfPlayer(view) >= 0)
+      Inst_Switch(Inst_ViewOfPlayer(view));
     if (!strcmp(cmd, "load")) {
       SaveLoadSlot(kSaveLoad_Load, 256 + atoi(arg1) - 1);
     } else if (!strcmp(cmd, "join")) {
@@ -279,10 +281,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         failures++;
       }
     } else if (!strcmp(cmd, "hd2d")) {
-      // hd2d <0|1> [lighting]: the 2D-HD look for screenshots
+      // hd2d <0|1> [lighting] [see through 0|1]: the 2D-HD look for screenshots
       g_hd2d.enabled = atoi(arg1);
       if (arg2[0])
         g_hd2d.lighting = atoi(arg2);
+      if (arg3[0])
+        g_hd2d.see_through = atoi(arg3);
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         Inst_RunFrame(held);
@@ -587,7 +591,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       int r = Inst_Current();
       uint32 *wide = calloc(width * 2 * height * 4, 1);
       for (int v = 0; v < 2; v++) {
-        SwitchToPlayer(atoi(v ? arg3 : arg2) - 1);
+        Inst_Switch(Inst_ViewOfPlayer(atoi(v ? arg3 : arg2) - 1));
         Hd2d_DrawFrame((uint8 *)(wide + v * width), width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7, v);
       }
       Inst_Switch(r);
@@ -714,6 +718,23 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       int p = atoi(arg1) - 1;
       SwitchToPlayer(p);
       *Mp_PlayerRam(p, strtol(arg2, NULL, 16)) = strtol(arg3, NULL, 16);
+    } else if (!strcmp(cmd, "dumpworldmap")) {
+      // dumpworldmap <file> <dark 0|1>: (debug) the world map from the assets
+      extern void Ui_DebugWorldMap(const char *file, bool dark);
+      Ui_DebugWorldMap(arg1, atoi(arg2));
+    } else if (!strcmp(cmd, "expect_running")) {
+      // expect_running <p> <frames>: the world player p's Link is in keeps
+      // running (its frame counter advances) for that many frames
+      int p = atoi(arg1) - 1, n = atoi(arg2);
+      SwitchToPlayer(p);
+      uint8 f0 = frame_counter;
+      for (int k = 0; k < n; k++, frame++)
+        Inst_RunFrame(held);
+      SwitchToPlayer(p);
+      if ((uint8)(frame_counter - f0) != (uint8)n) {
+        printf("FAIL: P%d's world ran %d of %d frames at frame %d\n", p + 1, (uint8)(frame_counter - f0), n, frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "expect_pram")) {
       // expect_pram <p> <hexaddr> <hexval>: a byte of player p's own state
       int p = atoi(arg1) - 1;

@@ -1,6 +1,7 @@
-# Opening the item menu (or a map) gives that player a world of their own,
-# so the others keep playing; closing it merges the worlds again. The others
-# still see that player standing where they paused.
+# Opening the item menu (or a map) doesn't stop anything: the menu runs in a
+# world of its own, while that player's Link stays where it was, standing
+# still (the others see it and enemies can reach it). Closing the menu ends
+# that world; the item picked there goes back with it.
 load 2
 run 30
 join 2
@@ -14,14 +15,23 @@ expect_module 9
 view 2
 expect_module 14
 view 1
-expect_sees 1 2
+expect_same 1 2
+expect_near 2 3920 1579
 hold 1 D
 run 30
 hold 1 -
 expect_near 1 3920 1622
+# P2's Link didn't move while its menu was open.
+expect_near 2 3920 1579
+# Pick another item in the menu (Right), then close it.
+hold 2 R
+run 2
+hold 2 -
+run 10
 hold 2 S
 run 1
 hold 2 -
 run 60
 expect_instances 1
 expect_same 1 2
+expect_pram 2 202 02

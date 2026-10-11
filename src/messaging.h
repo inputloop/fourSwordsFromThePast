@@ -131,3 +131,5 @@ void Death_PlayerSwoon();
 void Death_PrepFaint();
 void DisplaySelectMenu();
 bool DidPressButtonForMap();
+// The 5x5 rooms of one floor of a dungeon (for the mini map), or NULL.
+const uint8 *DungMap_FloorRooms(int palace_x2, int floor);

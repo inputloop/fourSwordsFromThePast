@@ -3,7 +3,7 @@
 // is put over it: a tilt-shift depth of field (in focus around the players,
 // softly out of focus above and below, like a diorama), far layers hazy,
 // lights from the Lamp, torches and fire (dark rooms are lit by them alone),
-// Links seen through what hides them, bloom, color grading and a vignette.
+// optionally Links seen through what hides them, bloom, color grading and a vignette.
 // Sprites and the HUD stay sharp, because the PPU reports which layer every
 // pixel came from.
 //
@@ -20,6 +20,7 @@ typedef struct Hd2dSettings {
   uint8 vignette;        // 0-100
   uint8 grade;           // 0-100: contrast, saturation and warmth
   uint8 lighting;        // 0-100: light from the Lamp, torches and fire; dark rooms lit by them
+  bool see_through;      // show Links hidden behind scenery (off: hidden, like the original)
 } Hd2dSettings;
 
 extern Hd2dSettings g_hd2d;

@@ -230,7 +230,7 @@ uint16 Bindings_GetInput(int p) {
   return r;
 }
 
-uint16 Bindings_GetMenuFallbackInput() {
+uint16 Bindings_GetMenuFallbackInput(int controller) {
   uint16 r = 0;
   if (IsKeyDown(SDLK_UP)) r |= 1 << 4;
   if (IsKeyDown(SDLK_DOWN)) r |= 1 << 5;
@@ -239,6 +239,8 @@ uint16 Bindings_GetMenuFallbackInput() {
   if (IsKeyDown(SDLK_RETURN) || IsKeyDown(SDLK_KP_ENTER)) r |= 1 << 8;  // select
   if (IsKeyDown(SDLK_BACKSPACE)) r |= 1 << 0;  // back
   for (int c = 0; c < kMaxControllers; c++) {
+    if (controller >= 0 && c != controller)
+      continue;  // only the menu user's controller (and the keyboard)
     uint32 d = g_pad_down[c];
     if (d >> kGamepadBtn_DpadUp & 1) r |= 1 << 4;
     if (d >> kGamepadBtn_DpadDown & 1) r |= 1 << 5;

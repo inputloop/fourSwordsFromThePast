@@ -138,13 +138,31 @@ int Inst_Current() {
   return g_cur;
 }
 
-int Inst_OfPlayer(int p) {
+// A player in the item menu or a map is in two worlds: its Link stands in
+// the world it came from ("away" there), and the menu runs in a world of its
+// own. Inst_OfPlayer is where the Link is; Inst_ViewOfPlayer what the player
+// sees and controls.
+static int FindPlayer(int p, bool away) {
   if (p < 0 || p >= kMpMaxPlayers)
     return -1;
   for (int i = 0; i < kInstMax; i++)
-    if (g_inst[i].active && MpOf(i)->p[p].joined)
+    if (g_inst[i].active && MpOf(i)->p[p].joined && MpOf(i)->away[p] == away)
       return i;
   return -1;
+}
+
+int Inst_OfPlayer(int p) {
+  int i = FindPlayer(p, true);
+  return i >= 0 ? i : FindPlayer(p, false);
+}
+
+int Inst_ViewOfPlayer(int p) {
+  int i = FindPlayer(p, false);
+  return i >= 0 ? i : FindPlayer(p, true);
+}
+
+bool Inst_PlayerInMenu(int p) {
+  return FindPlayer(p, true) >= 0;
 }
 
 bool Inst_IsJoined(int p) {
@@ -200,7 +218,49 @@ static void Deactivate(int i) {
   g_inst[i].born = 0;
 }
 
+// The fields of a player that the item menu changes (and so go back with it
+// to where its Link stands).
+static const uint16 kMenuChoices[] = { 0x202, 0x656, 0x657, 0x658, 0xF34F };
+
+// Ends a player's item menu or map world: with keep_choices, the items it
+// picked there are carried back to its Link.
+static void CloseMenu(int p, bool keep_choices) {
+  int body = FindPlayer(p, true), menu = FindPlayer(p, false);
+  if (body < 0)
+    return;
+  int r = g_cur;
+  if (menu >= 0 && keep_choices) {
+    uint8 v[countof(kMenuChoices)];
+    Inst_Switch(menu);
+    for (size_t k = 0; k < countof(kMenuChoices); k++)
+      v[k] = *Mp_PlayerRam(p, kMenuChoices[k]);
+    Inst_Switch(body);
+    for (size_t k = 0; k < countof(kMenuChoices); k++)
+      *Mp_PlayerRam(p, kMenuChoices[k]) = v[k];
+  }
+  MpOf(body)->away[p] = 0;
+  if (menu >= 0) {
+    Inst_Switch(body);
+    Deactivate(menu);
+    if (r == menu)
+      r = body;
+  }
+  Inst_Switch(r);
+}
+
+// Menus that were closed this frame.
+static void CloseFinishedMenus() {
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    int menu = FindPlayer(p, false);
+    if (menu < 0 || FindPlayer(p, true) < 0 || g_inst[menu].ram[0x10] == 14)  // main_module_index: still in it
+      continue;
+    TRACE("  P%d closed its menu in world %d\n", p + 1, menu);
+    CloseMenu(p, true);
+  }
+}
+
 void Inst_Leave(int p) {
+  CloseMenu(p, false);
   int i = Inst_OfPlayer(p);
   if (i < 0 || Inst_NumJoined() <= 1)
     return;
@@ -295,16 +355,41 @@ static bool RunInstance(int i, const uint16 *inputs) {
   ApplySettings();
   Mp_SetInputs(inputs);
   bool can_split = g_mp.independent && Mp_NumJoined() > 1;
-  if (can_split)
+  // In co-op the item menu and the maps don't stop the world, even for a
+  // player alone in it: the menu gets a world of its own.
+  bool menus_live = g_mp.independent && g_mp_coop;
+  if (can_split || menus_live)
     TakeSnapshot();
   bool replay = false;
   for (;;) {
     g_mp.split_request = -1;
-    replay |= ZeldaRunFrame(inputs[g_mp.leader]);
+    replay |= ZeldaRunFrame(g_mp.away[g_mp.leader] ? 0 : inputs[g_mp.leader]);
     int p = g_mp.split_request, j;
-    if (p < 0 || !can_split || Mp_NumJoined() < 2 || (j = FreeSlot()) < 0)
+    if (p < 0 || (j = FreeSlot()) < 0)
       break;
     uint8 travel = g_mp.split_travel;
+    if (travel == 2) {
+      if (!menus_live)
+        break;
+      // The menu continues in the new world; here the frame is played again
+      // without it, with this Link standing still until the menu closes.
+      TRACE("  P%d opens a menu in world %d (from %d)\n", p + 1, j, i);
+      SplitOff(j, p, false);
+      MpOf(j)->away[p] = 0;
+      RestoreSnapshot();
+      g_mp.away[p] = 1;
+      // (The buttons were read during the last frame's vblank: forget them.)
+      for (int a = 0xF0; a < 0xFB; a++)
+        *Mp_PlayerRam(p, a) = 0;
+      // The camera and doors follow someone who is playing.
+      for (int q = 0; q < kMpMaxPlayers && g_mp.leader == p; q++)
+        if (q != p && Mp_IsAlive(q) && !g_mp.away[q])
+          Mp_SetLeader(q);
+      TakeSnapshot();
+      continue;
+    }
+    if (!can_split || Mp_NumJoined() < 2)
+      break;
     TRACE("  split P%d from world %d into %d travel=%d module=%d/%d\n", p + 1, i, j, travel, main_module_index, submodule_index);
     // The follower follows whoever led the group before this frame.
     // (Not into a menu: split_travel 2.)
@@ -335,7 +420,7 @@ static bool RunInstance(int i, const uint16 *inputs) {
 static void MovePlayers(int from, int to) {
   TRACE("  move players of world %d into %d\n", from, to);
   uint8 ctx[kMpMaxPlayers][kMpCtxMaxBytes];
-  uint8 joined[kMpMaxPlayers] = { 0 }, downed[kMpMaxPlayers], ctr[kMpMaxPlayers];
+  uint8 joined[kMpMaxPlayers] = { 0 }, downed[kMpMaxPlayers], ctr[kMpMaxPlayers], away[kMpMaxPlayers];
   Inst_Switch(from);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
@@ -343,13 +428,19 @@ static void MovePlayers(int from, int to) {
     joined[p] = 1;
     downed[p] = g_mp.p[p].downed;
     ctr[p] = g_mp.p[p].revive_ctr;
+    away[p] = g_mp.away[p];
     Mp_ExportPlayer(p, ctx[p]);
   }
   Inst_Switch(to);
   Deactivate(from);
-  for (int p = 0; p < kMpMaxPlayers; p++)
-    if (joined[p])
-      Mp_ImportPlayer(p, ctx[p], downed[p], ctr[p]);
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!joined[p])
+      continue;
+    // (A player both here and there was in a menu: the menu ends.)
+    bool both = g_mp.p[p].joined;
+    Mp_ImportPlayer(p, ctx[p], downed[p], ctr[p]);
+    g_mp.away[p] = both ? 0 : away[p];
+  }
 }
 
 typedef struct InstView {
@@ -586,6 +677,7 @@ bool Inst_RunFrame(const uint16 *inputs) {
     }
   }
   g_apu_push_enabled = true;
+  CloseFinishedMenus();
   if (Inst_Count() > 1) {
     if (g_independent) {
       MergeAndCleanUp();
@@ -601,9 +693,9 @@ bool Inst_RunFrame(const uint16 *inputs) {
   Inst_Sync();
   RecordLastSeen();
   // Hear (and by default show) the world of the local player.
-  int ai = Inst_OfPlayer(g_audio_player);
+  int ai = Inst_ViewOfPlayer(g_audio_player);
   for (int p = 0; p < kMpMaxPlayers && ai < 0; p++)
-    ai = Inst_OfPlayer(p);
+    ai = Inst_ViewOfPlayer(p);
   if (ai < 0)
     ai = g_cur;
   if (ai != g_audio_inst && g_audio_inst >= 0 && g_inst[ai].active) {
@@ -948,7 +1040,8 @@ int Inst_LinksFromOtherWorlds(InstRemoteLink *out, int max) {
     const MpRenderState *r = &g_inst[i].render;
     bool live = WorldView(i, &key, &x, &y);
     for (int p = 0; p < kMpMaxPlayers && n < max; p++) {
-      if (!m->p[p].joined)
+      // (A player in a menu: its Link stands in another world, drawn from there.)
+      if (!m->p[p].joined || MpOf(g_cur)->p[p].joined || (!m->away[p] && FindPlayer(p, true) >= 0))
         continue;
       const LastSeen *ls = &g_last_seen[p];
       if (live && key == key0) {
@@ -1001,6 +1094,16 @@ bool Inst_PlayerCanSendHeart(int p) {
 uint8 Inst_PlayerReviveCtr(int p) {
   int i = Inst_OfPlayer(p);
   return i >= 0 ? MpOf(i)->p[p].revive_ctr : 0;
+}
+
+uint8 Inst_PlayerViewModule(int p) {
+  int i = Inst_ViewOfPlayer(p);
+  return i >= 0 ? g_inst[i].ram[0x10] : 0;
+}
+
+const uint8 *Inst_PlayerWorldRam(int p) {
+  int i = Inst_OfPlayer(p);
+  return i >= 0 ? g_inst[i].ram : NULL;
 }
 
 uint8 Inst_PlayerModule(int p) {

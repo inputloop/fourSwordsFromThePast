@@ -9,7 +9,7 @@
 #include "mp.h"
 #include "snes/ppu.h"
 
-Hd2dSettings g_hd2d = { false, 60, 40, 45, 50, 70 };
+Hd2dSettings g_hd2d = { false, 60, 40, 45, 50, 70, false };
 
 enum {
   kMaxW = kPpuXPixels,
@@ -259,18 +259,18 @@ static bool IsFireAncilla(uint8 type) {
 static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
   memset(sc, 0, sizeof(*sc));
   sc->w = w, sc->h = h;
-  sc->reveal = (main_module_index == 7 || main_module_index == 9) && submodule_index == 0;
+  sc->reveal = g_hd2d.see_through && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0;
   int cam_x = BG2HOFS_copy2 - ppu->extraLeftRight, cam_y = BG2VOFS_copy2;
   // A dark room: the game darkens it by subtracting a layer of darkness
   // (BG1 on the subscreen), with a hole for the Lamp. The pass lights the
   // room itself instead.
   sc->dark = player_is_indoors && g_hd2d.lighting && (dung_want_lights_out | dung_want_lights_out_copy) &&
-             ppu->addSubscreen && ppu->subtractColor && ppu->screenEnabled[1] == 1;
+             ppu->addSubscreen && ppu->subtractColor && (ppu->screenEnabled[1] & 1);
   if (sc->dark) {
     float lit = (31 - ppu->fixedColorR) / 31.0f;  // 0 with no torch lit, 1 with all
     sc->ambient = 0.03f + 0.97f * lit;
   }
-  bool lamp = sc->dark && link_item_torch != 0;
+  bool have_lamp = link_item_torch != 0;
   float flicker = 0.93f + 0.07f * sinf(frame_counter * 0.37f);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (Mp_Active() ? !Mp_IsAlive(p) : p != 0)
@@ -279,8 +279,10 @@ static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
     if (x < -64 || x > w + 64)
       continue;
     sc->player_y[sc->num_players++] = y;
-    if (lamp) {
-      // The Lamp lights a circle around the Link, a little ahead of it.
+    // The Lamp lights a circle around the Link, a little ahead of it: in a
+    // dark room whenever the team has it, elsewhere while it is this
+    // Link's selected item (11).
+    if (have_lamp && (sc->dark || *Mp_PlayerRam(p, 0x202) == 11)) {
       static const int8 kAhead[4][2] = { {0, -12}, {0, 12}, {-12, 0}, {12, 0} };
       int dir = (*Mp_PlayerRam(p, 0x2F) >> 1) & 3;
       AddLight(sc, x + kAhead[dir][0], y + kAhead[dir][1], 92, 1.3f * flicker, 1.0f, 0.9f, 0.7f);
@@ -327,7 +329,7 @@ static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
 static void ComputeLight(const Scene *sc, int w, int h) {
   float strength = g_hd2d.lighting / 100.0f;
   float base = sc->dark ? sc->ambient : 1.0f;
-  float add = sc->dark ? 1.0f : 0.3f * strength;
+  float add = sc->dark ? 1.0f : 0.45f * strength;
   for (int i = 0; i < w * h; i++)
     g_light[0][i] = g_light[1][i] = g_light[2][i] = base;
   for (int n = 0; n < sc->num_lights; n++) {

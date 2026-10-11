@@ -1,0 +1,27 @@
+# The item menu doesn't pause the world, also for a player alone in it (in a
+# co-op game; playing alone, Start still pauses as in the original). P2 is
+# alone outside while P1 went into the palace.
+load 2
+run 30
+join 2
+run 20
+hold 1 U
+run 300
+hold 1 -
+expect_instances 2
+expect_running 2 30
+hold 2 S
+run 1
+hold 2 -
+run 20
+expect_instances 3
+view 2
+expect_module 14
+expect_running 2 100
+expect_near 2 3920 1579
+hold 2 S
+run 1
+hold 2 -
+run 60
+expect_instances 2
+expect_module 9

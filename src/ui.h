@@ -26,6 +26,10 @@ bool Ui_HandlePadButton(int controller, int pad_button);
 // Keyboard/text events (used for the menu toggle key and typing addresses).
 // Returns true if the key was consumed.
 bool Ui_HandleKey(int sdl_keycode, bool pressed);
+// The Guide button of a controller opens/closes the menu for its player.
+void Ui_ToggleFromController(int controller);
+// The controller of the player using the menu, or -1.
+int Ui_MenuController();
 void Ui_HandleText(const char *text);
 bool Ui_IsOpen();
 // True when the game should not advance (menu open while playing alone).

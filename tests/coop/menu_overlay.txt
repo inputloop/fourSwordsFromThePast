@@ -1,0 +1,16 @@
+# The options menu (Esc) doesn't pause co-op either: the player who opened
+# it stands still (its buttons run the menu), the others play on. (Through
+# the real input path: tick.)
+load 2
+run 30
+localjoin 2
+tick 30
+menu
+hold 1 D
+hold 2 D
+tick 30
+hold 1 -
+hold 2 -
+expect_near 1 3920 1579
+expect_near 2 3920 1622
+menu

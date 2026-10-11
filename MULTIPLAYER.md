@@ -30,16 +30,25 @@ Players can drop in and drop out at any time.
 - **Free roaming** is always on: nobody ever has to wait for the others or
   head the same way.
 - Online, the pause and turbo hotkeys do nothing (they would stop or outrun
-  everybody else). Use the menu; it doesn't stop the game online.
+  everybody else).
 
 ## Rules of the shared world
 
 - **One shared inventory.** Every item, key, rupee, bomb and arrow belongs to
   the team. Each player picks their own Y item in the item menu, and the
   HUD's item box shows the item of the player whose screen it is.
-- **Private menus and maps.** Start (item menu) and the map open for whoever
-  pressed them, in a world of their own: the others keep playing, and when
-  the menu is closed the worlds merge again.
+- **Menus don't pause co-op.** Start (item menu) and the map open for whoever
+  pressed them, in a world of their own, and nothing stops: that player's
+  Link stays where it was, standing still (enemies can still reach it), while
+  the others play on. Closing the menu brings the player back to their Link,
+  with the item they picked. This holds even for a player alone in their
+  part of the world. The options menu (Esc) doesn't pause co-op either: only
+  the player who opened it stops, and only their buttons move its cursor.
+  Playing alone, both pause as in the original.
+- **The map button (X) goes round**: a mini map in the corner (outdoors the
+  game's world map around you with everyone in your world as colored dots;
+  in a dungeon the current floor's rooms, the ones you've seen filled in, all
+  of them once you have the map), then the full screen map, then no map.
 - **Hearts and magic are personal.** The four corners show P1 (top left), P2
   (top right), P3 (bottom left) and P4 (bottom right), each with a small magic
   bar under the hearts. Heart containers raise everyone's maximum. The HUD's

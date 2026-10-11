@@ -75,7 +75,11 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Your own magic meter.** Magic power is part of each player's Link context too, so every player has their own magic. Using the Fire Rod or the Cape uses up only your magic, and a magic jar only fills the meter of whoever picks it up. The HUD's magic meter is swapped in for each screen the same way as the item box, and each corner panel shows a small green magic bar under the hearts.
 
-**Private menus and maps.** Opening the item menu or a map would normally pause the whole game. Instead, the player who opens it gets a world of their own for it, the same way as going through a door alone. The others keep playing. When the menu closes, that player is standing in the same spot with the same camera, so the worlds merge right away.
+**Menus that don't pause.** Opening the item menu or a map would normally pause the whole game. In co-op, the player who opens it gets a world of their own just for the menu, and the frame is then played again in the old world without the menu, with that player's Link still there but marked "away": it stands still (its buttons go to the menu instead) and enemies can still reach it. So nothing pauses, even for a player alone in their part of the world. While away, the player is in two worlds: the menu world is what they see and control (`Inst_ViewOfPlayer`), and the old world is where their Link is (`Inst_OfPlayer`, used for hearts, arrows, name tags). When the menu closes, the menu world is dropped and the choices made there (the selected item, the bottle) are copied back to the Link. Playing alone, Start still pauses, as in the original.
+
+**The options menu.** The menu drawn by the mod (Esc) also doesn't stop co-op: only the player who opened it stands still, and only their keys and controller move its cursor. The others keep playing.
+
+**The map button.** X goes round three states: a mini map, the full screen map, no map. The press that turns on the mini map is taken away before the game sees it; the next one reaches the game and opens its map. Outdoors the mini map shows the game's own world map (built once from its mode 7 picture: 1 pixel for 16 of the overworld) around the player, with teammates in the same world as colored dots. In a dungeon it shows the current floor as the dungeon map lays it out (5 by 5 rooms), the rooms already seen filled in, all of them once the team has that dungeon's map.
 
 **Teammates off to the side.** The game's code for drawing Link only expects Link near the middle of the screen. For a teammate far off to the right it got the sprites' position wrong, and they appeared wrapped around onto the left side of the screen. The mod works out each sprite's real position again and leaves out the ones that are off screen.
 
@@ -103,7 +107,7 @@ flowchart LR
 
 **Merging.** When two worlds are in the same room or overworld screen, and their cameras are within 48 pixels of each other, the players of one world move into the other. The extra world is thrown away. The camera rule keeps anyone's view from jumping. Right after someone walks out of view, the two worlds wait a second before they may merge, because the new camera is still sliding over to its player; otherwise they would merge straight back and split again, and the camera would jump between leaders.
 
-**Seeing each other before merging.** Two worlds in the same room can have cameras far apart, for example while one player walks back toward the other. So nobody is invisible until the worlds merge, each world remembers where its Links were drawn. When a screen is drawn, the Links of every other world in the same room or area are drawn on it too, shifted by the difference between the two cameras. Drawing them changes nothing in the game, so it is safe online. A player who opened the item menu or a map has a world of their own that shows the menu, so they are drawn as they last looked, standing where they paused.
+**Seeing each other before merging.** Two worlds in the same room can have cameras far apart, for example while one player walks back toward the other. So nobody is invisible until the worlds merge, each world remembers where its Links were drawn. When a screen is drawn, the Links of every other world in the same room or area are drawn on it too, shifted by the difference between the two cameras. Drawing them changes nothing in the game, so it is safe online. A player in the item menu or a map is still drawn where their Link stands.
 
 **Shared progress.** Some things must stay the same in every world. The save-file part of memory (addresses 7EF000 to 7EF4FF) is compared every frame, and any change is copied into all worlds:
 
@@ -296,8 +300,8 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 **The 2D-HD look (beta).** An optional picture filter in the style of Octopath Traveler, in `src/hd2d.c`. *Video > 2D-HD settings* turns it on and sets how strong each part is. After the game draws a frame, the filter:
 
 - keeps the players in focus and lets the screen go softly out of focus above and below them, so the world looks like a tiny model seen through a camera (in split screen each pane focuses on its own player), and makes far layers, like a cave's distant floor, softer and hazy,
-- lights dark rooms for real: instead of the game's flat darkness with a cone cut out of it, the room gets a warm glow around each Link that has the Lamp, around lit torches, fire and explosions, over a darkness that lifts as torches are lit,
-- shows a Link hidden behind a roof, door frame or treetop through it (but not when the game hides Link on purpose, like while he walks out of a door),
+- lights dark rooms for real: instead of the game's flat darkness with a cone cut out of it, the room gets a warm glow around each Link that has the Lamp, around lit torches, fire and explosions, over a darkness that lifts as torches are lit (outside dark rooms, a Link whose selected item is the Lamp glows too),
+- can show a Link hidden behind a roof, bridge or door frame through it (an option, off by default so Link stays hidden as in the original; never when the game hides Link on purpose, like while he walks out of a door),
 - makes the brightest parts glow, warms up the colors and darkens the corners.
 
 To keep Link, the enemies and the hearts and item box crisp, the drawing code (`snes/ppu.c`) also writes down, for every pixel, which layer it came from (background, sprite or HUD), and the colors of Link's pixels when a background tile hides them. The filter skips the HUD completely and never blurs sprites. It reads where the players, torches and fire are from the game's memory, but never changes the game, so online players can each turn it on or off. To stay fast (about 1-2 milliseconds a frame), the blurry copies are made at half and a quarter of the size, and the work is shared by up to four processor cores.
@@ -306,7 +310,7 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 
 ## How it is tested and built
 
-The mod has 48 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 51 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -322,7 +326,8 @@ The mod has 48 automatic tests that play the game with no window, by following w
 - the opening: the new story's text really reaches the game's text buffer, and the original comes back when it is turned off,
 - the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game,
 - teamwork: throwing a teammate over a pit and a ledge (the test paints pit and ledge tiles into a room), lifting a heavy rock together, a ghost sending a heart,
-- the 2D-HD look: a dark room is lit by the filter, and a Link in a doorway shows through the door frame,
+- the 2D-HD look: a dark room is lit by the filter, and a Link in a doorway stays hidden unless see-through is on,
+- menus: the world keeps running (and the Link stands still) while a player is in the item menu, even alone; the options menu stops only its player; the map button goes mini map, full map, no map,
 - screenshots: a few scenes (the HUD, the co-op HUD, the pause menu, the 2D-HD look) are compared with reference screenshots. Those are made from your own copy of the game the first time, and are never uploaded, because the game's graphics belong to Nintendo; so this check runs on your computer, not on GitHub. When something looks different, the test saves the new picture and one with the changed pixels in red.
 
 **Building.** The code is built with a C compiler using the `Makefile` on Linux and Mac. For Windows there are three ways: Visual Studio (`zelda3.vcxproj`), a cross-build script (`tools/build_windows_mingw.sh`), or `run_with_tcc.bat`, which downloads a tiny compiler and builds the game on the player's own PC.
