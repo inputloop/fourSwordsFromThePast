@@ -65,6 +65,8 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Shared inventory.** Items live outside the Link context, so they are naturally shared. The one exception is the Y-button item: each player picks their own. On each player's screen, the item box at the top shows *their* item. (The game only knows how to draw one item box, so just before a screen is drawn the mod briefly swaps in that player's Link, draws the box, and puts everything back.)
 
+**Your own magic meter.** Magic power is part of each player's Link context too, so every player has their own magic. Using the Fire Rod or the Cape uses up only your magic, and a magic jar only fills the meter of whoever picks it up. The HUD's magic meter is swapped in for each screen the same way as the item box, and each corner panel shows a small green magic bar under the hearts.
+
 **Private menus and maps.** Opening the item menu or a map would normally pause the whole game. Instead, the player who opens it gets a world of their own for it, the same way as going through a door alone. The others keep playing. When the menu closes, that player is standing in the same spot with the same camera, so the worlds merge right away.
 
 **Projectiles drawn with the right picture.** Some items, like the hookshot, draw their chain with pictures from Link's own graphics. The game only loads those for one Link, so another player's hookshot used to show the wrong pictures. The mod now draws those parts together with that player's own Link sprites, which have the right pictures.
@@ -91,13 +93,15 @@ flowchart LR
 
 **Merging.** When two worlds are in the same room or overworld screen, and their cameras are within 48 pixels of each other, the players of one world move into the other. The extra world is thrown away. The camera rule keeps anyone's view from jumping.
 
+**Seeing each other before merging.** Two worlds in the same room can have cameras far apart, for example while one player walks back toward the other. So nobody is invisible until the worlds merge, each world remembers where its Links were drawn. When a screen is drawn, the Links of every other world in the same room or area are drawn on it too, shifted by the difference between the two cameras. Drawing them changes nothing in the game, so it is safe online.
+
 **Shared progress.** Some things must stay the same in every world. The save-file part of memory (addresses 7EF000 to 7EF4FF) is compared every frame, and any change is copied into all worlds:
 
 - items, heart containers, pendants and crystals,
 - opened chests, doors and other room and overworld flags (these are combined, never removed),
-- counters such as rupees, bombs, arrows, magic and keys (each world's change is added up, so two players spending bombs at once both count).
+- counters such as rupees, bombs, arrows and keys (each world's change is added up, so two players spending bombs at once both count).
 
-A few things stay per world: each player's health, the key count of the dungeon you are in, light or dark world, and the follower (like Zelda). Enemies and pots in a room can also differ between two worlds until they merge. A chest can only be emptied once: if a teammate opened it in another copy of the room, it may still look closed in yours, but it is empty.
+A few things stay per world: each player's health and magic, the key count of the dungeon you are in, light or dark world, and the follower (like Zelda). Enemies and pots in a room can also differ between two worlds until they merge. A chest can only be emptied once: if a teammate opened it in another copy of the room, it may still look closed in yours, but it is empty.
 
 **Split screen.** If two or more players on the same computer are in different worlds, the window shows each world side by side (2 players) or in a 2×2 grid (3 or 4). Online players always see their own world. The sound comes from the world of the first player on that computer.
 
@@ -109,7 +113,7 @@ Each player has their own hearts, but nobody dies alone. A player who runs out o
 
 **Going down.** Normally, losing your last heart starts the death scene. In co-op the mod catches that moment (`Mp_OnFatalDamage`). If any other player is still standing, in any world, the player becomes a **ghost** instead:
 
-- the ghost flickers and lies still exactly where it fell,
+- the ghost is drawn in pale ghost colors and lies still exactly where it fell (it used to blink, which made it look like it kept popping up out of nowhere),
 - it cannot move, attack or be hurt,
 - enemies ignore it.
 
@@ -272,7 +276,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 28 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 33 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -280,7 +284,8 @@ The mod has 28 automatic tests that play the game with no window, by following w
 
 - co-op basics, combat, reviving, friendly fire and falling into holes,
 - free roaming: splitting, merging, ghosts waiting in their room (also when stuck on a text box, or with Zelda following), game over,
-- a stress test: four players wander randomly for 20,000 frames, and the test fails if any standing Link jumps (teleports), any ghost moves, or any visible Link is not drawn,
+- a stress test: four players wander randomly for 20,000 frames, and the test fails if any standing Link jumps (teleports), any ghost moves, any player is in two worlds at once, or any visible Link is not drawn,
+- players in two worlds of the same room see each other, each player's magic meter is their own, and the state sent to online players loads back exactly as it was saved,
 - online play: a real host and client talk over the network, and the client checks it stays in sync,
 - free roaming with everyone walking the same way at the same time, so they reach doors, stairs and screen edges together; the test fails if a Link jumps, runs off on its own, ends up outside the room or area its world has loaded, or the camera loses its player,
 - online play over a bad connection: a *lag simulator* (`ZELDA3_NETSIM`) delays messages by 60 milliseconds, randomly adds up to 30 more and throws away 3% of them. Both players wander around, and the test fails if the game ever goes out of sync or the client's own Link is ever moved by a guess (rubber banding),

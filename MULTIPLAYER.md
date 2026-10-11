@@ -40,16 +40,19 @@ Players can drop in and drop out at any time.
 - **Private menus and maps.** Start (item menu) and the map open for whoever
   pressed them, in a world of their own: the others keep playing, and when
   the menu is closed the worlds merge again.
-- **Hearts are personal.** The four corners show P1 (top left), P2 (top right),
-  P3 (bottom left) and P4 (bottom right). Heart containers raise everyone's
-  maximum.
+- **Hearts and magic are personal.** The four corners show P1 (top left), P2
+  (top right), P3 (bottom left) and P4 (bottom right), each with a small magic
+  bar under the hearts. Heart containers raise everyone's maximum. The HUD's
+  magic meter shows the magic of the player whose screen it is.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
 - **Free roaming (default).** Everybody goes wherever they want. Players who
   are close together share a screen. A player who walks (mostly) out of view or
   through a door, stairs or a pit on their own continues in a world of their
   own with their own camera. When players meet again (same room or screen,
-  close enough that their cameras line up), they share a screen again. Players on the same
+  close enough that their cameras line up), they share a screen again. Until
+  then, players in the same room or screen still see each other walking
+  around. Players on the same
   computer in different places get a split screen (side by side for two,
   2x2 for three or four). Netplay players always see their own Link.
   - Progress is shared between the worlds right away: items, rupees, bombs,
@@ -62,8 +65,8 @@ Players can drop in and drop out at any time.
 - **The leader.** In a group sharing a screen, whoever opens a menu, talks
   to someone or takes an exit becomes the leader that the camera, rooms and
   cutscenes follow.
-- **Downed, not dead.** A Link that runs out of hearts becomes a flickering
-  ghost that lies where it fell. Someone has to come and stand next to it
+- **Downed, not dead.** A Link that runs out of hearts becomes a pale ghost
+  that lies where it fell. Someone has to come and stand next to it
   for 1.5 seconds to revive it with half a heart. It is game over only when
   everyone is down; then everybody continues together.
   - A fairy in a bottle (shared by the team, like all items) saves a Link
@@ -122,12 +125,18 @@ world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
   on top of the leader).
 - **Shared progress.** After every frame, the save file area of RAM
   (`7EF000-7EF4FF`) is synced: changed bytes are copied to every world, room
-  and overworld flags are combined, and counters (bombs, arrows, magic,
-  rupees, keys) add up the changes of each world. Health, the dungeon key
+  and overworld flags are combined, and counters (bombs, arrows, rupees,
+  keys) add up the changes of each world. Health and magic, the dungeon key
   counter in use, refills in progress, light/dark world and the follower
   stay per world.
 - Snapshots and the netplay state hash cover all worlds, so netplay works
   unchanged.
+- **Seeing other worlds.** Each world records its leader's Link sprites
+  (`Mp_BeginLeaderOam` / `Mp_EndLeaderOam`) next to the other players'. When a
+  screen is drawn, `Inst_LinksFromOtherWorlds` lists the Links of every other
+  world in the same room or area, and they are drawn as extra sprite sets,
+  moved by the difference between the two cameras. So players walking toward
+  each other are visible before their worlds merge.
 
 ### Netplay
 
