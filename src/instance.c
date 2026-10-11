@@ -866,6 +866,26 @@ int Inst_PlayerPos(int p, uint16 *x, uint16 *y) {
   return i;
 }
 
+bool Inst_PlayerPlace(int p, InstPlace *out) {
+  int i = Inst_OfPlayer(p), r = g_cur;
+  if (i < 0)
+    return false;
+  Inst_Switch(i);
+  uint8 m = main_module_index;
+  bool ok = (m == 7 || m == 9 || m == 14) && (submodule_index == 0 || m == 14);
+  if (ok) {
+    out->world = i;
+    out->x = Mp_PlayerX(p) + 8, out->y = Mp_PlayerY(p) + 12;  // the middle of the Link
+    out->cam_x = BG2HOFS_copy2, out->cam_y = BG2VOFS_copy2;
+    uint8 palace = BYTE(cur_palace_index_x2);
+    out->space = !player_is_indoors ? (overworld_area_index & 0x40) :
+                 palace == 0xff ? 0x20000 | dungeon_room_index : 0x10000 | palace;
+    out->downed = g_mp.p[p].downed;
+  }
+  Inst_Switch(r);
+  return ok;
+}
+
 // Where world i is and where its camera looks, if it is in normal gameplay.
 static bool WorldView(int i, uint32 *key, uint16 *cam_x, uint16 *cam_y) {
   const uint8 *ram = g_inst[i].ram;

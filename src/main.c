@@ -198,6 +198,18 @@ static void DrawPpuFrameWithPerf() {
   for (int i = 0; i < kSessionMaxLocal; i++)
     if (st->local_slot[i] >= 0)
       g_mp_local_mask |= 1 << st->local_slot[i];
+  // Tell the overlay whose eyes each screen looks through.
+  UiView uv[kInstMax];
+  for (int v = 0; v < nviews; v++) {
+    uv[v].x = nviews > 1 ? (v & 1) * g_snes_width : 0;
+    uv[v].y = nviews > 1 ? (v >> 1) * g_snes_height : 0;
+    uv[v].w = g_snes_width, uv[v].h = g_snes_height;
+    uv[v].player = -1;
+    for (int i = 0; i < kSessionMaxLocal && uv[v].player < 0; i++)
+      if (st->local_slot[i] >= 0 && Inst_OfPlayer(Ui_WatchedPlayer(i)) == views[v])
+        uv[v].player = Ui_WatchedPlayer(i);
+  }
+  Ui_SetViews(uv, nviews);
   int cols = nviews >= 2 ? 2 : 1, rows = nviews >= 3 ? 2 : 1;
   g_disp_width = g_snes_width * cols;
   g_disp_height = g_snes_height * rows;

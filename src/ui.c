@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <SDL.h>
 #include "config.h"
 #include "features.h"
@@ -192,6 +193,7 @@ enum {
   kScreen_Main,
   kScreen_Multiplayer,
   kScreen_JoinAddress,
+  kScreen_Seed,
   kScreen_Lan,
   kScreen_Video,
   kScreen_Gameplay,
@@ -224,6 +226,8 @@ static struct {
   uint16 prev_inputs[4];
   int repeat_ctr;
   char join_addr[64];
+  uint32 seed_edit;     // the seed being typed in
+  char seed_note[64];   // the result of writing a spoiler log
   bool use_upnp;
   uint32 last_lan_refresh;
   char last_message[96];
@@ -274,8 +278,9 @@ static void Goto(int screen) {
     Ui_SaveSettings();
   g_ui.screen = screen;
   g_ui.cursor = 0;
+  g_ui.seed_note[0] = 0;
   g_ui.want_quit_confirm = false;
-  if (screen == kScreen_JoinAddress)
+  if (screen == kScreen_JoinAddress || screen == kScreen_Seed)
     SDL_StartTextInput();
   else
     SDL_StopTextInput();
@@ -465,6 +470,41 @@ static void ScreenMultiplayer() {
   snprintf(g_ui.footer, sizeof(g_ui.footer), "New controllers: press START to join");
 }
 
+// Typing in a seed: hex digits from the keyboard, or Left/Right on a digit.
+static void ScreenSeed() {
+  snprintf(g_ui.title, sizeof(g_ui.title), "ENTER A SEED");
+  Label("Type the 8 hex digits, or");
+  Label("change each digit with Left/Right");
+  char buf[16];
+  for (int d = 0; d < 8; d++) {
+    int shift = (7 - d) * 4, v = (g_ui.seed_edit >> shift) & 15;
+    char name[16];
+    snprintf(name, sizeof(name), "Digit %d", d + 1);
+    snprintf(buf, sizeof(buf), "%X", v);
+    Item(name, buf);
+    int a = Act();
+    if (a == kAct_Left || a == kAct_Right) {
+      v = (v + (a == kAct_Right ? 1 : 15)) & 15;
+      g_ui.seed_edit = (g_ui.seed_edit & ~(15u << shift)) | (uint32)v << shift;
+    }
+  }
+  snprintf(buf, sizeof(buf), "%08X", g_ui.seed_edit);
+  Label("Seed");
+  snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s", buf);
+  Item("Use this seed for new games", NULL);
+  if (Act() == kAct_Select && g_ui.seed_edit > kRando_RandomSeed) {
+    Session_SetRandomizer(g_ui.seed_edit);
+    g_config.randomizer = g_ui.seed_edit;
+    g_ui.dirty_settings = true;
+    Goto(kScreen_Gameplay);
+    return;
+  }
+  Item("Back", NULL);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Gameplay);
+  snprintf(g_ui.footer, sizeof(g_ui.footer), "Same seed = same item places");
+}
+
 static void ScreenJoinAddress() {
   snprintf(g_ui.title, sizeof(g_ui.title), "JOIN BY ADDRESS");
   Label("Type the host's address, then ENTER");
@@ -606,12 +646,31 @@ static void ScreenGameplay() {
     g_config.randomizer = next;
     g_ui.dirty_settings = true;
   }
+  if (!client) {
+    Item("Enter a seed", ">");
+    if (Act() == kAct_Select) {
+      g_ui.seed_edit = rando > kRando_RandomSeed ? rando : current;
+      Goto(kScreen_Seed);
+      return;
+    }
+  }
   if (current)
     snprintf(buf, sizeof(buf), "randomized, seed %08X", current);
   else
     snprintf(buf, sizeof(buf), "not randomized");
   Label("This game");
   snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s", buf);
+  if (current) {
+    Item("Write spoiler log", NULL);
+    if (Act() == kAct_Select) {
+      char path[32];
+      snprintf(path, sizeof(path), "spoiler_%08X.txt", current);
+      if (Rando_WriteSpoiler(current, path))
+        snprintf(g_ui.seed_note, sizeof(g_ui.seed_note), "Wrote %s", path);
+      else
+        snprintf(g_ui.seed_note, sizeof(g_ui.seed_note), "Couldn't write %s", path);
+    }
+  }
   Item("Four Swords opening story", OnOff(Session_GetStory()));
   if (Act() != kAct_None && !client) {
     g_config.four_swords_story = !g_config.four_swords_story;
@@ -633,6 +692,8 @@ static void ScreenGameplay() {
     Goto(kScreen_Main);
   if (client)
     snprintf(g_ui.footer, sizeof(g_ui.footer), "In an online game the host's options are used");
+  else if (g_ui.seed_note[0])
+    snprintf(g_ui.footer, sizeof(g_ui.footer), "%s", g_ui.seed_note);
   else
     snprintf(g_ui.footer, sizeof(g_ui.footer), "Randomizing applies to new save files");
 }
@@ -742,6 +803,7 @@ static void BuildScreen() {
   case kScreen_Main: ScreenMain(); break;
   case kScreen_Multiplayer: ScreenMultiplayer(); break;
   case kScreen_JoinAddress: ScreenJoinAddress(); break;
+  case kScreen_Seed: ScreenSeed(); break;
   case kScreen_Lan: ScreenLan(); break;
   case kScreen_Video: ScreenVideo(); break;
   case kScreen_Gameplay: ScreenGameplay(); break;
@@ -901,8 +963,14 @@ bool Ui_HandleKey(int key, bool pressed) {
     g_ui.dirty_settings = true;
     return true;
   }
+  if (g_ui.screen == kScreen_Seed && key == SDLK_BACKSPACE) {
+    g_ui.seed_edit >>= 4;
+    return true;
+  }
   if (key == SDLK_ESCAPE) {
-    if (g_ui.screen == kScreen_JoinAddress)
+    if (g_ui.screen == kScreen_Seed)
+      Goto(kScreen_Gameplay);
+    else if (g_ui.screen == kScreen_JoinAddress)
       Goto(kScreen_Multiplayer);
     else
       Toggle();
@@ -949,6 +1017,15 @@ bool Ui_HandlePadButton(int controller, int pad_button) {
 }
 
 void Ui_HandleText(const char *text) {
+  if (g_ui.screen == kScreen_Seed) {
+    for (; *text; text++) {
+      char c = *text;
+      int v = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+      if (v >= 0)
+        g_ui.seed_edit = g_ui.seed_edit << 4 | v;
+    }
+    return;
+  }
   if (g_ui.screen != kScreen_JoinAddress)
     return;
   size_t n = strlen(g_ui.join_addr);
@@ -962,6 +1039,85 @@ void Ui_HandleText(const char *text) {
 
 // ---------------------------------------------------------------------------
 // Overlay rendering
+
+static UiView g_views[4];
+static int g_nviews;
+
+void Ui_SetViews(const UiView *views, int n) {
+  g_nviews = IntMin(n, 4);
+  memcpy(g_views, views, g_nviews * sizeof(UiView));
+}
+
+// A filled triangle with its tip at (px, py), pointing along (ux, uy).
+static void DrawArrow(int px, int py, float ux, float uy, int size, uint32 color) {
+  for (int y = py - size; y <= py + size; y++) {
+    for (int x = px - size; x <= px + size; x++) {
+      float a = (x - px) * ux + (y - py) * uy;     // along the arrow (tip at 0)
+      float b = -(x - px) * uy + (y - py) * ux;    // across it
+      if (a <= 0 && a >= -size && fabsf(b) <= -a * 0.6f + 0.5f)
+        FillRect(x, y, 1, 1, color);
+    }
+  }
+}
+
+// Arrows at the edge of each screen pointing at teammates who are out of
+// view (in this world or another one), as long as they are somewhere the
+// direction means something: the same overworld, dungeon or room.
+static void DrawTeammateArrows() {
+  if (Inst_NumJoined() < 2 || main_module_index < 6 || main_module_index == 0x14 || main_module_index == 0x1a)
+    return;
+  for (int v = 0; v < g_nviews; v++) {
+    const UiView *view = &g_views[v];
+    InstPlace me, them;
+    if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
+      continue;
+    int extra = (view->w - 256) / 2;  // widescreen: columns left of the camera
+    for (int q = 0; q < kMpMaxPlayers; q++) {
+      if (q == view->player || !Inst_PlayerPlace(q, &them) || them.space != me.space)
+        continue;
+      int sx = (int16)(them.x - me.cam_x) + extra, sy = (int16)(them.y - me.cam_y);
+      if (sx >= -4 && sx < view->w + 4 && sy >= -4 && sy < view->h + 4)
+        continue;  // on screen
+      float cx = view->w * 0.5f, cy = view->h * 0.5f, dx = sx - cx, dy = sy - cy;
+      float len = sqrtf(dx * dx + dy * dy);
+      if (len < 1)
+        continue;
+      float ux = dx / len, uy = dy / len;
+      // Where the line from the middle of the screen leaves it (a margin in).
+      float t = 1e9f;
+      if (fabsf(dx) > 0.01f) t = fminf(t, (cx - 10) / fabsf(dx));
+      if (fabsf(dy) > 0.01f) t = fminf(t, (cy - 10) / fabsf(dy));
+      int px = view->x + (int)(cx + dx * t), py = view->y + (int)(cy + dy * t);
+      uint32 color = them.downed ? 0xa0a0a0 : kPlayerColorRgb[q];
+      DrawArrow(px, py, ux, uy, 8, 0x000000);
+      DrawArrow(px - (int)(ux * 1.5f), py - (int)(uy * 1.5f), ux, uy, 6, color);
+      char label[4];
+      snprintf(label, sizeof(label), "P%d", q + 1);
+      int lx = px - (int)(ux * 16) - TextWidth(label) / 2, ly = py - (int)(uy * 16) - 3;
+      lx = IntMax(view->x + 1, IntMin(lx, view->x + view->w - TextWidth(label) - 1));
+      ly = IntMax(view->y + 1, IntMin(ly, view->y + view->h - 8));
+      ShadeRect(lx - 1, ly - 1, TextWidth(label) + 2, 9);
+      DrawText(lx, ly, label, color);
+    }
+  }
+}
+
+// On the file select screen: will a new file be randomized, and how?
+static void DrawSeedNotice() {
+  if (main_module_index != 1 && main_module_index != 4)  // file select, naming a file
+    return;
+  uint32 rando = Rando_GetNewGameSetting();  // what new files actually get
+  if (rando == kRando_Off)
+    return;
+  char buf[48];
+  if (rando == kRando_RandomSeed)
+    snprintf(buf, sizeof(buf), "New files: randomized, new seed");
+  else
+    snprintf(buf, sizeof(buf), "New files: randomized, seed %08X", rando);
+  int w = TextWidth(buf) + 8, x = (g_cv.width - w) / 2, y = g_cv.height - 14;
+  ShadeRect(x, y, w, 12);
+  DrawText(x + 4, y + 3, buf, 0xffe080);
+}
 
 static void DrawCornerHud() {
   if (Inst_NumJoined() < 2 || main_module_index < 6 || main_module_index == 0x14 || main_module_index == 0x1a)
@@ -1145,6 +1301,8 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   g_cv.width = width / scale;
   g_cv.height = height / scale;
   DrawTitleBanner();
+  DrawSeedNotice();
+  DrawTeammateArrows();
   DrawCornerHud();
   DrawNotifications();
   DrawMenu();

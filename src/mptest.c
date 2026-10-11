@@ -59,6 +59,7 @@
 #include "features.h"
 #include "mp.h"
 #include "instance.h"
+#include "player.h"
 #include "util.h"
 #include "randomizer.h"
 #include "story.h"
@@ -224,6 +225,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
     } else if (!strcmp(cmd, "shot")) {
       g_mp_local_mask = 1 << view;
+      Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
       ZeldaDrawPpuFrame((uint8 *)pixels, width * 4, render_flags);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
@@ -478,6 +480,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         SwitchToPlayer(p);
         g_mp.p[p].downed = !strcmp(cmd, "down");
       }
+    } else if (!strcmp(cmd, "spoiler")) {
+      // spoiler <hexseed> <file>: writes the spoiler log of a seed
+      if (!Rando_WriteSpoiler(strtoul(arg1, NULL, 16), arg2)) {
+        printf("FAIL: no spoiler for seed %s\n", arg1);
+        failures++;
+      }
+    } else if (!strcmp(cmd, "receive")) {
+      // receive <hexitem>: the viewed player gets an item, as from a chest
+      SwitchToPlayer(view);
+      Link_ReceiveItem(strtol(arg1, NULL, 16), 0);
     } else if (!strcmp(cmd, "setleader")) {
       // setleader <p>: player p leads its world (as if it had opened a door)
       SwitchToPlayer(atoi(arg1) - 1);

@@ -44,6 +44,9 @@ Players can drop in and drop out at any time.
   (top right), P3 (bottom left) and P4 (bottom right), each with a small magic
   bar under the hearts. Heart containers raise everyone's maximum. The HUD's
   magic meter shows the magic of the player whose screen it is.
+- **Arrows to teammates.** A teammate off your screen gets an arrow in their
+  color at the screen's edge pointing their way (grey while down), when you
+  are both on the same overworld, in the same dungeon or in the same room.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
 - **Free roaming (default).** Everybody goes wherever they want. Players who

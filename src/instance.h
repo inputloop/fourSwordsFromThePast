@@ -87,6 +87,18 @@ uint8 Inst_PlayerHealth(int p);
 uint8 Inst_PlayerMagic(int p);
 // Where player p is: returns the world, or -1 if p isn't playing.
 int Inst_PlayerPos(int p, uint16 *x, uint16 *y);
+// Where player p is, for pointing at it from another player's screen. space
+// says which coordinates the position is in: the light or dark world, a
+// dungeon (its rooms share coordinates) or a single house or cave room.
+// cam_x/cam_y is the camera of the player's world. False if p isn't playing
+// or its world is in a transition.
+typedef struct InstPlace {
+  int world;
+  uint16 x, y, cam_x, cam_y;
+  uint32 space;
+  bool downed;
+} InstPlace;
+bool Inst_PlayerPlace(int p, InstPlace *out);
 bool Inst_PlayerDowned(int p);
 uint8 Inst_PlayerReviveCtr(int p);
 // The player whose world p's screen shows: p, or while p is a ghost in a

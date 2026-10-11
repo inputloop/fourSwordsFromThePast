@@ -105,6 +105,8 @@ flowchart LR
 
 A few things stay per world: each player's health and magic, the key count of the dungeon you are in, light or dark world, and the follower (like Zelda). Enemies and pots in a room can also differ between two worlds until they merge. A chest can only be emptied once: if a teammate opened it in another copy of the room, it may still look closed in yours, but it is empty.
 
+**Arrows to teammates.** When a teammate is off your screen, a small arrow in their color at the edge of the screen points their way, with their player number. It works across worlds too, as long as the direction means something: you are both on the same overworld (light or dark), in the same dungeon, or in the same house or cave. A downed teammate's arrow is grey. The arrows are only drawn on your screen and change nothing in the game.
+
 **Split screen.** If two or more players on the same computer are in different worlds, the window shows each world side by side (2 players) or in a 2×2 grid (3 or 4). Online players always see their own world. The sound comes from the world of the first player on that computer.
 
 ## Health, ghosts, reviving and game over
@@ -195,7 +197,9 @@ The randomizer moves items to new places, so every run of the game is a new puzz
 
 **Turning it on.** In *Pause menu > Gameplay*, set *Randomize new games* to on. It only affects save files created after that. Existing saves are never changed. Online, the host's setting is used.
 
-**The seed.** A *seed* is a number that decides the whole arrangement. The same seed always gives the same item placement. The seed is stored inside the save file (at save address 7EF4F0), so a file stays randomized the same way after saving and loading. The menu shows the current game's seed, and you can choose to make new files with that same seed to race a friend.
+**The seed.** A *seed* is a number that decides the whole arrangement. The same seed always gives the same item placement. The seed is stored inside the save file (at save address 7EF4F0), so a file stays randomized the same way after saving and loading. The menu shows the current game's seed, and you can choose to make new files with that same seed to race a friend. To play a friend's seed, use *Enter a seed*: type its 8 characters (0-9 and A-F), or pick each one with Left and Right on a controller. The file select screen then says which seed new files will get.
+
+**Spoiler log.** *Write spoiler log* saves a text file named after the seed. It lists the important items round by round (the first round is everything you can get from the start, the next round what those items open up, and so on), then every location and what it holds.
 
 **What gets shuffled.**
 
@@ -216,7 +220,8 @@ The randomizer moves items to new places, so every run of the game is a new puzz
 - swords: fighter's, then Master, then tempered, then golden,
 - shields: fighter's, then red, then mirror,
 - gloves: Power Glove, then Titan's Mitt,
-- mail: blue, then red.
+- mail: blue, then red,
+- boomerangs: blue, then red.
 
 **Open start.** A randomized game skips the intro and the castle escape. It begins as if Zelda was already rescued: no rain, no guards blocking the way. Link starts at his house or the sanctuary, with no items, and can go anywhere.
 
@@ -278,7 +283,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 37 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 39 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

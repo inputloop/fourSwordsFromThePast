@@ -79,11 +79,16 @@ randomizer for save files created from then on (or set `Randomizer` in the
   The castle basement and sewer chests (normally opened during the escape)
   only get filler. Dungeons count as needing a sword, and the medallion
   tablets and Agahnim's tower barrier the Master Sword level (or the cape).
-  Gloves and mails are progressive too: the first glove found is the Power
-  Glove, the second the Titan's Mitt.
+  Gloves, mails and boomerangs are progressive too: the first glove found
+  is the Power Glove, the second the Titan's Mitt.
 - The seed is stored in the save file, so a file stays randomized the same
   way. *Gameplay > This game* shows the seed; choosing "on, seed ..." makes
   new files with that same seed, to race a friend or replay it.
+  *Gameplay > Enter a seed* takes a friend's 8-digit seed (type it, or
+  change each digit with Left/Right), and the file select screen shows the
+  seed new files will get. *Gameplay > Write spoiler log* writes
+  `spoiler_<seed>.txt`: where the important items are, in the order they
+  can be collected, and every location.
 - In netplay the host's setting is used, and everybody plays the same seed.
 - `src/randomizer.c` has the location logic. `./zelda3 --mptest` with
   `randocheck <first seed> <count> [verbose]` checks seeds and prints spoilers.

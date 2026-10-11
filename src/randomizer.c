@@ -19,7 +19,7 @@ enum {
 // Item ids as used by the chest table and Link_ReceiveItem.
 enum {
   kI_MirrorShield = 0x06, kI_FireRod = 0x07, kI_IceRod = 0x08, kI_Hammer = 0x09,
-  kI_Hookshot = 0x0A, kI_Bow = 0x0B, kI_Lamp = 0x12, kI_Somaria = 0x15,
+  kI_Hookshot = 0x0A, kI_Bow = 0x0B, kI_BlueBoomerang = 0x0C, kI_RedBoomerang = 0x2A, kI_Lamp = 0x12, kI_Somaria = 0x15,
   kI_Cape = 0x19, kI_Glove = 0x1B, kI_Mitt = 0x1C, kI_Pearl = 0x1F,
   kI_BlueMail = 0x22, kI_RedMail = 0x23, kI_SmallKey = 0x24, kI_Compass = 0x25,
   kI_BigKey = 0x32, kI_Map = 0x33,
@@ -508,6 +508,9 @@ uint8 Rando_AdjustReceivedItem(uint8 item) {
     return link_item_gloves ? kI_Mitt : kI_Glove;
   if (item == kI_BlueMail || item == kI_RedMail)
     return link_armor ? kI_RedMail : kI_BlueMail;
+  // The first boomerang found is the blue one, the next the red one.
+  if (item == kI_BlueBoomerang || item == kI_RedBoomerang)
+    return link_item_boomerang ? kI_RedBoomerang : kI_BlueBoomerang;
   return item;
 }
 
@@ -532,4 +535,115 @@ bool Rando_Check(uint32 seed, bool verbose) {
                pl.room[k], pl.item[k], pl.vanilla[k]);
   }
   return ok;
+}
+
+// ---------------------------------------------------------------------------
+// Spoiler log
+
+static const char *ItemName(uint8 item, char *buf, size_t size) {
+  static const char *const kNames[0x4c] = {
+    [0x00] = "Fighter's Sword and Shield", [0x01] = "Master Sword", [0x02] = "Tempered Sword",
+    [0x03] = "Golden Sword", [0x04] = "Fighter's Shield", [0x05] = "Red Shield", [0x06] = "Mirror Shield",
+    [0x07] = "Fire Rod", [0x08] = "Ice Rod", [0x09] = "Hammer", [0x0A] = "Hookshot", [0x0B] = "Bow",
+    [0x0C] = "Boomerang", [0x0D] = "Magic Powder", [0x0F] = "Bombos Medallion",
+    [0x10] = "Ether Medallion", [0x11] = "Quake Medallion", [0x12] = "Lamp", [0x13] = "Shovel",
+    [0x14] = "Flute", [0x15] = "Cane of Somaria", [0x16] = "Bottle", [0x17] = "Piece of Heart",
+    [0x18] = "Cane of Byrna", [0x19] = "Magic Cape", [0x1A] = "Magic Mirror", [0x1B] = "Power Glove",
+    [0x1C] = "Titan's Mitt", [0x1D] = "Book of Mudora", [0x1E] = "Zora's Flippers", [0x1F] = "Moon Pearl",
+    [0x21] = "Bug-Catching Net", [0x22] = "Blue Mail", [0x23] = "Red Mail", [0x24] = "Small Key",
+    [0x25] = "Compass", [0x27] = "Bomb", [0x28] = "3 Bombs", [0x29] = "Mushroom",
+    [0x2A] = "Magical Boomerang", [0x31] = "10 Bombs", [0x32] = "Big Key", [0x33] = "Map",
+    [0x34] = "Rupee", [0x35] = "5 Rupees", [0x36] = "20 Rupees", [0x3E] = "Heart Container", [0x3F] = "Heart Container",
+    [0x40] = "100 Rupees", [0x41] = "50 Rupees", [0x43] = "Arrow", [0x44] = "10 Arrows",
+    [0x46] = "300 Rupees", [0x47] = "20 Rupees", [0x49] = "Fighter's Sword", [0x4B] = "Pegasus Boots",
+  };
+  if (item < 0x4c && kNames[item])
+    return kNames[item];
+  snprintf(buf, size, "item %02X", item);
+  return buf;
+}
+
+static const char *PlaceName(int room, char *buf, size_t size) {
+  static const struct { uint16 room; const char *name; } kPlaces[] = {
+    {0x104, "Link's House"}, {0x12, "Sanctuary"}, {0x55, "Secret passage by the castle"},
+    {0x11C, "C-shaped House"}, {0x11E, "Hype Cave"}, {0x113, "King's Tomb"},
+    {0x117, "Spike Cave"}, {0x10D, "Mire Shed"}, {0xEF, "Paradox Cave"}, {0xFF, "Paradox Cave"},
+    {0xFE, "Spiral Cave"}, {0x10C, "Mimic Cave"}, {0xF8, "Superbunny Cave"}, {0x3C, "Hookshot Cave"},
+    {0x1000, "Uncle (first item)"}, {0x1001, "Uncle (second item)"}, {0x1002, "Master Sword Pedestal"},
+    {0x1003, "Smiths"}, {0x1004, "Pyramid Fairy"}, {0x1005, "Waterfall of Wishing Fairy"},
+  };
+  for (size_t i = 0; i < countof(kPlaces); i++)
+    if (kPlaces[i].room == room)
+      return kPlaces[i].name;
+  // The dungeons, by the rooms the logic knows them by.
+  static const struct { const char *name; uint8 rooms[12]; } kDungeons[] = {
+    {"Hyrule Castle", {0x11, 0x32, 0x71, 0x72, 0x80}},
+    {"Castle Tower", {0xE0, 0xD0}},
+    {"Eastern Palace", {0xA8, 0xA9, 0xAA, 0xB8, 0xB9}},
+    {"Desert Palace", {0x73, 0x74, 0x75, 0x85}},
+    {"Tower of Hera", {0x27, 0x77, 0x87}},
+    {"Palace of Darkness", {0x09, 0x0A, 0x19, 0x1A, 0x2A, 0x2B, 0x3A, 0x6A}},
+    {"Swamp Palace", {0x16, 0x28, 0x34, 0x35, 0x36, 0x37, 0x46, 0x66, 0x76}},
+    {"Skull Woods", {0x57, 0x58, 0x59, 0x67, 0x68}},
+    {"Thieves' Town", {0x44, 0x45, 0x65, 0xCB, 0xDB, 0xDC}},
+    {"Ice Palace", {0x1F, 0x2E, 0x3F, 0x5F, 0x7E, 0x9E, 0xAE}},
+    {"Misery Mire", {0xA2, 0xB3, 0xC1, 0xC2, 0xC3, 0xD1}},
+    {"Turtle Rock", {0x04, 0x14, 0x24, 0xB6, 0xB7, 0xD5, 0xD6}},
+    {"Ganon's Tower", {0x1C, 0x3D, 0x4D, 0x5B, 0x7B, 0x7C, 0x7D, 0x8B, 0x8C, 0x8D, 0x9D}},
+  };
+  for (size_t i = 0; i < countof(kDungeons); i++)
+    for (int j = 0; j < 12 && kDungeons[i].rooms[j]; j++)
+      if (room < 0x100 && kDungeons[i].rooms[j] == room) {
+        snprintf(buf, size, "%s (room %02X)", kDungeons[i].name, room);
+        return buf;
+      }
+  if (room >= 0x100)
+    snprintf(buf, size, "Cave or house (room %03X)", room);
+  else
+    snprintf(buf, size, "Room %02X", room);
+  return buf;
+}
+
+bool Rando_WriteSpoiler(uint32 seed, const char *path) {
+  Placement pl;
+  if (seed <= kRando_RandomSeed || !Generate(seed, &pl))
+    return false;
+  FILE *f = fopen(path, "w");
+  if (!f)
+    return false;
+  char b1[48], b2[48];
+  fprintf(f, "Four Swords of the Past - item randomizer spoiler log\nSeed: %08X\n\n", seed);
+  // The order things can be collected in: each round, everything reachable
+  // with what the rounds before found.
+  fprintf(f, "Playthrough (what you can get with everything from the rounds before):\n");
+  State s = { 0 };
+  bool taken[kMaxChests] = { 0 };
+  for (int round = 1;; round++) {
+    Ev e;
+    Evaluate(&s, &e);
+    int found[kMaxChests], n = 0;
+    for (int k = 0; k < pl.nchests; k++)
+      if (!taken[k] && CanReach(pl.room[k], &e))
+        found[n++] = k;
+    if (!n)
+      break;
+    fprintf(f, "  Round %d:\n", round);
+    for (int i = 0; i < n; i++) {
+      int k = found[i];
+      taken[k] = true;
+      s.n[pl.item[k]]++;
+      if (IsProgression(pl.item[k]) || IsUsefulItem(pl.item[k]))
+        fprintf(f, "    %-28s %s\n", ItemName(pl.item[k], b1, sizeof(b1)), PlaceName(pl.room[k], b2, sizeof(b2)));
+    }
+  }
+  fprintf(f, "\nAll locations:\n");
+  for (int k = 0; k < pl.nchests; k++) {
+    if (!pl.shuffled[k])
+      continue;
+    fprintf(f, "  %-40s %s\n", PlaceName(pl.room[k], b2, sizeof(b2)), ItemName(pl.item[k], b1, sizeof(b1)));
+  }
+  fprintf(f, "\nSwords, shields, gloves, mails and boomerangs are progressive: each one\n"
+             "found is the next level of what you have, whatever the location says.\n");
+  fclose(f);
+  return true;
 }

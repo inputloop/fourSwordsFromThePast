@@ -30,6 +30,13 @@ void Ui_HandleText(const char *text);
 bool Ui_IsOpen();
 // True when the game should not advance (menu open while playing alone).
 bool Ui_PausesGame();
+// The screens on the window (one, or one per pane of a split screen), in
+// overlay pixels, and whose eyes each one looks through (-1: nobody's).
+typedef struct UiView {
+  int x, y, w, h;
+  int player;
+} UiView;
+void Ui_SetViews(const UiView *views, int n);
 // Draws the overlay into a 32-bit XRGB buffer. scale is the render scale (1 or 4).
 void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale);
 // Writes the settings changed through the menu to zelda3.coop.ini.

@@ -60,6 +60,10 @@ void Rando_UncleGivesItems();
 // Hands out the uncle's second item as soon as Link is free to receive it.
 void Rando_GiveStartItems();
 
+// Writes a spoiler log for seed to path: where the important items are, in
+// the order they can be collected, then every location. False on failure.
+bool Rando_WriteSpoiler(uint32 seed, const char *path);
+
 // Tests: generates the placement for seed and checks it can be beaten.
 // Prints the spoiler when verbose. Returns false if no placement was found.
 bool Rando_Check(uint32 seed, bool verbose);

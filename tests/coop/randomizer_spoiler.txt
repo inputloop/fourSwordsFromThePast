@@ -1,0 +1,2 @@
+# The spoiler log of a seed can be written (Gameplay menu > Write spoiler log).
+spoiler 1234ABCD tests/out/spoiler_1234ABCD.txt

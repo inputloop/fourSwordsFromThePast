@@ -1,0 +1,26 @@
+# Randomized games hand out boomerangs in order, like swords and gloves: the
+# first one found is the blue boomerang even if the chest held the red one,
+# the next one is the red boomerang.
+rando 40
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_ram f341 0
+receive 2a
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 100
+expect_ram f341 1
+receive 2a
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 100
+expect_ram f341 2
