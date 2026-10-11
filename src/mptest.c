@@ -341,6 +341,23 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
             runaways++;
           }
         }
+        // A world stuck in a screen or room transition.
+        static int in_trans[kInstMax];
+        for (int i = 0; i < kInstMax && (checks || together); i++) {
+          int r0 = Inst_Current();
+          if (!Inst_IsActive(i)) {
+            in_trans[i] = 0;
+            continue;
+          }
+          Inst_Switch(i);
+          bool trans = (main_module_index == 7 || main_module_index == 9) && submodule_index != 0;
+          in_trans[i] = trans ? in_trans[i] + 1 : 0;
+          if (in_trans[i] == 600) {
+            printf("[frame %d] STUCK TRANSITION world %d module %d/%d\n", frame, i, main_module_index, submodule_index);
+            runaways++;
+          }
+          Inst_Switch(r0);
+        }
         // A world whose camera lost its leader.
         static int lost[kInstMax];
         for (int i = 0; i < kInstMax && (checks || together); i++) {
@@ -494,6 +511,13 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // setleader <p>: player p leads its world (as if it had opened a door)
       SwitchToPlayer(atoi(arg1) - 1);
       Mp_SetLeader(atoi(arg1) - 1);
+    } else if (!strcmp(cmd, "expect_playing")) {
+      // expect_playing <p>: player p's world is in plain gameplay (not stuck in a transition)
+      SwitchToPlayer(atoi(arg1) - 1);
+      if (!((main_module_index == 7 || main_module_index == 9) && submodule_index == 0)) {
+        printf("FAIL: P%s's world is in module %d/%d at frame %d\n", arg1, main_module_index, submodule_index, frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "check_area")) {
       // check_area: fail if a standing Link on the overworld is outside the area its world has loaded
       for (int p = 0; p < kMpMaxPlayers; p++) {

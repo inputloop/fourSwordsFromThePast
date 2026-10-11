@@ -1,0 +1,25 @@
+# A Link crosses into the next area while its world's camera isn't lined up
+# the way a single Link's would be (as after the worlds split, or the leader
+# changed while a teammate was taking damage): here 120 pixels behind. The screen
+# transition used to step past its target and scroll on forever, dragging
+# the Link across the map. It now starts from where a single Link's camera
+# would be and ends in the next area.
+load 2
+run 30
+join 2
+run 10
+pos 1 3110 2450
+pos 2 3110 2450
+run 400
+pos 1 3082 2450
+pos 2 3082 2450
+poke e2 78
+hold 1 L
+hold 2 L
+run 100
+hold 1 -
+hold 2 -
+run 200
+view 1
+expect_playing 1
+check_area

@@ -1667,7 +1667,9 @@ int OverworldCameraBoundaryCheck(int xa, int ya, int vd, int r8) {  // 82bd62
 
   uint16 *xp = (xa ? &BG2VOFS_copy2 : &BG2HOFS_copy2);
   uint16 *yp = &(&ow_scroll_vars0.ystart)[ya];
-  if (*xp == *yp) {
+  // At the area's edge, or past it (in co-op the camera can be off where a
+  // single Link would never have put it): don't scroll further out.
+  if (*xp == *yp || (vd < 0 ? (int16)(*xp - *yp) < 0 : (int16)(*xp - *yp) > 0)) {
     (&overworld_unk1)[ya] = 0;
     (&overworld_unk1)[ya ^ 1] = 0;
     return 0;
@@ -1690,6 +1692,16 @@ int OverworldScrollTransition() {  // 82c001
   transition_counter++;
   int y = overworld_screen_transition;
   int d = kOverworld_Func6B_Tab1[y], rv;
+  // A single Link only reaches the area's edge with the camera stopped at
+  // that edge. In co-op the camera may still be sliding over to its Link
+  // (after the worlds split, or the leader changed), so start the scroll
+  // from where it would have been, or it runs too long and drags Link along.
+  if (transition_counter == 1 && g_mp_coop) {
+    if (y < 2)
+      BG2VOFS_copy2 = d < 0 ? ow_scroll_vars0.ystart : ow_scroll_vars0.yend;
+    else
+      BG2HOFS_copy2 = d < 0 ? ow_scroll_vars0.xstart : ow_scroll_vars0.xend;
+  }
   if (y < 2) {
     byte_7E069E[0] = d;
     rv = (BG2VOFS_copy2 += d);
@@ -1697,8 +1709,15 @@ int OverworldScrollTransition() {  // 82c001
       BG1VOFS_copy2 = BG2VOFS_copy2;
     if (transition_counter >= kOverworld_Func6B_Tab2[y])
       link_y_coord += d;
-    if (rv != (&up_down_scroll_target)[y])
+    // (Reached or passed: in co-op the camera may not have been lined up
+    // with the area when the transition started, and stepping past the
+    // target would scroll on forever.)
+    uint16 target = (&up_down_scroll_target)[y];
+    if (d < 0 ? (int16)(rv - target) > 0 : (int16)(rv - target) < 0)
       return rv;
+    rv = BG2VOFS_copy2 = target;
+    if (BYTE(overworld_screen_index) != 0x1b && BYTE(overworld_screen_index) != 0x5b)
+      BG1VOFS_copy2 = BG2VOFS_copy2;
     if (y == 0)
       BG2VOFS_copy2 -= 2;
     link_y_coord &= ~7;
@@ -1712,8 +1731,12 @@ int OverworldScrollTransition() {  // 82c001
       BG1HOFS_copy2 = BG2HOFS_copy2;
     if (transition_counter >= kOverworld_Func6B_Tab2[y])
       link_x_coord += d;
-    if (rv != (&up_down_scroll_target)[y])
+    uint16 target = (&up_down_scroll_target)[y];
+    if (d < 0 ? (int16)(rv - target) > 0 : (int16)(rv - target) < 0)
       return rv;
+    rv = BG2HOFS_copy2 = target;
+    if (BYTE(overworld_screen_index) != 0x1b && BYTE(overworld_screen_index) != 0x5b)
+      BG1HOFS_copy2 = BG2HOFS_copy2;
     link_x_coord &= ~7;
     camera_x_coord_scroll_hi = link_x_coord + kOverworld_Func6B_Tab3[y] + 11;
     camera_x_coord_scroll_low = camera_x_coord_scroll_hi + 2;
