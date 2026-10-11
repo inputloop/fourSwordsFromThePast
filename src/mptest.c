@@ -62,6 +62,7 @@
 #include "player.h"
 #include "util.h"
 #include "randomizer.h"
+#include "hd2d.h"
 #include "story.h"
 #include "config.h"
 #include "select_file.h"
@@ -247,6 +248,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: BG3 scroll is %d, expected %s at frame %d\n", g_zenv.ppu->bgLayer[2].hScroll, arg1, frame);
         failures++;
       }
+    } else if (!strcmp(cmd, "hd2d")) {
+      // hd2d <0|1>: the 2D-HD look for screenshots
+      g_hd2d.enabled = atoi(arg1);
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         Inst_RunFrame(held);
@@ -254,7 +258,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "shot")) {
       g_mp_local_mask = 1 << view;
       Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
-      ZeldaDrawPpuFrame((uint8 *)pixels, width * 4, render_flags);
+      Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
@@ -500,7 +504,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       uint32 *wide = calloc(width * 2 * height * 4, 1);
       for (int v = 0; v < 2; v++) {
         SwitchToPlayer(atoi(v ? arg3 : arg2) - 1);
-        ZeldaDrawPpuFrame((uint8 *)(wide + v * width), width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7);
+        Hd2d_DrawFrame((uint8 *)(wide + v * width), width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7);
       }
       Inst_Switch(r);
       Ui_Draw((uint8 *)wide, width * 2 * 4, width * 2, height, 1);

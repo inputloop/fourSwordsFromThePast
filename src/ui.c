@@ -9,6 +9,7 @@
 #include "mp.h"
 #include "instance.h"
 #include "randomizer.h"
+#include "hd2d.h"
 #include "session.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -571,6 +572,12 @@ static void ScreenVideo() {
     g_ui.dirty_settings = true;
     if (g_ui.host.apply_display)
       g_ui.host.apply_display();
+  }
+  Item("2D-HD look (beta)", OnOff(g_config.hd2d));
+  if (Act() != kAct_None) {
+    g_config.hd2d ^= 1;
+    g_hd2d.enabled = g_config.hd2d;
+    g_ui.dirty_settings = true;
   }
   Item("No sprite flicker", OnOff(g_config.no_sprite_limits));
   if (Act() != kAct_None) {
@@ -1324,6 +1331,7 @@ void Ui_SaveSettings() {
   fprintf(f, "EnhancedMode7 = %d\n", g_config.enhanced_mode7);
   fprintf(f, "LinearFiltering = %d\n", g_config.linear_filtering);
   fprintf(f, "NoSpriteLimits = %d\n", g_config.no_sprite_limits);
+  fprintf(f, "Hd2d = %d\n", g_config.hd2d);
   fprintf(f, "DimFlashes = %d\n", (g_config.features0 & kFeatures0_DimFlashes) != 0);
   fprintf(f, "OutputMethod = %s\n", g_config.output_method == kOutputMethod_OpenGL ? "OpenGL" :
           g_config.output_method == kOutputMethod_OpenGL_ES ? "OpenGL ES" :

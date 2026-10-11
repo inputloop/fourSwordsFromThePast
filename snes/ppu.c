@@ -850,16 +850,32 @@ static FORCEINLINE uint32 PpuLookupColor(Ppu *ppu, PpuZbufType z, size_t i) {
   return ppu->cgram[z & 0xff];
 }
 
+uint8_t *g_ppu_layer_out;
+int g_ppu_layer_pitch;
+
+static void PpuWriteLayerLine(Ppu *ppu, uint y, bool known) {
+  uint8_t *out = g_ppu_layer_out + (y - 1) * g_ppu_layer_pitch;
+  int w = 256 + ppu->extraLeftRight * 2;
+  for (int d = 0; d < w && d < g_ppu_layer_pitch; d++) {
+    int i = d - ppu->extraLeftRight + kPpuExtraLeftRight;
+    out[d] = known && i >= 0 && i < kPpuXPixels ? (ppu->bgBuffers[0].data[i] >> 8) & 0xf : 0xff;
+  }
+}
+
 static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
   if (ppu->forcedBlank) {
     uint8 *dst = &ppu->renderBuffer[(y - 1) * ppu->renderPitch];
     size_t n = sizeof(uint32) * (256 + ppu->extraLeftRight * 2);
     memset(dst, 0, n);
+    if (g_ppu_layer_out)
+      PpuWriteLayerLine(ppu, y, false);
     return;
   }
 
   if (ppu->mode == 7 && (ppu->renderFlags & kPpuRenderFlags_4x4Mode7)) {
     PpuDrawMode7Upsampled(ppu, y);
+    if (g_ppu_layer_out)
+      PpuWriteLayerLine(ppu, y, false);
     return;
   }
 
@@ -949,6 +965,9 @@ static NOINLINE void PpuDrawWholeLine(Ppu *ppu, uint y) {
       } while (dst++, ++i < right);
     }
   } while (cw_clip_math >>= 1, ++windex < cwin.nr);
+
+  if (g_ppu_layer_out)
+    PpuWriteLayerLine(ppu, y, true);
 
   // Clear out stuff on the sides.
   if (ppu->extraLeftRight - ppu->extraLeftCur != 0)

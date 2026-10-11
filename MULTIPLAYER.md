@@ -113,6 +113,11 @@ addresses. `src/mp.c` gives each player a private copy of those RAM ranges
 - Extra Links are drawn into private sprite lists with their own copies of the
   pose-dependent Link tiles; the PPU (`snes/ppu.c`) draws them on top of the
   regular OAM and recolors palette 7 per player.
+- The optional 2D-HD look (`src/hd2d.c`, `Hd2d` in `zelda3.ini`) is a
+  display-only post pass. `Hd2d_DrawFrame` sets `g_ppu_layer_out`, so the PPU
+  also writes the layer of every 1x pixel (BG1-4, sprites, backdrop); the pass
+  then blurs and grades the frame, leaving the HUD (BG3) untouched and sprites
+  sharp. It never touches game state, so it is safe in netplay.
 
 ### World instances (free roaming)
 

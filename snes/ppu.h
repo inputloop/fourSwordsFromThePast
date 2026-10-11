@@ -157,6 +157,11 @@ void ppu_free(Ppu* ppu);
 void ppu_reset(Ppu* ppu);
 void ppu_handleVblank(Ppu* ppu);
 void ppu_runLine(Ppu* ppu, int line);
+// When set, each drawn line also writes which layer every pixel came from
+// (0-3 background layers, 4 or 6 sprites, 5 backdrop, 0xff unknown), one
+// byte per pixel, g_ppu_layer_pitch bytes per line. Used for display effects.
+extern uint8_t *g_ppu_layer_out;
+extern int g_ppu_layer_pitch;
 uint8_t ppu_read(Ppu* ppu, uint8_t adr);
 void ppu_write(Ppu* ppu, uint8_t adr, uint8_t val);
 void ppu_saveload(Ppu *ppu, SaveLoadFunc *func, void *ctx);

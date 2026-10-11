@@ -375,6 +375,20 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.linear_filtering);
     } else if (StringEqualsNoCase(key, "NoSpriteLimits")) {
       return ParseBool(value, &g_config.no_sprite_limits);
+    } else if (StringEqualsNoCase(key, "Hd2d")) {
+      return ParseBool(value, &g_config.hd2d);
+    } else if (StringEqualsNoCase(key, "Hd2dDepthOfField")) {
+      g_config.hd2d_depth_of_field = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
+      return true;
+    } else if (StringEqualsNoCase(key, "Hd2dBloom")) {
+      g_config.hd2d_bloom = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
+      return true;
+    } else if (StringEqualsNoCase(key, "Hd2dVignette")) {
+      g_config.hd2d_vignette = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
+      return true;
+    } else if (StringEqualsNoCase(key, "Hd2dGrade")) {
+      g_config.hd2d_grade = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
+      return true;
     } else if (StringEqualsNoCase(key, "LinkGraphics")) {
       g_config.link_graphics = value;
       return true;
@@ -577,6 +591,10 @@ void ParseConfigFile(const char *filename) {
   g_config.mp_input_delay = 2;
   g_config.four_swords_story = true;
   g_config.four_swords_title = true;
+  g_config.hd2d_depth_of_field = 60;
+  g_config.hd2d_bloom = 40;
+  g_config.hd2d_vignette = 45;
+  g_config.hd2d_grade = 50;
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)

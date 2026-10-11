@@ -94,6 +94,18 @@ randomizer for save files created from then on (or set `Randomizer` in the
 - `src/randomizer.c` has the location logic. `./zelda3 --mptest` with
   `randocheck <first seed> <count> [verbose]` checks seeds and prints spoilers.
 
+## 2D-HD look (beta)
+
+*Pause menu > Video > 2D-HD look* (or `Hd2d = 1` in `zelda3.ini`) puts a
+lens-and-light pass over the pixel art, in the style of Octopath Traveler:
+the top and bottom of the screen go softly out of focus like a diorama
+(tilt-shift), bright parts glow, colors get a warmer grade, and the corners
+darken. Links, enemies and the HUD stay sharp, because the PPU reports which
+layer every pixel came from. `Hd2dDepthOfField`, `Hd2dBloom`, `Hd2dVignette`
+and `Hd2dGrade` (0-100) set the strength of each part. It only changes the
+picture, so it is safe in netplay and each player can choose. The code is in
+`src/hd2d.c`; this is the groundwork for a fuller 2D-HD mode.
+
 ## Quick start (Linux / macOS)
 
 ```sh
@@ -124,7 +136,7 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 - Keyboard: arrows, X = A, Z = B, S = X, A = Y, Enter = Start, Right Shift = Select.
 - `Esc` (or the controller's Guide button, or Back+Start) opens the menu:
   Multiplayer, Video and HD options (widescreen 16:9/16:10/18:9, HD world map,
-  smooth scaling, no sprite flicker, ...) and Gameplay options.
+  smooth scaling, no sprite flicker, 2D-HD look, ...) and Gameplay options.
 - Extra controllers press START to drop in as P2-P4.
 
 ## Where to mod

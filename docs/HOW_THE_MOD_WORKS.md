@@ -272,7 +272,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 | Menu screen | What it does |
 | --- | --- |
 | Multiplayer | Host a game, join by address, find LAN games, add or remove local players, friendly fire |
-| Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen |
+| Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen, the 2D-HD look |
 | Gameplay | Randomizer, the Four Swords story and title, plus the original project's extras (switch items with L/R, bug fixes and more) |
 | Controls | Set up each of the four players |
 | Controls help | A short list of the default keys |
@@ -286,6 +286,8 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 **Couch co-op.** The keyboard and the first controller are Player 1. Any other controller joins the game by pressing Start.
 
 **Widescreen.** The game draws extra columns of the world to the left and right, so it fills a wide monitor instead of showing black bars.
+
+**The 2D-HD look (beta).** An optional picture filter in the style of Octopath Traveler, in `src/hd2d.c`. After the game draws a frame, the filter blurs the top and bottom of the screen a little (so the world looks like a tiny model seen through a camera), makes the brightest parts glow, warms up the colors and darkens the corners. To keep Link, the enemies and the hearts and item box crisp, the drawing code (`snes/ppu.c`) also writes down, for every pixel, which layer it came from: background, sprite or HUD. The filter skips the HUD completely and never blurs sprites. It only changes what you see, never the game itself, so online players can each turn it on or off. The four strengths are set in `zelda3.ini`.
 
 **Settings files.** `zelda3.ini` holds all default settings with explanations. Changes made in the menu are saved to `zelda3.coop.ini`, which overrides the defaults. They are saved automatically when the menu closes, and right away when you host or join a game, so the address you last joined, UPnP, the input delay and the other network settings are remembered.
 

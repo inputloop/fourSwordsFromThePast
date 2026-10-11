@@ -241,6 +241,7 @@
     <ClCompile Include="src\instance.c" />
     <ClCompile Include="src\randomizer.c" />
     <ClCompile Include="src\story.c" />
+    <ClCompile Include="src\hd2d.c" />
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\session.c" />
