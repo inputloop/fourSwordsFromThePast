@@ -1,0 +1,12 @@
+# Free roaming stress test: four players walk the same way at the same time,
+# so they reach exits, doors and screen edges together. Fails if a standing
+# Link jumps, runs off on its own, leaves the area or room its world has
+# loaded, or the camera loses the leader.
+load 3
+poke f35c 6
+run 30
+join 2
+join 3
+join 4
+wander 15000 2 together
+status

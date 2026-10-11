@@ -586,7 +586,10 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     return;
 
   uint32 key = Mp_AreaKey();
+  if (g_mp.regroup_grace)
+    g_mp.regroup_grace--;
   if (key != g_mp.area_key || g_mp.after_death) {
+    g_mp.regroup_grace = 30;
     extern bool g_inst_trace;
     if (g_inst_trace)
       printf("  regroup: area %x -> %x after_death=%d leader=P%d\n", g_mp.area_key, key, g_mp.after_death, g_mp.leader + 1);
@@ -629,8 +632,10 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     if (main_module_index == m && submodule_index == s) {
       if (!g_mp.independent) {
         Mp_LimitMovement(old_x, old_y, lx, ly);
-      } else if (g_mp.split_request < 0) {
+      } else if (g_mp.split_request < 0 && !g_mp.regroup_grace) {
         // Heading out of view: this Link gets its own world and camera.
+        // (Not right after a regroup: Links put next to the leader at, say, an
+        // entrance look out of view until the camera has caught up.)
         int sx = (int16)(link_x_coord - BG2HOFS_copy2), sy = (int16)(link_y_coord - BG2VOFS_copy2);
         if (sx < 8 || sx > 256 - 24 || sy < 8 || sy > 224 - 40) {
           g_mp.split_request = p;

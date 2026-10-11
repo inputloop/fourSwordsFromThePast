@@ -13,7 +13,7 @@
 #include "story.h"
 
 enum {
-  kProtoVersion = 7,
+  kProtoVersion = 8,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -27,6 +27,8 @@ enum {
   kInputsPerPacket = 8,  // each input is sent this many times, against packet loss
   kSchedSize = 64,       // host: client inputs stamped for upcoming frames
   kMarginWindow = 20,    // host: report the worst margin of this many packets
+  kMaxWait = 30,         // host: frames to wait for a client's input before using a guess
+  kStallMs = 500,        // host: a client this quiet isn't waited for
 };
 
 enum {
@@ -97,7 +99,7 @@ static struct {
   NetSocket *lan_sock;
   char name[24];
   uint32 frame;  // number of frames simulated (clients: including predicted ones)
-  uint32 conf;   // clients: frames up to this one are confirmed by the host
+  uint32 conf;   // frames up to this one are final (host: everyone's input is known)
   MpFrameInput ring[kRingSize];
   uint32 ring_frame[kRingSize];
   bool ff;
@@ -129,6 +131,13 @@ static struct {
   int margin;                       // host's latest report of how early our inputs arrive
   bool margin_known;
   int lead_cooldown;
+  // host prediction: frame f as currently known, which slots' inputs are real
+  // (not guessed) and who owned each slot when the frame was built
+  MpFrameInput pend[kRbSize];
+  uint8 pend_known[kRbSize];
+  uint8 pend_owner[kRbSize][kMpMaxPlayers], pend_local[kRbSize][kMpMaxPlayers];
+  bool host_rollback_pending;
+  uint32 host_rollback;             // earliest frame whose input changed
   SessionLanGame lan[8];
   int nlan;
 } g_s;
@@ -281,9 +290,18 @@ static void QueueJoinLeave(MpFrameInput *fi, uint8 owner, uint8 *join_mask, uint
   }
 }
 
-// Builds the next frame on the host (or offline).
-static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 features) {
+static HostClient *FindClientById(uint8 id) {
+  for (int c = 0; c < kSessionMaxClients; c++)
+    if (g_s.clients[c].used && g_s.clients[c].id == id)
+      return &g_s.clients[c];
+  return NULL;
+}
+
+// Builds the next frame on the host (or offline). *known gets the slots whose
+// buttons are real; a client's buttons that haven't arrived yet are guessed.
+static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 features, uint8 *known) {
   memset(fi, 0, sizeof(*fi));
+  *known = 0;
   memcpy(g_s.host_in[(g_s.frame + 1) & 15], local_inputs, sizeof(g_s.host_in[0]));
   fi->features = features;
   fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.story ? 4 : 0) | (g_s.rando ? 8 : 0);
@@ -303,21 +321,17 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
       fi->inputs[p] = local_inputs[local];
       if (g_s.st.mode == kSessionHost)
         fi->inputs[p] = g_s.host_in[(g_s.frame + 1 - g_s.input_delay) & 15][local];
+      *known |= 1 << p;
     } else {
+      // The buttons the client meant for this frame, or else a guess: it keeps
+      // holding what it held (corrected by a rollback when they arrive).
       uint32 f = g_s.frame + 1;
-      for (int c = 0; c < kSessionMaxClients; c++) {
-        HostClient *hc = &g_s.clients[c];
-        if (!hc->used || hc->id != owner)
-          continue;
-        // The input the client meant for this frame, or else its newest one
-        // from before this frame (it's late: that's what it predicted too).
-        fi->inputs[p] = hc->inputs[local];
-        for (uint32 k = 0; k < kInputsPerPacket * 2; k++) {
-          if (hc->sched_frame[(f - k) % kSchedSize] == f - k) {
-            fi->inputs[p] = hc->sched[(f - k) % kSchedSize][local];
-            break;
-          }
-        }
+      HostClient *hc = FindClientById(owner);
+      if (hc && hc->sched_frame[f % kSchedSize] == f) {
+        fi->inputs[p] = hc->sched[f % kSchedSize][local];
+        *known |= 1 << p;
+      } else {
+        fi->inputs[p] = g_s.pend[(f - 1) % kRbSize].inputs[p];
       }
     }
   }
@@ -371,6 +385,10 @@ void Session_Init(const char *player_name) {
 
 const SessionStatus *Session_GetStatus() {
   return &g_s.st;
+}
+
+void Session_ResetCounters() {
+  g_s.st.resyncs = g_s.st.rollbacks = g_s.st.own_corrections = 0;
 }
 
 bool Session_IsNetplay() {
@@ -441,6 +459,27 @@ static void UpnpDone(bool ok, const char *external_ip, uint16 port) {
     snprintf(g_s.st.public_addr, sizeof(g_s.st.public_addr), "UPnP unavailable - forward UDP %u", port);
 }
 
+static void SaveRollbackState(uint32 f);
+
+// Everything simulated so far becomes final (hosting starts, or the host
+// loaded a save state).
+static void HostResetPrediction() {
+  while ((int32)(g_s.conf - g_s.frame) < 0) {
+    g_s.conf++;
+    g_s.ring[g_s.conf & (kRingSize - 1)] = g_s.pend[g_s.conf % kRbSize];
+    g_s.ring_frame[g_s.conf & (kRingSize - 1)] = g_s.conf;
+  }
+  g_s.conf = g_s.frame;
+  uint32 i = g_s.frame % kRbSize;
+  g_s.pend[i] = g_s.ring[g_s.frame & (kRingSize - 1)];
+  g_s.pend_known[i] = 0xff;
+  memcpy(g_s.pend_owner[(g_s.frame + 1) % kRbSize], g_s.slot_owner, kMpMaxPlayers);
+  memcpy(g_s.pend_local[(g_s.frame + 1) % kRbSize], g_s.slot_local, kMpMaxPlayers);
+  g_s.host_rollback_pending = false;
+  g_s.heard = g_s.frame;
+  SaveRollbackState(g_s.frame);
+}
+
 bool Session_Host(uint16 port, bool use_upnp) {
   if (g_s.st.mode != kSessionOffline)
     Session_Disconnect();
@@ -451,6 +490,7 @@ bool Session_Host(uint16 port, bool use_upnp) {
   }
   g_s.st.mode = kSessionHost;
   g_s.st.my_id = 0;
+  HostResetPrediction();
   uint32 ip = Net_GetLocalIp();
   NetAddr a = { ip, Net_LocalPort(g_s.sock) };
   Net_AddrToString(&a, g_s.st.host_addr, sizeof(g_s.st.host_addr));
@@ -467,12 +507,27 @@ bool Session_Host(uint16 port, bool use_upnp) {
 
 static void HostStartSnapshot(HostClient *hc) {
   ByteArray raw = { 0 }, comp = { 0 };
-  Inst_SaveState(&raw);
+  // The snapshot is of the newest final frame: later frames may still change.
+  const uint8 *owner = g_s.slot_owner, *local = g_s.slot_local;
+  if (g_s.conf != g_s.frame && g_s.rb[g_s.conf % kRbSize]) {
+    static InstSnapshot *live;
+    if (!live)
+      live = Inst_SnapshotNew();
+    Inst_SnapshotSave(live);
+    Inst_SnapshotLoad(g_s.rb[g_s.conf % kRbSize]);
+    Inst_SaveState(&raw);
+    Inst_SnapshotLoad(live);
+    // Who owned the slots right after that frame.
+    owner = g_s.pend_owner[(g_s.conf + 1) % kRbSize];
+    local = g_s.pend_local[(g_s.conf + 1) % kRbSize];
+  } else {
+    Inst_SaveState(&raw);
+  }
   // header: frame, slot owners/locals, then the compressed state
   uint8 hdr[4 + 8];
-  memcpy(hdr, &g_s.frame, 4);
-  memcpy(hdr + 4, g_s.slot_owner, 4);
-  memcpy(hdr + 8, g_s.slot_local, 4);
+  memcpy(hdr, &g_s.conf, 4);
+  memcpy(hdr + 4, owner, 4);
+  memcpy(hdr + 8, local, 4);
   ByteArray_AppendData(&comp, hdr, sizeof(hdr));
   RleCompress(raw.data, raw.size, &comp);
   ByteArray_Destroy(&raw);
@@ -482,7 +537,7 @@ static void HostStartSnapshot(HostClient *hc) {
   hc->snap_have = 0;
   hc->snap_id = ++g_s.next_snap_id;
   hc->loading = true;
-  hc->need_frame = g_s.frame + 1;
+  hc->need_frame = g_s.conf + 1;
 }
 
 static void HostDropClient(HostClient *hc, const char *why) {
@@ -503,6 +558,24 @@ static HostClient *HostFindClient(const NetAddr *a) {
     if (g_s.clients[c].used && Net_AddrEqual(&g_s.clients[c].addr, a))
       return &g_s.clients[c];
   return NULL;
+}
+
+// A client's buttons for a frame the host already ran with a guess. If the
+// guess was wrong, the host rolls back to that frame.
+static void HostLateInput(HostClient *hc, uint32 f, const uint16 *in) {
+  uint32 i = f % kRbSize;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (g_s.pend_owner[i][p] != hc->id || g_s.pend_local[i][p] >= kSessionMaxLocal || (g_s.pend_known[i] >> p & 1))
+      continue;
+    g_s.pend_known[i] |= 1 << p;
+    uint16 v = in[g_s.pend_local[i][p]];
+    if (g_s.pend[i].inputs[p] != v) {
+      g_s.pend[i].inputs[p] = v;
+      if (!g_s.host_rollback_pending || (int32)(f - g_s.host_rollback) < 0)
+        g_s.host_rollback = f;
+      g_s.host_rollback_pending = true;
+    }
+  }
 }
 
 static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
@@ -582,6 +655,8 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
       if ((int32)(f - g_s.frame) > 0 && (int32)(f - g_s.frame) < kSchedSize) {
         memcpy(hc->sched[f % kSchedSize], inputs[k], sizeof(inputs[k]));
         hc->sched_frame[f % kSchedSize] = f;
+      } else if ((int32)(f - g_s.conf) > 0 && (int32)(f - g_s.frame) <= 0) {
+        HostLateInput(hc, f, inputs[k]);
       }
       if (hc->inputs_frame == 0 || (int32)(f - hc->inputs_frame) > 0) {
         memcpy(hc->inputs, inputs[k], sizeof(inputs[k]));
@@ -607,6 +682,9 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
         hc->snap_have = snap_have;
       if (hc->snap_have >= hc->snap_size) {
         hc->loading = false;
+        // Measure how early its buttons arrive afresh, from now on.
+        hc->margin_count = 0;
+        hc->margin_report = -128;
         free(hc->snap);
         hc->snap = NULL;
       }
@@ -614,7 +692,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     if (!hc->loading) {
       hc->need_frame = need;
       // Too far behind to catch up from the frame history.
-      if (resync || g_s.frame - need + 1 >= kRingSize - 64)
+      if (resync || g_s.conf - need + 1 >= kRingSize - 64)
         HostStartSnapshot(hc);
     }
   } else if (type == kPkt_Bye && hc) {
@@ -650,11 +728,11 @@ static void HostSend() {
     }
     // Frames after the snapshot are sent even while loading so they are ready.
     uint32 first = hc->need_frame;
-    if (first == 0 || first > g_s.frame)
+    if (first == 0 || first > g_s.conf)
       continue;
-    if (g_s.frame - first >= kRingSize - 1)
-      first = g_s.frame - (kRingSize - 2);
-    int count = g_s.frame - first + 1;
+    if (g_s.conf - first >= kRingSize - 1)
+      first = g_s.conf - (kRingSize - 2);
+    int count = g_s.conf - first + 1;
     if (count > kMaxFramesPerPacket)
       count = kMaxFramesPerPacket;
     WBegin(&w, kPkt_Frames);
@@ -672,6 +750,7 @@ static void HostSend() {
 void Session_ResyncAll() {
   if (g_s.st.mode != kSessionHost)
     return;
+  HostResetPrediction();
   for (int c = 0; c < kSessionMaxClients; c++)
     if (g_s.clients[c].used)
       HostStartSnapshot(&g_s.clients[c]);
@@ -777,6 +856,32 @@ static int Decay(int v) {
   return v - (d ? d : v > 0 ? 1 : v < 0 ? -1 : 0);
 }
 
+// Positions of all players, to smooth out corrections after a rollback.
+typedef struct PlayerPositions {
+  int world[kMpMaxPlayers];
+  uint16 x[kMpMaxPlayers], y[kMpMaxPlayers];
+} PlayerPositions;
+
+static void GetPlayerPositions(PlayerPositions *pp) {
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    pp->world[p] = Inst_PlayerPos(p, &pp->x[p], &pp->y[p]);
+}
+
+// Other players' Links were shown in the wrong place. Rather than jumping,
+// they slide over to where they really are.
+static void SmoothCorrections(const PlayerPositions *was) {
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    uint16 x, y;
+    if (IsLocalSlot(p) || was->world[p] < 0 || Inst_PlayerPos(p, &x, &y) != was->world[p])
+      continue;
+    int dx = g_mp_draw_offset[p][0] + (int16)(was->x[p] - x);
+    int dy = g_mp_draw_offset[p][1] + (int16)(was->y[p] - y);
+    bool small = abs(dx) < 64 && abs(dy) < 64;  // bigger: a real teleport
+    g_mp_draw_offset[p][0] = small ? dx : 0;
+    g_mp_draw_offset[p][1] = small ? dy : 0;
+  }
+}
+
 // One display frame of a client: take in the host's frames (rolling back if
 // we guessed wrong) and predict ahead so our own Link reacts right away.
 static int ClientTick(const uint16 *local_inputs) {
@@ -789,6 +894,9 @@ static int ClientTick(const uint16 *local_inputs) {
   while (HostFrameAvailable(g_s.conf + 1) && (int32)(g_s.conf + 1 - g_s.frame) <= 0) {
     uint32 f = g_s.conf + 1;
     if (!SameFrameInput(&g_s.ring[f & (kRingSize - 1)], &g_s.rb_in[f % kRbSize])) {
+      for (int p = 0; p < kMpMaxPlayers; p++)
+        if (IsLocalSlot(p) && g_s.ring[f & (kRingSize - 1)].inputs[p] != g_s.rb_in[f % kRbSize].inputs[p])
+          g_s.st.own_corrections++;
       mismatch = f;
       break;
     }
@@ -799,10 +907,8 @@ static int ClientTick(const uint16 *local_inputs) {
     // Go back to the last confirmed frame and simulate again with what the
     // host says really happened, then our guesses up to where we were.
     uint32 end = g_s.frame;
-    int was_w[kMpMaxPlayers];
-    uint16 was_x[kMpMaxPlayers], was_y[kMpMaxPlayers];
-    for (int p = 0; p < kMpMaxPlayers; p++)
-      was_w[p] = Inst_PlayerPos(p, &was_x[p], &was_y[p]);
+    PlayerPositions was;
+    GetPlayerPositions(&was);
     Inst_SnapshotLoad(g_s.rb[g_s.conf % kRbSize]);
     g_s.frame = g_s.conf;
     // Session slots only change in confirmed frames; restore them too.
@@ -819,18 +925,7 @@ static int ClientTick(const uint16 *local_inputs) {
       }
     }
     g_s.st.rollbacks++;
-    // Other players' Links were shown in the wrong place. Rather than jumping,
-    // they slide over to where they really are.
-    for (int p = 0; p < kMpMaxPlayers; p++) {
-      uint16 x, y;
-      if (IsLocalSlot(p) || was_w[p] < 0 || Inst_PlayerPos(p, &x, &y) != was_w[p])
-        continue;
-      int dx = g_mp_draw_offset[p][0] + (int16)(was_x[p] - x);
-      int dy = g_mp_draw_offset[p][1] + (int16)(was_y[p] - y);
-      bool small = abs(dx) < 64 && abs(dy) < 64;  // bigger: a real teleport
-      g_mp_draw_offset[p][0] = small ? dx : 0;
-      g_mp_draw_offset[p][1] = small ? dy : 0;
-    }
+    SmoothCorrections(&was);
   }
   // 2. Behind the host (just connected or stalled): catch up quickly.
   int caught_up = 0;
@@ -879,6 +974,73 @@ static int ClientTick(const uint16 *local_inputs) {
   g_s.st.frames_buffered = behind;
   g_s.st.predicted = g_s.frame - g_s.conf;
   return shown;
+}
+
+// One display frame of the host. The host runs ahead like a client: when a
+// client's buttons arrive after the host has already guessed them, it rolls
+// back and simulates again with the real ones. A frame becomes final, and is
+// sent to the clients, once everyone's buttons for it are known. So nobody's
+// own Link is ever moved by a guess (no rubber banding).
+static int HostTick(const uint16 *local_inputs, uint32 features) {
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    for (int k = 0; k < 2; k++)
+      g_mp_draw_offset[p][k] = Decay(g_mp_draw_offset[p][k]);
+  if (g_s.host_rollback_pending && (int32)(g_s.host_rollback - g_s.conf) > 0 && (int32)(g_s.host_rollback - g_s.frame) <= 0) {
+    PlayerPositions was;
+    GetPlayerPositions(&was);
+    uint32 end = g_s.frame;
+    Inst_SnapshotLoad(g_s.rb[(g_s.host_rollback - 1) % kRbSize]);
+    g_s.frame = g_s.host_rollback - 1;
+    while ((int32)(g_s.frame - end) < 0) {
+      uint32 f = g_s.frame + 1, i = f % kRbSize;
+      // Buttons still unknown: the guess follows the frame before.
+      for (int p = 0; p < kMpMaxPlayers; p++)
+        if (!(g_s.pend_known[i] >> p & 1))
+          g_s.pend[i].inputs[p] = g_s.pend[(f - 1) % kRbSize].inputs[p];
+      ClientRunFrame(&g_s.pend[i]);
+    }
+    g_s.st.rollbacks++;
+    SmoothCorrections(&was);
+  }
+  g_s.host_rollback_pending = false;
+
+  // The next frame.
+  uint32 f = g_s.frame + 1, i = f % kRbSize;
+  memcpy(g_s.pend_owner[i], g_s.slot_owner, kMpMaxPlayers);
+  memcpy(g_s.pend_local[i], g_s.slot_local, kMpMaxPlayers);
+  BuildFrame(&g_s.pend[i], local_inputs, features, &g_s.pend_known[i]);
+  // Players of dropped clients leave.
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    if (g_s.slot_owner[p] == 0xfe && g_s.pend[i].nevents < kSessionMaxEvents)
+      AddEvent(&g_s.pend[i], kSessEv_Leave, p, 0xff, 0xff);
+  ClientRunFrame(&g_s.pend[i]);
+
+  // Frames whose buttons are all known become final. A client that is still
+  // loading, or has gone quiet, isn't waited for (nor for longer than kMaxWait).
+  uint32 now = SDL_GetTicks();
+  while ((int32)(g_s.conf - g_s.frame) < 0) {
+    uint32 cf = g_s.conf + 1, ci = cf % kRbSize;
+    bool ready = true;
+    for (int p = 0; p < kMpMaxPlayers; p++) {
+      uint8 owner = g_s.pend_owner[ci][p];
+      HostClient *hc = owner && owner < 0xfe ? FindClientById(owner) : NULL;
+      if (hc && !hc->loading && now - hc->last_recv < kStallMs && !(g_s.pend_known[ci] >> p & 1))
+        ready = false;
+    }
+    if (!ready && g_s.frame - cf < kMaxWait)
+      break;
+    MpFrameInput fi = g_s.pend[ci];
+    if (cf % kHashInterval == 0) {
+      fi.flags |= 0x80;
+      fi.hash = g_s.rb_hash[ci];
+    }
+    g_s.ring[cf & (kRingSize - 1)] = fi;
+    g_s.ring_frame[cf & (kRingSize - 1)] = cf;
+    g_s.conf = cf;
+  }
+  g_s.st.predicted = g_s.frame - g_s.conf;
+  HostSend();
+  return 1;
 }
 
 static void ClientFinishSnapshot() {
@@ -1167,23 +1329,16 @@ int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
   PollSocket(g_s.sock);
   PollSocket(g_s.lan_sock);
 
-  if (g_s.st.mode != kSessionClient) {
+  if (g_s.st.mode == kSessionHost)
+    return HostTick(local_inputs, wanted_features);
+  if (g_s.st.mode == kSessionOffline) {
     MpFrameInput fi;
-    BuildFrame(&fi, local_inputs, wanted_features);
-    // Players of dropped clients leave.
-    for (int p = 0; p < kMpMaxPlayers; p++)
-      if (g_s.slot_owner[p] == 0xfe && fi.nevents < kSessionMaxEvents)
-        AddEvent(&fi, kSessEv_Leave, p, 0xff, 0xff);
-    bool host = g_s.st.mode == kSessionHost;
-    RunFrame(&fi, host);
-    if (host && g_s.frame % kHashInterval == 0) {
-      fi.flags |= 0x80;
-      fi.hash = Inst_HashState();
-    }
+    uint8 known;
+    BuildFrame(&fi, local_inputs, wanted_features, &known);
+    RunFrame(&fi, false);
     g_s.ring[g_s.frame & (kRingSize - 1)] = fi;
     g_s.ring_frame[g_s.frame & (kRingSize - 1)] = g_s.frame;
-    if (host)
-      HostSend();
+    g_s.conf = g_s.frame;
     return 1;
   }
 

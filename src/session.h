@@ -56,7 +56,8 @@ typedef struct SessionStatus {
   int snapshot_progress;  // percent
   int resyncs;
   int predicted;  // clients: frames shown ahead of what the host confirmed
-  int rollbacks;  // clients: how often a guess about other players was wrong
+  int rollbacks;  // how often a guess about other players was wrong
+  int own_corrections;  // clients: frames where the host used other buttons for our own Link
   char host_addr[48];
   char public_addr[48];
   char message[96];
@@ -94,6 +95,7 @@ void Session_RefreshLan();
 int Session_GetLanGames(SessionLanGame *out, int max);
 
 const SessionStatus *Session_GetStatus();
+void Session_ResetCounters();
 bool Session_IsNetplay();
 // Whether local save states / turbo may be used.
 bool Session_AllowsLocalStateChanges();

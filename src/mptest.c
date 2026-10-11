@@ -39,6 +39,8 @@
 //   story <0|1>         the Four Swords opening story
 //   title <0|1>         "Four Swords of the Past" on the title screen
 //   inputdelay <frames> online input delay
+//   resetcounters       zero the netplay statistics (resyncs, rollbacks, own corrections)
+//   expect_own_corrections <n>  fail if our own Link was corrected more than n times
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
 //   localjoin <i> / localleave <i>
 //   corrupt             flip a byte of RAM (to test desync recovery)
@@ -247,12 +249,28 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // wander <frames> <seed>: every player walks around randomly and swings the sword.
       uint32 seed = atoi(arg2) * 2654435761u + 1;
       bool checks = arg3[0] != 0;  // wander <frames> <seed> check: report jumps / invisible Links
-      int jumps = 0, invisible = 0;
+      // wander <frames> <seed> together: everybody walks the same way (and sometimes
+      // stands still), so groups reach screen edges at the same time.
+      bool together = !strcmp(arg3, "together");
+      int jumps = 0, invisible = 0, runaways = 0;
+      int idle_moving[kMpMaxPlayers] = { 0 };
+      const char *trace_env = getenv("ZELDA3_TRACE_FRAMES");  // "from,to": trace those frames
+      int trace_from = -1, trace_to = -1;
+      if (trace_env)
+        sscanf(trace_env, "%d,%d", &trace_from, &trace_to);
       for (int n = atoi(arg1); n > 0; n--, frame++) {
+        if (trace_env) {
+          extern bool g_inst_trace;
+          g_inst_trace = frame >= trace_from && frame <= trace_to;
+          if (frame >= trace_from && frame <= trace_to && (frame - trace_from) % 5 == 0)
+            PrintStatus(frame);
+        }
         if (n % 24 == 0) {
           for (int p = 0; p < kMpMaxPlayers; p++) {
             seed = seed * 1103515245 + 12345;
             held[p] = ParseKeys((const char *[]){ "U", "D", "L", "R", "UL", "UR", "DL", "DR", "B" }[(seed >> 16) % 9]);
+            if (together)
+              held[p] = (seed >> 16) % 4 == 0 ? 0 : held[0];
           }
         }
         // Remember where everybody was, to report sudden jumps and missing sprites.
@@ -267,6 +285,72 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           pdown[p] = g_mp.p[p].downed;
         }
         Inst_RunFrame(held);
+        // A world whose camera lost its leader.
+        static int lost[kInstMax];
+        for (int i = 0; i < kInstMax && (checks || together); i++) {
+          if (!Inst_IsActive(i)) {
+            lost[i] = 0;
+            continue;
+          }
+          int r0 = Inst_Current();
+          Inst_Switch(i);
+          int sx = (int16)(Mp_PlayerX(g_mp.leader) - BG2HOFS_copy2), sy = (int16)(Mp_PlayerY(g_mp.leader) - BG2VOFS_copy2);
+          bool st = (main_module_index == 7 || main_module_index == 9) && submodule_index == 0;
+          st = st && *Mp_PlayerRam(g_mp.leader, 0x5D) == 0 && !g_mp.p[g_mp.leader].downed;  // standing on the ground
+          lost[i] = st && (sx < -16 || sx > 272 || sy < -16 || sy > 240) ? lost[i] + 1 : 0;
+          if (lost[i] == 30) {
+            printf("[frame %d] CAMERA LOST world %d leader P%d at (%d,%d) screen (%d,%d)\n", frame, i, g_mp.leader + 1,
+                   Mp_PlayerX(g_mp.leader), Mp_PlayerY(g_mp.leader), sx, sy);
+            runaways++;
+          }
+          Inst_Switch(r0);
+        }
+        // A Link outside the overworld area its world has loaded.
+        for (int p = 0; p < kMpMaxPlayers && (checks || together); p++) {
+          if (Inst_OfPlayer(p) < 0)
+            continue;
+          SwitchToPlayer(p);
+          if (main_module_index != 9 || submodule_index != 0 || g_mp.p[p].downed)
+            continue;
+          int a = BYTE(overworld_area_index) & 0x3f, size = kOverworldMapIsSmall[a] ? 512 : 1024;
+          int dx = Mp_PlayerX(p) - kOverworld_OffsetBaseX[a], dy = Mp_PlayerY(p) - kOverworld_OffsetBaseY[a];
+          if (dx < -8 || dx > size + 8 || dy < -16 || dy > size + 8) {
+            printf("[frame %d] OUT OF AREA P%d at (%d,%d) area %02x world %d leader P%d\n", frame, p + 1,
+                   Mp_PlayerX(p), Mp_PlayerY(p), a, Inst_Current(), g_mp.leader + 1);
+            runaways++;
+          }
+        }
+        // A Link outside the dungeon room its world has loaded.
+        for (int p = 0; p < kMpMaxPlayers && (checks || together); p++) {
+          if (Inst_OfPlayer(p) < 0)
+            continue;
+          SwitchToPlayer(p);
+          if (main_module_index != 7 || submodule_index != 0 || g_mp.p[p].downed)
+            continue;
+          int rx = (dungeon_room_index & 0xf) * 512, ry = (dungeon_room_index >> 4 & 0x3f) * 512;
+          int dx = (Mp_PlayerX(p) & 0x1fff) - rx, dy = (Mp_PlayerY(p) & 0x1fff) - ry;
+          if (dx < -16 || dx > 512 + 16 || dy < -16 || dy > 512 + 16) {
+            printf("[frame %d] OUT OF ROOM P%d at (%d,%d) room %x world %d leader P%d\n", frame, p + 1,
+                   Mp_PlayerX(p), Mp_PlayerY(p), dungeon_room_index, Inst_Current(), g_mp.leader + 1);
+            runaways++;
+          }
+        }
+        // A Link that keeps moving although its player holds nothing ran away.
+        for (int p = 0; p < kMpMaxPlayers && (checks || together); p++) {
+          if (pw[p] < 0 || Inst_OfPlayer(p) != pw[p])
+            continue;
+          SwitchToPlayer(p);
+          bool moved = Mp_PlayerX(p) != px[p] || Mp_PlayerY(p) != py[p];
+          bool stable = (main_module_index == 7 || main_module_index == 9) && submodule_index == 0;
+          // (Swimming Links drift on their own.)
+          stable = stable && *Mp_PlayerRam(p, 0x5D) == 0;
+          idle_moving[p] = held[p] == 0 && moved && stable && !g_mp.p[p].downed ? idle_moving[p] + 1 : 0;
+          if (idle_moving[p] == 40) {
+            printf("[frame %d] RUNAWAY P%d moving with no input at (%d,%d) world %d leader=%d state=%d\n", frame, p + 1,
+                   Mp_PlayerX(p), Mp_PlayerY(p), Inst_Current(), g_mp.leader, *Mp_PlayerRam(p, 0x5D));
+            runaways++;
+          }
+        }
         for (int p = 0; p < kMpMaxPlayers && checks; p++) {
           if (Inst_IsJoined(p) && Inst_ExitBlockedTimer(p) == 90) {
             printf("[frame %d] P%d was told everyone has to head that way\n", frame, p + 1);
@@ -277,7 +361,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           SwitchToPlayer(p);
           int d = abs(Mp_PlayerX(p) - px[p]) + abs(Mp_PlayerY(p) - py[p]);
           bool stable = pm[p] == (7 << 8) || pm[p] == (9 << 8);
-          if (d > 12 && stable && main_module_index == pm[p] >> 8 && submodule_index == 0 && !g_mp.p[p].downed && *Mp_PlayerRam(p, 0x5D) == 0) {
+          if (d > 12 && stable && !pdown[p] && main_module_index == pm[p] >> 8 && submodule_index == 0 && !g_mp.p[p].downed && *Mp_PlayerRam(p, 0x5D) == 0) {
             printf("[frame %d] JUMP P%d by %d (%d,%d)->(%d,%d) world %d->%d leader=%d downed=%d module=%d state=%d recoil=%d\n", frame, p + 1, d,
                    px[p], py[p], Mp_PlayerX(p), Mp_PlayerY(p), pw[p], Inst_Current(), g_mp.leader, g_mp.p[p].downed, main_module_index, *Mp_PlayerRam(p, 0x5D), *Mp_PlayerRam(p, 0x46));
             jumps++;
@@ -304,9 +388,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         }
       }
       memset(held, 0, sizeof(held));
-      if (checks) {
-        printf("wander: %d jumps, %d invisible\n", jumps, invisible);
-        if (jumps || invisible)
+      if (checks || together) {
+        printf("wander: %d jumps, %d invisible, %d runaways\n", jumps, invisible, runaways);
+        if (jumps || invisible || runaways)
           failures++;
       }
     } else if (!strcmp(cmd, "splitshot")) {
@@ -374,6 +458,13 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Session_SetStory(atoi(arg1));
     } else if (!strcmp(cmd, "title")) {
       g_config.four_swords_title = atoi(arg1);
+    } else if (!strcmp(cmd, "resetcounters")) {
+      Session_ResetCounters();
+    } else if (!strcmp(cmd, "expect_own_corrections")) {
+      if (Session_GetStatus()->own_corrections > atoi(arg1)) {
+        printf("FAIL: %d own corrections (rubber banding), at most %s expected\n", Session_GetStatus()->own_corrections, arg1);
+        failures++;
+      }
     } else if (!strcmp(cmd, "inputdelay")) {
       Session_SetInputDelay(atoi(arg1));
     } else if (!strcmp(cmd, "tickwander")) {
@@ -424,7 +515,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         SDL_Delay(16);
       }
       memset(held, 0, sizeof(held));
-      printf("tickwander: %d jumps of local players, %d of other players, %d rollbacks\n", jumps, remote_jumps, Session_GetStatus()->rollbacks);
+      printf("tickwander: %d jumps of local players, %d of other players, %d rollbacks, %d own corrections\n", jumps, remote_jumps,
+             Session_GetStatus()->rollbacks, Session_GetStatus()->own_corrections);
       if (jumps) {
         printf("FAIL: %d jumps\n", jumps);
         failures++;

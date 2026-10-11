@@ -3,7 +3,12 @@ inputdelay 2
 connect 127.0.0.1:47475
 waitplay
 expect_players 2
-tickwander 1400 9
+# Let the connection settle (the first seconds find the right timing).
+tick 180
+resetcounters
+tickwander 1300 9
 status
 expect_resyncs 0
+# Our own Link is never moved by a guess (no rubber banding).
+expect_own_corrections 0
 disconnect
