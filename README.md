@@ -1,5 +1,7 @@
 # fourSwordsFromThePast
 
+<p align="center"><img src="docs/screenshots/title.png" width="512" alt="The title screen: Four Swords of the Past above The Legend of Zelda: A Link to the Past"></p>
+
 *The Legend of Zelda: A Link to the Past* as a native PC game with **four player
 drop-in/drop-out co-op** (same PC, LAN and internet), each Link in its own
 color, free roaming (split screen when couch players go separate ways),
@@ -9,6 +11,18 @@ native widescreen and an in-game options menu.
 Built on the [snesrev/zelda3](https://github.com/snesrev/zelda3) C
 reimplementation (vendored from commit `45a149d8`, MIT licensed). You need your
 own US ROM to extract the game's assets.
+
+<p align="center">
+  <img src="docs/screenshots/four-links.png" width="49%" alt="Four Links in green, red, blue and purple on top of the Pyramid at sunset, each with their own hearts in a screen corner">
+  <img src="docs/screenshots/battle.png" width="49%" alt="Four Links fighting soldiers in front of the Eastern Palace">
+</p>
+<p align="center">
+  <img src="docs/screenshots/split-screen.png" width="66%" alt="Split screen: one player inside the Eastern Palace while another explores outside">
+  <img src="docs/screenshots/opening-story.png" width="32%" alt="The retold opening legend: the Four Sword split a knight into four heroes in green, red, blue and purple">
+</p>
+
+*Four Links in widescreen on the Pyramid of Power and at the Eastern Palace;
+free roaming with split screen; the retold opening legend.*
 
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 See **[docs/HOW_THE_MOD_WORKS.md](docs/HOW_THE_MOD_WORKS.md)** for a plain-language guide to how the whole mod works.

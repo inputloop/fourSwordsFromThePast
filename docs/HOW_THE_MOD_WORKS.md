@@ -224,6 +224,8 @@ The mod gives the game a new opening that fits its four heroes. Both parts can b
 
 **The title.** "FOUR SWORDS" in big gold letters, with "OF THE PAST" below it, sits in the black band above the title picture. It is drawn on top of the finished picture by the same code that draws the menus (`src/ui.c`), so the original title graphics are untouched. It fades in and out with the screen.
 
+<p align="center"><img src="screenshots/title.png" width="384" alt="The title screen with Four Swords of the Past"> <img src="screenshots/opening-story.png" width="384" alt="The retold legend"></p>
+
 **The story.** After the title screen waits a while, the game plays its legend: pictures of the Golden Land, then Agahnim in the throne room, then Zelda in prison. The mod tells a new story over the same pictures:
 
 1. Long ago, seven wise men hid the Golden Power in a secret land. Beside it they laid the Four Sword, a blade that could split one hero into four.
