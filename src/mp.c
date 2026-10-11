@@ -299,20 +299,33 @@ static uint32 Mp_AreaKey() {
 // the game only updates it as the leader walks from one half of the room to
 // the other. After the leader changes, it still says where the old leader
 // was: walking out of the room's exit then looks like walking into the other
-// half, and the game scrolls instead of leaving the room. So it is put back
-// in line with wherever the leader stands.
+// half, and the game scrolls instead of leaving the room. The quadrant isn't
+// simply the half Link stands in (in some rooms, like Link's house, it isn't),
+// but how the two differ stays the same within a room. So that difference is
+// remembered per room, and the quadrant is kept in line with the leader's
+// half through it. (Not while the leader stands in a doorway: there the
+// game's door code moves the quadrant on its own time.)
 static void Mp_SyncQuadrantToLeader() {
-  if (!g_mp_coop || !player_is_indoors || main_module_index != 7 || submodule_index != 0)
+  if (!g_mp_coop || !player_is_indoors || main_module_index != 7 || submodule_index != 0 ||
+      is_standing_in_doorway)
     return;
-  uint8 qx = (link_x_coord >> 8) & 1, qy = ((link_y_coord >> 8) & 1) << 1;
-  if (link_quadrant_x != qx) {
-    if (qx)
+  uint8 page = ((link_x_coord >> 8) & 1) | ((link_y_coord >> 8) & 1) << 1;
+  uint8 quad = link_quadrant_x | link_quadrant_y;
+  if (!g_mp.quad_valid || g_mp.quad_room != dungeon_room_index) {
+    g_mp.quad_valid = 1;
+    g_mp.quad_room = dungeon_room_index;
+    g_mp.quad_offset = page ^ quad;
+    return;
+  }
+  uint8 want = page ^ g_mp.quad_offset, d = want ^ quad;
+  if (d & 1) {
+    if (want & 1)
       AdjustQuadrantAndCamera_right();
     else
       AdjustQuadrantAndCamera_left();
   }
-  if (link_quadrant_y != qy) {
-    if (qy)
+  if (d & 2) {
+    if (want & 2)
       AdjustQuadrantAndCamera_down();
     else
       AdjustQuadrantAndCamera_up();

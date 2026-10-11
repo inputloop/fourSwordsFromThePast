@@ -61,7 +61,7 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Who is the leader?** Whoever does something that changes the game's mode becomes the leader: opening the menu, talking to someone, opening a chest or going through a door. A downed leader hands the job to a standing player.
 
-**Keeping the room in step with the leader.** In a dungeon, the game remembers which half of a big room Link is in, and only updates it as Link walks across the middle. That memory belongs to the whole world, not to one player. So when the leader changes, the mod resets it to wherever the new leader stands. Without that, a player walking out of a room's exit right after becoming leader could be scrolled into the "other half" of the room instead, and end up back where they started.
+**Keeping the room in step with the leader.** In a dungeon, the game remembers which half of a big room Link is in, and only updates it as Link walks across the middle. That memory belongs to the whole world, not to one player. It isn't simply "the half Link stands in" (in Link's house it says the other half), but in each room the two differ in the same way. So the mod remembers that difference for the room, and after the leader changes it applies it to the new leader's position. (It skips moments when the leader stands in a doorway, where the game's door code updates the half on its own.) Without that, a player walking out of a room's exit right after becoming leader could be scrolled into the "other half" of the room instead, and end up back where they started.
 
 **Colors.** The tunic color lives in one small palette (16 colors). Before drawing, the mod copies that palette and recolors the tunic for each player: green, red, blue and purple. Because of this, armor upgrades still protect you but no longer change your tunic color.
 
@@ -95,7 +95,7 @@ flowchart LR
 
 **Merging.** When two worlds are in the same room or overworld screen, and their cameras are within 48 pixels of each other, the players of one world move into the other. The extra world is thrown away. The camera rule keeps anyone's view from jumping.
 
-**Seeing each other before merging.** Two worlds in the same room can have cameras far apart, for example while one player walks back toward the other. So nobody is invisible until the worlds merge, each world remembers where its Links were drawn. When a screen is drawn, the Links of every other world in the same room or area are drawn on it too, shifted by the difference between the two cameras. Drawing them changes nothing in the game, so it is safe online.
+**Seeing each other before merging.** Two worlds in the same room can have cameras far apart, for example while one player walks back toward the other. So nobody is invisible until the worlds merge, each world remembers where its Links were drawn. When a screen is drawn, the Links of every other world in the same room or area are drawn on it too, shifted by the difference between the two cameras. Drawing them changes nothing in the game, so it is safe online. A player who opened the item menu or a map has a world of their own that shows the menu, so they are drawn as they last looked, standing where they paused.
 
 **Shared progress.** Some things must stay the same in every world. The save-file part of memory (addresses 7EF000 to 7EF4FF) is compared every frame, and any change is copied into all worlds:
 
@@ -278,7 +278,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 34 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 35 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

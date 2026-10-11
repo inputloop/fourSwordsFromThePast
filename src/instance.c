@@ -29,6 +29,19 @@ typedef struct Instance {
 } Instance;
 
 static Instance g_inst[kInstMax];
+
+// How each player last looked in normal gameplay (display only), so a player
+// who opened the item menu or a map in a world of their own is still drawn
+// for the others, standing where they paused.
+typedef struct LastSeen {
+  bool valid;
+  uint32 key;
+  uint16 cam_x, cam_y;
+  bool downed;
+  MpRenderPlayer rp;  // with the Link tiles in rp.tiles
+} LastSeen;
+static LastSeen g_last_seen[kMpMaxPlayers];
+static void RecordLastSeen();
 static int g_cur;
 static bool g_ff;
 static bool g_independent = true;
@@ -584,6 +597,7 @@ bool Inst_RunFrame(const uint16 *inputs) {
     }
   }
   Inst_Sync();
+  RecordLastSeen();
   // Hear (and by default show) the world of the local player.
   int ai = Inst_OfPlayer(g_audio_player);
   for (int p = 0; p < kMpMaxPlayers && ai < 0; p++)
@@ -862,6 +876,42 @@ static bool WorldView(int i, uint32 *key, uint16 *cam_x, uint16 *cam_y) {
   return true;
 }
 
+static bool InMenu(int i) {
+  return g_inst[i].ram[0x10] == 14;  // main_module_index: item menu, maps
+}
+
+// Remembers how every player in normal gameplay looks right now.
+static void RecordLastSeen() {
+  Unbind();
+  for (int i = 0; i < kInstMax; i++) {
+    uint32 key;
+    uint16 x, y;
+    if (!g_inst[i].active)
+      continue;
+    const MpState *m = &g_inst[i].mp;
+    bool live = WorldView(i, &key, &x, &y);
+    for (int p = 0; p < kMpMaxPlayers; p++) {
+      if (!m->p[p].joined)
+        continue;
+      LastSeen *ls = &g_last_seen[p];
+      if (!live) {
+        ls->valid &= InMenu(i);  // keep showing it while in a menu
+        continue;
+      }
+      bool leader = p == m->leader;
+      const MpRenderPlayer *rp = leader ? &g_inst[i].render.self : &g_inst[i].render.p[p];
+      ls->valid = rp->visible && rp->count;
+      if (!ls->valid)
+        continue;
+      ls->key = key, ls->cam_x = x, ls->cam_y = y;
+      ls->downed = m->p[p].downed;
+      ls->rp = *rp;
+      if (leader)
+        memcpy(ls->rp.tiles, &g_inst[i].ppu->vram[0x4000], sizeof(ls->rp.tiles));
+    }
+  }
+}
+
 int Inst_LinksFromOtherWorlds(InstRemoteLink *out, int max) {
   uint32 key0, key;
   uint16 x0, y0, x, y;
@@ -870,24 +920,37 @@ int Inst_LinksFromOtherWorlds(InstRemoteLink *out, int max) {
   if (!WorldView(g_cur, &key0, &x0, &y0))
     return 0;
   for (int i = 0; i < kInstMax; i++) {
-    if (i == g_cur || !g_inst[i].active || !WorldView(i, &key, &x, &y) || key != key0)
+    if (i == g_cur || !g_inst[i].active)
       continue;
     const MpState *m = &g_inst[i].mp;
     const MpRenderState *r = &g_inst[i].render;
+    bool live = WorldView(i, &key, &x, &y);
     for (int p = 0; p < kMpMaxPlayers && n < max; p++) {
       if (!m->p[p].joined)
         continue;
-      bool leader = p == m->leader;
-      const MpRenderPlayer *rp = leader ? &r->self : &r->p[p];
-      if (!rp->visible || !rp->count)
-        continue;
-      out[n].player = p;
-      out[n].downed = m->p[p].downed;
-      out[n].rp = rp;
-      out[n].tiles = leader ? &g_inst[i].ppu->vram[0x4000] : rp->tiles;
-      out[n].dx = (int16)(x - x0);
-      out[n].dy = (int16)(y - y0);
-      n++;
+      const LastSeen *ls = &g_last_seen[p];
+      if (live && key == key0) {
+        bool leader = p == m->leader;
+        const MpRenderPlayer *rp = leader ? &r->self : &r->p[p];
+        if (!rp->visible || !rp->count)
+          continue;
+        out[n].player = p;
+        out[n].downed = m->p[p].downed;
+        out[n].rp = rp;
+        out[n].tiles = leader ? &g_inst[i].ppu->vram[0x4000] : rp->tiles;
+        out[n].dx = (int16)(x - x0);
+        out[n].dy = (int16)(y - y0);
+        n++;
+      } else if (!live && InMenu(i) && ls->valid && ls->key == key0) {
+        // In the item menu or a map: drawn as last seen, where it paused.
+        out[n].player = p;
+        out[n].downed = ls->downed;
+        out[n].rp = &ls->rp;
+        out[n].tiles = ls->rp.tiles;
+        out[n].dx = (int16)(ls->cam_x - x0);
+        out[n].dy = (int16)(ls->cam_y - y0);
+        n++;
+      }
     }
   }
   return n;

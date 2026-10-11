@@ -64,8 +64,8 @@ Players can drop in and drop out at any time.
   - The sound is from the world of the first player on this computer.
 - **The leader.** In a group sharing a screen, whoever opens a menu, talks
   to someone or takes an exit becomes the leader that the camera, rooms and
-  cutscenes follow. (In a dungeon, the room's "which half is Link in" state is
-  reset to the new leader's position, or an exit could turn into a scroll.)
+  cutscenes follow. (In a dungeon, the room's "which half is Link in" state
+  follows the new leader, or an exit could turn into a scroll.)
 - **Downed, not dead.** A Link that runs out of hearts becomes a pale ghost
   that lies where it fell. Someone has to come and stand next to it
   for 1.5 seconds to revive it with half a heart. It is game over only when
@@ -137,7 +137,8 @@ world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
   screen is drawn, `Inst_LinksFromOtherWorlds` lists the Links of every other
   world in the same room or area, and they are drawn as extra sprite sets,
   moved by the difference between the two cameras. So players walking toward
-  each other are visible before their worlds merge.
+  each other are visible before their worlds merge. A player in the item menu
+  or a map is drawn as last seen in gameplay, standing where they paused.
 
 ### Netplay
 

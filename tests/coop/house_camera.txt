@@ -1,0 +1,10 @@
+# Two players walk around Link's house, taking turns leading. The camera stays
+# on the house: it must not scroll into the rooms drawn next to it.
+load 1
+run 400
+join 2
+run 30
+enter 104
+run 300
+wander 3000 3
+expect_camx 1 2304

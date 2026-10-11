@@ -374,8 +374,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           SwitchToPlayer(p);
           if (main_module_index != 7 || submodule_index != 0 || g_mp.p[p].downed)
             continue;
-          int rx = (dungeon_room_index & 0xf) * 512, ry = (dungeon_room_index >> 4 & 0x3f) * 512;
-          int dx = (Mp_PlayerX(p) & 0x1fff) - rx, dy = (Mp_PlayerY(p) & 0x1fff) - ry;
+          // (Rooms from 0x100 on lie below the others, from y = 8192.)
+          int rx = (dungeon_room_index & 0xf) * 512, ry = (dungeon_room_index >> 4 & 0x1f) * 512;
+          int dx = (Mp_PlayerX(p) & 0x1fff) - rx, dy = (Mp_PlayerY(p) & 0x3fff) - ry;
           if (dx < -16 || dx > 512 + 16 || dy < -16 || dy > 512 + 16) {
             printf("[frame %d] OUT OF ROOM P%d at (%d,%d) room %x world %d leader P%d\n", frame, p + 1,
                    Mp_PlayerX(p), Mp_PlayerY(p), dungeon_room_index, Inst_Current(), g_mp.leader + 1);
@@ -635,6 +636,13 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       WORD(*Mp_PlayerRam(p, 0x20)) = atoi(arg3);
     } else if (!strcmp(cmd, "poke")) {
       g_ram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
+    } else if (!strcmp(cmd, "expect_camx")) {
+      // expect_camx <p> <x>: the camera of player p's world is at x
+      SwitchToPlayer(atoi(arg1) - 1);
+      if (BG2HOFS_copy2 != atoi(arg2)) {
+        printf("FAIL: P%s's camera x is %d, expected %s at frame %d\n", arg1, BG2HOFS_copy2, arg2, frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "expect_ram")) {
       int v = g_ram[strtol(arg1, NULL, 16)];
       if (v != strtol(arg2, NULL, 16)) {
