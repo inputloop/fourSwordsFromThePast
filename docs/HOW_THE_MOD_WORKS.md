@@ -93,7 +93,7 @@ flowchart LR
 - opened chests, doors and other room and overworld flags (these are combined, never removed),
 - counters such as rupees, bombs, arrows, magic and keys (each world's change is added up, so two players spending bombs at once both count).
 
-A few things stay per world: each player's health, the key count of the dungeon you are in, light or dark world, and the follower (like Zelda). Enemies and pots in a room can also differ between two worlds until they merge.
+A few things stay per world: each player's health, the key count of the dungeon you are in, light or dark world, and the follower (like Zelda). Enemies and pots in a room can also differ between two worlds until they merge. A chest can only be emptied once: if a teammate opened it in another copy of the room, it may still look closed in yours, but it is empty.
 
 **Split screen.** If two or more players on the same computer are in different worlds, the window shows each world side by side (2 players) or in a 2×2 grid (3 or 4). Online players always see their own world. The sound comes from the world of the first player on that computer.
 
@@ -160,9 +160,11 @@ The host sends each frame to every client, and every computer runs it. The host 
 
 This idea is called *rollback*. Fighting games use it too. Sounds from replayed frames are not played twice.
 
+**The host guesses too, but never decides with a guess.** The host also runs ahead without waiting. If a client's buttons arrive a little late, the host has already guessed them, so it rolls back and replays with the real ones, just like a client. A frame becomes final, and is sent out, only once the host has everyone's real buttons for it. (A player whose connection goes silent for half a second isn't waited for.) This matters: if a guess about *your* buttons ever became final, your own Link would snap back to where the guess put it ("rubber banding"), and a door or stairs you took could be undone. With this rule, your own Link is only ever moved by your own buttons.
+
 **Trick 3: corrections slide instead of jumping.** After a rollback, another player's Link may now be in a slightly different place than the client showed a moment ago. Instead of jumping there, it slides over a few frames. This only changes where the Link is drawn, never where it really is. (The Link that leads a world isn't slid, because the camera follows it.)
 
-**Input delay.** Online, your buttons take effect 2 frames (about 1/30 of a second) after you press them. Most people can't feel that. Because of it, every computer learns everyone's buttons 2 frames sooner, so guesses are wrong less often and the corrections are smaller. You can change it with `InputDelay` in `zelda3.ini` (0 to 8).
+**Input delay.** Online, your buttons take effect 2 frames (about 1/30 of a second) after you press them. Most people can't feel that. Because of it, every computer learns everyone's buttons 2 frames sooner, so guesses are wrong less often and the corrections are smaller. You can change it in *Pause menu > Multiplayer > Online input delay* (0 to 8 frames).
 
 **Joining a game in progress.** A new client first downloads a *snapshot*, a compressed copy of the whole game (every world, the save data and the co-op state). Then it fast-forwards through the frames that happened while it was downloading, and starts playing.
 
@@ -260,7 +262,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 **Widescreen.** The game draws extra columns of the world to the left and right, so it fills a wide monitor instead of showing black bars.
 
-**Settings files.** `zelda3.ini` holds all default settings with explanations. Changes made in the menu are saved to `zelda3.coop.ini`, which overrides the defaults.
+**Settings files.** `zelda3.ini` holds all default settings with explanations. Changes made in the menu are saved to `zelda3.coop.ini`, which overrides the defaults. They are saved automatically when the menu closes, and right away when you host or join a game, so the address you last joined, UPnP, the input delay and the other network settings are remembered.
 
 ## How it is tested and built
 
@@ -274,7 +276,8 @@ The mod has 28 automatic tests that play the game with no window, by following w
 - free roaming: splitting, merging, ghosts waiting in their room (also when stuck on a text box, or with Zelda following), game over,
 - a stress test: four players wander randomly for 20,000 frames, and the test fails if any standing Link jumps (teleports), any ghost moves, or any visible Link is not drawn,
 - online play: a real host and client talk over the network, and the client checks it stays in sync,
-- online play over a bad connection: a *lag simulator* (`ZELDA3_NETSIM`) delays messages by 60 milliseconds, randomly adds up to 30 more and throws away 3% of them. Both players wander around, and the test fails if the game ever goes out of sync or the client's own Link ever jumps,
+- free roaming with everyone walking the same way at the same time, so they reach doors, stairs and screen edges together; the test fails if a Link jumps, runs off on its own, ends up outside the room or area its world has loaded, or the camera loses its player,
+- online play over a bad connection: a *lag simulator* (`ZELDA3_NETSIM`) delays messages by 60 milliseconds, randomly adds up to 30 more and throws away 3% of them. Both players wander around, and the test fails if the game ever goes out of sync or the client's own Link is ever moved by a guess (rubber banding),
 - the opening: the new story's text really reaches the game's text buffer, and the original comes back when it is turned off,
 - the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game.
 
@@ -334,6 +337,7 @@ The mod has 28 automatic tests that play the game with no window, by following w
 | RAM | The game's working memory; here a 128 KB block called `g_ram` |
 | ROM | The game cartridge's data, saved as a file; each player supplies their own |
 | Rollback | Going back to the last frame known to be right and replaying with the real buttons |
+| Rubber banding | Your own Link snapping back because a guess about your buttons was used; this mod avoids it |
 | Seed | The number that decides one randomized item placement |
 | Snapshot | A compressed copy of the whole game, sent to players who join online |
 | Split | A player getting their own world when they leave their group |

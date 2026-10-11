@@ -134,6 +134,15 @@ frames gives the same game everywhere.
 
 - The host runs at 60 fps and streams the frames to everyone. It never waits
   for a slow connection.
+- **The host rolls back too.** The host also runs ahead with guesses. When a
+  client's buttons arrive after the host already guessed them, the host goes
+  back and simulates again with the real ones. A frame becomes final, and is
+  sent to the clients, only once everyone's buttons for it are known (a client
+  that is still loading or has been silent for half a second isn't waited for,
+  nor for longer than 30 frames). So nobody's own Link is ever moved by a
+  guess: no rubber banding, and a door, stairs or screen edge is taken exactly
+  where its player took it. Joining clients get a snapshot of the newest final
+  frame.
 - **Inputs are scheduled.** A client stamps every joypad state with the frame
   it is meant for and sends it ahead of time (each one 8 times, against packet
   loss). The host tells each client how early its inputs arrive, and the client
@@ -151,8 +160,9 @@ frames gives the same game everywhere.
   drawing only). The Link that leads a world isn't smoothed, since the camera
   follows it.
 - **Input delay.** Online, button presses take effect `InputDelay` frames
-  later (default 2, about 33 ms). Every computer then learns everyone's
-  buttons 2 frames sooner, so guesses are wrong less often and for less time.
+  later (default 2, about 33 ms; set it in the Multiplayer menu). Every
+  computer then learns everyone's buttons 2 frames sooner, so guesses are wrong
+  less often and for less time.
 - `ZELDA3_NETSIM=delay_ms,jitter_ms,loss_percent` simulates a bad connection
   for testing (it delays and drops received packets).
 - A joining client downloads a compressed snapshot (RAM, VRAM, SRAM, APU and
@@ -180,7 +190,8 @@ runs the regression tests, including a real host/client pair over UDP.
   is still far below what any PC needs.
 - Room contents in two worlds can differ (for example an enemy killed in one
   world still lives in the other) until the worlds merge. Then the world
-  that stays keeps its room.
+  that stays keeps its room. A chest opened in one copy of a room may still
+  look closed in another copy, but it is empty there.
 - The original game has 10 projectile slots and some items allow only one at a
   time (one boomerang, one hookshot). These limits are shared by the team.
 - Followers (Zelda, the old man, ...) follow the leader of their world.
