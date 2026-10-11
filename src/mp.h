@@ -55,6 +55,7 @@ typedef struct MpState {
   uint8 at_title;            // on the title / file select screens: the save file isn't loaded yet
   uint8 carried_by[kMpMaxPlayers];  // the teammate (+1) holding this Link over its head, 0 = none
   uint8 merge_grace;         // frames after a Link walked out of view before the worlds may merge again
+  uint8 thrown[kMpMaxPlayers];   // in flight after a teammate threw it: flies over ledges
   uint16 ghost_cooldown[kMpMaxPlayers];  // frames before a downed player can send a heart again
   uint16 ghost_prev_input[kMpMaxPlayers];
   uint8 quad_valid;          // quad_offset is known for quad_room
@@ -121,6 +122,9 @@ uint16 Mp_PlayerY(int p);
 uint8 Mp_PlayerHealth(int p);
 uint8 Mp_PlayerMagic(int p);
 bool Mp_IsAlive(int p);
+// The Link whose context is resident is flying from a throw (tile detection
+// then treats ledges as open ground, so it can land on top of one).
+bool Mp_ResidentIsThrown();
 enum { kMpGhostHeartCooldown = 20 * 60 };
 
 // Hooks called from the game code

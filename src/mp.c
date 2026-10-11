@@ -394,11 +394,23 @@ static void Mp_Release(int q, bool throw_it) {
   link_auxiliary_state = 1;
   link_give_damage = 0;
   link_direction_facing = dir;
+  // A Link held overhead isn't standing in a doorway, whatever the flag kept
+  // from before it was lifted says (in a doorway, knockback only goes
+  // along the door, so a sideways throw went nowhere).
+  is_standing_in_doorway = 0;
   Mp_SwapTo(r);
+  g_mp.thrown[q] = throw_it;
+}
+
+bool Mp_ResidentIsThrown() {
+  return g_mp_coop && g_mp.thrown[g_mp.resident] && link_auxiliary_state == 1;
 }
 
 static void Mp_HandleCarry() {
   bool stable = Mp_Active() && submodule_index == 0 && (main_module_index == 7 || main_module_index == 9);
+  for (int q = 0; q < kMpMaxPlayers; q++)
+    if (g_mp.thrown[q] && (!g_mp.p[q].joined || *Mp_PlayerRam(q, 0x4D) != 1))
+      g_mp.thrown[q] = 0;  // landed
   for (int q = 0; q < kMpMaxPlayers; q++) {
     int c = g_mp.carried_by[q] - 1;
     if (c < 0)

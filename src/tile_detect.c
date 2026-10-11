@@ -1,4 +1,5 @@
 #include "tile_detect.h"
+#include "mp.h"
 #include "zelda_rtl.h"
 #include "ancilla.h"
 #include "variables.h"
@@ -256,6 +257,9 @@ void TileDetection_Execute(uint16 x, uint16 y, uint16 bits) {  // 87d9d8
 void TileDetect_ExecuteInner(uint8 tile, uint16 offs, uint16 bits, bool is_indoors) {  // 87dc2e
   static const uint8 word_87DC55[] = { 4, 0, 6, 2 };
   if (cheatWalkThroughWalls)
+    tile = 0;
+  // Co-op: a thrown Link flies over ledges (and can land on top of one).
+  if (tile >= 0x28 && tile <= 0x2f && Mp_ResidentIsThrown())
     tile = 0;
 
   switch (tile) {

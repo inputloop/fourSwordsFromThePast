@@ -1,0 +1,45 @@
+# Throwing a teammate over a gap and over a ledge (Four Swords style), in a
+# dungeon room (Tower of Hera's entrance) with tiles made into a pit strip,
+# then a ledge strip (flown over in one arc, without the ledge hop). The Links came in through the door, so the game still
+# thought P2 stood in the doorway, which used to stop every sideways throw.
+load 3
+run 30
+join 2
+run 10
+enter 77
+run 200
+clearsprites
+# A pit, 20 pixels wide: P2 flies over it and lands on the far side.
+pos 1 3792 3980
+pos 2 3808 3980
+pram 1 2f 06
+run 20
+settiles 3834 3960 3854 4000 20
+hold 1 A
+run 2
+hold 1 -
+run 10
+hold 1 A
+run 2
+hold 1 -
+run 80
+expect_near 2 3867 3981
+expect_instances 1
+expect_alive 2
+# A ledge strip.
+settiles 3834 3960 3854 4000 0
+settiles 3834 3960 3850 4000 2b
+pos 1 3792 3980
+pos 2 3808 3980
+pram 1 2f 06
+run 10
+hold 1 A
+run 2
+hold 1 -
+run 10
+hold 1 A
+run 2
+hold 1 -
+run 80
+expect_near 2 3867 3981
+expect_alive 2

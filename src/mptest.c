@@ -156,8 +156,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   char line[256];
   int frame = 0, failures = 0;
   while (fgets(line, sizeof(line), f)) {
-    char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 }, arg3[64] = { 0 };
-    if (sscanf(line, "%31s %199s %63s %63s", cmd, arg1, arg2, arg3) < 1 || cmd[0] == '#')
+    char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 }, arg3[64] = { 0 }, arg4[64] = { 0 }, arg5[64] = { 0 };
+    if (sscanf(line, "%31s %199s %63s %63s %63s %63s", cmd, arg1, arg2, arg3, arg4, arg5) < 1 || cmd[0] == '#')
       continue;
     // Commands about the game look at the world of the viewed player.
     SwitchToPlayer(view);
@@ -831,6 +831,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "message")) {
       dialogue_message_index = strtol(arg1, NULL, 16);
       Main_ShowTextMessage();
+    } else if (!strcmp(cmd, "settiles")) {
+      // settiles <x0> <y0> <x1> <y1> <hexattr>: (dungeon) make the tiles of that
+      // rectangle (pixels) behave like attr, e.g. 20 for a pit
+      for (int y = atoi(arg2) & ~7; y <= atoi(arg4); y += 8)
+        for (int x = atoi(arg1) & ~7; x <= atoi(arg3); x += 8)
+          dung_bg2_attr_table[(y >> 3 & 63) * 64 + (x >> 3 & 63)] = dung_bg1_attr_table[(y >> 3 & 63) * 64 + (x >> 3 & 63)] = strtol(arg5, NULL, 16);
     } else if (!strcmp(cmd, "clearsprites")) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;
