@@ -764,6 +764,7 @@ static void ScreenControls() {
   Label("While down: L/R picks who to watch,");
   Label("  A sends a teammate a heart");
   Label("Lift teammate: A, A again throws");
+  Label("Heavy rock: lift it together (both A)");
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);

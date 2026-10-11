@@ -63,6 +63,7 @@
 #include "util.h"
 #include "randomizer.h"
 #include "hd2d.h"
+#include "tile_detect.h"
 #include "story.h"
 #include "config.h"
 #include "select_file.h"
@@ -831,6 +832,17 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "message")) {
       dialogue_message_index = strtol(arg1, NULL, 16);
       Main_ShowTextMessage();
+    } else if (!strcmp(cmd, "findtile")) {
+      // findtile <p> <hexattr>: (overworld) prints the tiles with that
+      // behavior within 200 pixels of player p
+      int p = atoi(arg1) - 1, want = strtol(arg2, NULL, 16), n = 0;
+      SwitchToPlayer(p);
+      for (int dy = -200; dy <= 200 && n < 12; dy += 8)
+        for (int dx = -200; dx <= 200 && n < 12; dx += 8) {
+          uint16 x = Mp_PlayerX(p) + dx, y = Mp_PlayerY(p) + dy;
+          if (Overworld_GetTileAttributeAtLocation(x >> 3, y) == want)
+            printf("tile %x at %d,%d\n", want, x & ~7, y & ~7), n++;
+        }
     } else if (!strcmp(cmd, "settiles")) {
       // settiles <x0> <y0> <x1> <y1> <hexattr>: (dungeon) make the tiles of that
       // rectangle (pixels) behave like attr, e.g. 20 for a pit

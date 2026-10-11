@@ -5533,7 +5533,7 @@ uint8 Link_HandleLiftables() {  // 87d383
     }
     interacting_with_liftable_tile_x1 = interacting_with_liftable_tile_x2 >> 1;
   }
-  if (kGetBestActionToPerformOnTile_a[interacting_with_liftable_tile_x1] - link_item_gloves <= 0)
+  if (kGetBestActionToPerformOnTile_a[interacting_with_liftable_tile_x1] - Mp_GloveLevelForLift() <= 0)
     action = 1;
 getout:
   if (tiledetect_chest & 1)

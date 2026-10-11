@@ -125,6 +125,9 @@ bool Mp_IsAlive(int p);
 // The Link whose context is resident is flying from a throw (tile detection
 // then treats ledges as open ground, so it can land on top of one).
 bool Mp_ResidentIsThrown();
+// The glove level that counts when the resident Link lifts something: one
+// more when a teammate next to it helps (holds A).
+int Mp_GloveLevelForLift();
 enum { kMpGhostHeartCooldown = 20 * 60 };
 
 // Hooks called from the game code

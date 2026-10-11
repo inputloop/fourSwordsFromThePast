@@ -402,6 +402,24 @@ static void Mp_Release(int q, bool throw_it) {
   g_mp.thrown[q] = throw_it;
 }
 
+// Heavy rocks: two Links together are one glove stronger. A teammate next to
+// the Link that tries to lift (within 24 pixels), free and holding A, helps.
+int Mp_GloveLevelForLift() {
+  int gloves = link_item_gloves;
+  if (!g_mp_coop || !Mp_Active() || gloves >= 2)
+    return gloves;
+  int me = g_mp.resident;
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    if (q == me || !Mp_IsAlive(q) || g_mp.carried_by[q] || Mp_CarriedBy(q) >= 0 || !(g_mp.inputs[q] & 0x100) ||
+        *Mp_PlayerRam(q, 0x4D) != 0 || (uint16)(WORD(*Mp_PlayerRam(q, 0x24)) + 1) > 1)
+      continue;
+    int dx = (int16)(Mp_PlayerX(q) - link_x_coord), dy = (int16)(Mp_PlayerY(q) - link_y_coord);
+    if (abs(dx) <= 24 && abs(dy) <= 24)
+      return gloves + 1;
+  }
+  return gloves;
+}
+
 bool Mp_ResidentIsThrown() {
   return g_mp_coop && g_mp.thrown[g_mp.resident] && link_auxiliary_state == 1;
 }

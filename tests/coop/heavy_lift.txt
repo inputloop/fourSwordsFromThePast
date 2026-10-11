@@ -1,0 +1,32 @@
+# Heavy rocks: two Links together are one glove stronger. Without a glove,
+# P1 can't lift the gray rock by the sanctuary on its own; with P2 next to
+# it holding A as well, it can.
+load 1
+run 30
+hold 1 D
+run 420
+hold 1 -
+join 2
+run 30
+clearsprites
+expect_ram f354 00
+pos 1 1756 1242
+pos 2 1790 1242
+pram 1 2f 02
+pram 2 2f 02
+run 90
+expect_instances 1
+hold 1 A
+run 2
+hold 1 -
+run 30
+expect_ram 308 00
+pos 2 1772 1242
+run 10
+hold 1 A
+hold 2 A
+run 2
+hold 1 -
+hold 2 -
+run 30
+expect_ram 308 80
