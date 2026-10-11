@@ -970,7 +970,7 @@ static void DrawCornerHud() {
   int per_row = 10;
   int rows = (hearts + per_row - 1) / per_row;
   int panel_w = 18 + IntMin(hearts, per_row) * 8;
-  int panel_h = 2 + rows * 8;
+  int panel_h = 5 + rows * 8;  // hearts, then the magic meter
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!Inst_IsJoined(p))
       continue;
@@ -993,6 +993,9 @@ static void DrawCornerHud() {
       int fill = hp >= (i + 1) * 8 ? 2 : hp >= i * 8 + 4 ? 1 : 0;
       DrawHeart(x + 16 + (i % per_row) * 8, y + 1 + (i / per_row) * 8, fill, kPlayerColorRgb[p]);
     }
+    int bar_w = panel_w - 18, magic = IntMin(Inst_PlayerMagic(p), 128);
+    FillRect(x + 16, y + panel_h - 4, bar_w, 2, 0x303030);
+    FillRect(x + 16, y + panel_h - 4, bar_w * magic / 128, 2, 0x40c840);
   }
 }
 

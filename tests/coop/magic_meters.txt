@@ -1,0 +1,22 @@
+# Each player has their own magic meter: P2 refilling (a magic jar's worth)
+# leaves P1's meter alone, also once the two are in different worlds.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pram 1 f36e 40
+pram 2 f36e 08
+pram 2 f373 10
+run 30
+expect_pram 1 f36e 40
+expect_pram 2 f36e 18
+expect_pram 2 f373 00
+hold 2 D
+run 260
+hold 2 -
+expect_apart 1 2
+pram 2 f36e 20
+run 30
+expect_pram 1 f36e 40
+expect_pram 2 f36e 20

@@ -493,6 +493,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       int p = atoi(arg1) - 1;
       SwitchToPlayer(p);
       *Mp_PlayerRam(p, strtol(arg2, NULL, 16)) = strtol(arg3, NULL, 16);
+    } else if (!strcmp(cmd, "expect_pram")) {
+      // expect_pram <p> <hexaddr> <hexval>: a byte of player p's own state
+      int p = atoi(arg1) - 1;
+      SwitchToPlayer(p);
+      int v = *Mp_PlayerRam(p, strtol(arg2, NULL, 16));
+      if (v != strtol(arg3, NULL, 16)) {
+        printf("FAIL: P%s ram %s is %02x, expected %s at frame %d\n", arg1, arg2, v, arg3, frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "resetcounters")) {
       Session_ResetCounters();
     } else if (!strcmp(cmd, "expect_own_corrections")) {

@@ -13,7 +13,7 @@
 #include "story.h"
 
 enum {
-  kProtoVersion = 9,
+  kProtoVersion = 10,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,

@@ -83,6 +83,7 @@ void Inst_SetAudioOutput(bool on);
 
 // Per player queries that work whatever instance the player is in.
 uint8 Inst_PlayerHealth(int p);
+uint8 Inst_PlayerMagic(int p);
 // Where player p is: returns the world, or -1 if p isn't playing.
 int Inst_PlayerPos(int p, uint16 *x, uint16 *y);
 bool Inst_PlayerDowned(int p);

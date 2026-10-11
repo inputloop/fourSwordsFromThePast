@@ -50,8 +50,8 @@ static const MpRange kMpCtxRanges[] = {
   {0xB7B, 5},      // link_prevent_from_moving, drag_player
   {0xFC1, 5},      // flag_unk1, prev coords
   {0xF34F, 1},     // selected bottle
-  {0xF36D, 1},     // link_health_current
-  {0xF372, 1},     // link_hearts_filler
+  {0xF36D, 2},     // link_health_current, link_magic_power
+  {0xF372, 2},     // link_hearts_filler, link_magic_filler
 };
 
 // Fields of the context that stay personal when a player is moved to the leader.
@@ -62,8 +62,8 @@ static const MpRange kMpPersonalRanges[] = {
   {0x303, 1},
   {0x307, 1},
   {0xF34F, 1},
-  {0xF36D, 1},
-  {0xF372, 1},
+  {0xF36D, 2},
+  {0xF372, 2},
 };
 
 static bool Mp_IsTravel(uint8 m0, uint8 m1, uint8 s1);
@@ -124,6 +124,7 @@ uint8 *Mp_PlayerRam(int p, uint32 addr) {
 uint16 Mp_PlayerX(int p) { return WORD(*Mp_PlayerRam(p, 0x22)); }
 uint16 Mp_PlayerY(int p) { return WORD(*Mp_PlayerRam(p, 0x20)); }
 uint8 Mp_PlayerHealth(int p) { return *Mp_PlayerRam(p, 0xF36D); }
+uint8 Mp_PlayerMagic(int p) { return *Mp_PlayerRam(p, 0xF36E); }
 
 bool Mp_IsAlive(int p) {
   return g_mp.p[p].joined && !g_mp.p[p].downed;
@@ -195,6 +196,7 @@ void Mp_Join(int p) {
   g_mp.p[p].revive_ctr = 0;
   Mp_RegroupPlayer(p);
   *Mp_PlayerRam(p, 0xF36D) = link_health_capacity ? link_health_capacity : 0x18;
+  *Mp_PlayerRam(p, 0xF36E) = link_magic_power;
   *Mp_PlayerRam(p, 0x202) = hud_cur_item;
   *Mp_PlayerRam(p, 0x303) = current_item_y;
   Mp_SwapTo(r);
@@ -696,11 +698,21 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
         }
       }
     }
-    // Hud_RefillLogic only runs for the leader, so apply pending hearts directly.
+    // Hud_RefillLogic only runs for the leader, so apply pending hearts directly
+    // and refill magic the same way it does.
     if (link_hearts_filler) {
       int h = link_health_current + link_hearts_filler;
       link_health_current = h > link_health_capacity ? link_health_capacity : h;
       link_hearts_filler = 0;
+    }
+    if (link_magic_filler) {
+      if (link_magic_power >= 128) {
+        link_magic_power = 128;
+        link_magic_filler = 0;
+      } else {
+        link_magic_filler--;
+        link_magic_power++;
+      }
     }
     Mp_EndObject();
   }
@@ -910,7 +922,8 @@ static void Mp_ShowViewersItem() {
   for (int p = 0; p < kMpMaxPlayers && v < 0; p++)
     if ((g_mp_local_mask >> p & 1) && g_mp.p[p].joined)
       v = p;
-  if (v < 0 || v == g_mp.leader || *Mp_PlayerRam(v, 0x202) == hud_cur_item)
+  if (v < 0 || v == g_mp.leader ||
+      (*Mp_PlayerRam(v, 0x202) == hud_cur_item && Mp_PlayerMagic(v) == link_magic_power))
     return;
   memcpy(g_mp_render_ram, g_ram, sizeof(g_mp_render_ram));
   g_mp_render_mp = g_mp;
@@ -918,10 +931,13 @@ static void Mp_ShowViewersItem() {
   memcpy(g_mp_saved_hud, &g_zenv.vram[g_mp_saved_hud_addr], sizeof(g_mp_saved_hud));
   Mp_SwapTo(v);
   Hud_RefreshIcon();
-  // Only the item icon (2x2 tiles at column 5, row 1 of the HUD).
+  // Only the item icon (2x2 tiles at column 5, row 1 of the HUD) and the
+  // magic meter (column 3, rows 1 to 4).
   for (int y = 1; y <= 2; y++)
     for (int x = 5; x <= 6; x++)
       g_zenv.vram[g_mp_saved_hud_addr + y * 32 + x] = hud_tile_indices_buffer[y * 32 + x];
+  for (int y = 1; y <= 4; y++)
+    g_zenv.vram[g_mp_saved_hud_addr + y * 32 + 3] = hud_tile_indices_buffer[y * 32 + 3];
   memcpy(g_ram, g_mp_render_ram, sizeof(g_mp_render_ram));
   g_mp = g_mp_render_mp;
   g_mp_hud_swapped = true;

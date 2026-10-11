@@ -107,6 +107,7 @@ uint8 *Mp_PlayerRam(int p, uint32 addr);
 uint16 Mp_PlayerX(int p);
 uint16 Mp_PlayerY(int p);
 uint8 Mp_PlayerHealth(int p);
+uint8 Mp_PlayerMagic(int p);
 bool Mp_IsAlive(int p);
 
 // Hooks called from the game code

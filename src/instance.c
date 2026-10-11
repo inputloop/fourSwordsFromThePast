@@ -473,12 +473,13 @@ static void MergeAndCleanUp() {
 }
 
 static bool IsCounter(int addr) {
-  return addr == 0xF343 || addr == 0xF36E || addr == 0xF377 ||
+  return addr == 0xF343 || addr == 0xF377 ||
          (addr >= kKeySlots && addr < kKeySlots + 16);
 }
 
 static bool IsPerWorld(int addr) {
-  return addr == 0xF34F || addr == 0xF36D || addr == 0xF372 ||  // personal
+  return addr == 0xF34F || addr == 0xF36D || addr == 0xF36E ||  // personal
+         addr == 0xF372 ||
          addr == 0xF36F ||                                       // keys of the current dungeon
          addr == 0xF373 || addr == 0xF375 || addr == 0xF376 ||   // refills in progress
          addr == 0xF3CA ||                                       // light/dark world
@@ -825,6 +826,16 @@ uint8 Inst_PlayerHealth(int p) {
     return 0;
   Inst_Switch(i);
   uint8 v = Mp_PlayerHealth(p);
+  Inst_Switch(r);
+  return v;
+}
+
+uint8 Inst_PlayerMagic(int p) {
+  int i = Inst_OfPlayer(p), r = g_cur;
+  if (i < 0)
+    return 0;
+  Inst_Switch(i);
+  uint8 v = Mp_PlayerMagic(p);
   Inst_Switch(r);
   return v;
 }
