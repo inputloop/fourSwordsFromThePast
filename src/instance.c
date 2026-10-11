@@ -4,6 +4,8 @@
 #include "variables.h"
 #include "audio.h"
 #include "util.h"
+#include "tagalong.h"
+#include "load_gfx.h"
 #include "snes/ppu.h"
 #include "snes/dma.h"
 #include "snes/saveload.h"
@@ -15,6 +17,7 @@ enum {
   kSharedEnd = 0xF500,
   kFlagsEnd = 0xF340,     // room and overworld flags: bits are only ever set
   kKeySlots = 0xF37C,     // keys per dungeon (16 bytes)
+  kInstGhostPressA = 0x100,  // the A button in a joypad input word
 };
 
 typedef struct Instance {
@@ -344,13 +347,36 @@ typedef struct InstView {
   uint16 cam_x, cam_y;
 } InstView;
 
+// A world that other players can merge into (or out of) right now.
+static bool IsJoinable() {
+  return Mp_InStableGameplay() && !flag_is_link_immobilized;
+}
+
 static void GetView(int i, InstView *v) {
   Inst_Switch(i);
-  v->stable = Mp_InStableGameplay() && !flag_is_link_immobilized;
+  v->stable = IsJoinable();
   v->has_follower = follower_indicator != 0;
   v->key = Mp_AreaKeyPublic();
   v->cam_x = BG2HOFS_copy2;
   v->cam_y = BG2VOFS_copy2;
+}
+
+// The world that absorbed another one takes over its follower (Zelda, the
+// old man...) if it has none, so a follower is never lost in a merge. This
+// happens when the follower was left behind with a ghost.
+static void MoveFollower(int from, int to) {
+  uint8 *f = &g_inst[from].ram[0xF3CC];  // follower_indicator .. follower_dropped
+  if (!f[0])
+    return;
+  Inst_Switch(to);
+  if (follower_indicator)
+    return;
+  TRACE("  follower %d moves from world %d into %d\n", f[0], from, to);
+  memcpy(&follower_indicator, f, 8);
+  memset(f, 0, 8);
+  Mp_SwapToLeader();
+  Follower_PlaceAtLink();
+  LoadFollowerGraphics();
 }
 
 // Can everyone in instance b join instance a? They must be standing in a's
@@ -415,9 +441,11 @@ static void MergeAndCleanUp() {
       if (!b_first && CanMerge(a, &va, b, &vb)) {
         TRACE("  merge %d into %d key=%x\n", b, a, va.key);
         MovePlayers(b, a);
+        MoveFollower(b, a);
       } else if (CanMerge(b, &vb, a, &va)) {
         TRACE("  merge %d into %d key=%x\n", a, b, va.key);
         MovePlayers(a, b);
+        MoveFollower(a, b);
       }
     }
   }
@@ -506,7 +534,6 @@ bool Inst_RunFrame(const uint16 *inputs) {
     g_inst[i].born = 0;
   bool replay = false;
   g_apu_push_enabled = false;
-  static const uint16 kNoInputs[kMpMaxPlayers];
   for (int i = 0; i < kInstMax; i++) {
     if (!g_inst[i].active || g_inst[i].born)
       continue;
@@ -514,10 +541,16 @@ bool Inst_RunFrame(const uint16 *inputs) {
       replay |= RunInstance(i, inputs);
     } else {
       // Only ghosts here: the world waits, frozen, for someone to come by.
-      // It first settles into normal gameplay so it can be joined.
+      // It first settles into normal gameplay so it can be joined. Nobody is
+      // there to close a text box (a follower talking, say), so it pages
+      // through them on its own; otherwise it would never become joinable.
       Inst_Switch(i);
-      if (!Mp_InStableGameplay())
-        replay |= RunInstance(i, kNoInputs);
+      if (!IsJoinable()) {
+        uint16 in[kMpMaxPlayers] = { 0 };
+        if (main_module_index == 14 && submodule_index == 2 && (frame_counter & 1))
+          in[g_mp.leader] = kInstGhostPressA;
+        replay |= RunInstance(i, in);
+      }
     }
   }
   g_apu_push_enabled = true;

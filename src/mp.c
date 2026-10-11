@@ -270,10 +270,15 @@ static void Mp_ReadJoypadInto(uint16 input, uint8 *last_h, uint8 *last_l, uint8 
 }
 
 void Mp_ReadJoypads() {
+  // Ghosts don't act. In a world of only ghosts the inputs come from the
+  // instance code, which only uses them to page through text boxes.
+  bool any_alive = false;
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    any_alive |= Mp_IsAlive(p);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
       continue;
-    Mp_ReadJoypadInto(g_mp.p[p].downed ? 0 : g_mp.inputs[p],
+    Mp_ReadJoypadInto(g_mp.p[p].downed && any_alive ? 0 : g_mp.inputs[p],
                       Mp_PlayerRam(p, 0xF0), Mp_PlayerRam(p, 0xF2), Mp_PlayerRam(p, 0xF4),
                       Mp_PlayerRam(p, 0xF6), Mp_PlayerRam(p, 0xF8), Mp_PlayerRam(p, 0xFA));
   }

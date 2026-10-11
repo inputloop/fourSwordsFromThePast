@@ -190,6 +190,18 @@ bool Follower_CheckBlindTrigger() {  // 899e90
 }
 
 void Follower_Initialize() {  // 899efc
+  Follower_PlaceAtLink();
+  link_speed_setting = 0;
+
+  if (enhanced_features0 & kFeatures0_TurnWhileDashing) {
+    link_player_handler_state = kPlayerState_Ground;
+    link_is_running = false;
+  }
+
+}
+
+// The part of Follower_Initialize that puts the follower where Link is.
+void Follower_PlaceAtLink() {
   tagalong_y_lo[0] = link_y_coord;
   tagalong_y_hi[0] = link_y_coord >> 8;
 
@@ -202,13 +214,6 @@ void Follower_Initialize() {  // 899efc
   tagalong_var1 = 0;
   tagalong_var3 = 0;
   tagalong_var4 = 0;
-  link_speed_setting = 0;
-
-  if (enhanced_features0 & kFeatures0_TurnWhileDashing) {
-    link_player_handler_state = kPlayerState_Ground;
-    link_is_running = false;
-  }
-
 }
 
 void Sprite_BecomeFollower(int k) {  // 899f39

@@ -67,7 +67,9 @@ Players can drop in and drop out at any time.
     that would go down: the bottle empties and the Link gets up to 7 hearts.
   - A ghost lying alone in some room keeps its world, paused, until a
     standing teammate enters that room or screen; then the ghost is there,
-    right where it fell.
+    right where it fell. If the follower (Zelda, the old man, ...) was left
+    behind with the ghost, it comes along and follows the teammate. A text
+    box that was open when the ghost fell is paged through on its own.
 - **Enemies** go after the nearest Link and can be hurt by anyone.
 
 ## How it works (for modders)

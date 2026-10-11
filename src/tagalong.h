@@ -10,6 +10,7 @@ bool Follower_ValidateMessageFreedom();
 void Follower_MoveTowardsLink();
 bool Follower_CheckBlindTrigger();
 void Follower_Initialize();
+void Follower_PlaceAtLink();
 void Sprite_BecomeFollower(int k);
 void Follower_Main();
 void Follower_NoTimedMessage();
