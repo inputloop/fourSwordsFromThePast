@@ -49,11 +49,24 @@ Players can drop in and drop out at any time.
   you face, in an arc like a knockback (walls still stop them). The one being carried
   can wriggle free with B. Getting hurt, or either player going down, drops
   the carried Link.
+  - A thrown Link flies over pits (about three tiles wide) and over ledges,
+    and only falls if it lands in a pit. Throwing someone up a cliff isn't
+    possible: in this game a cliff face is a wall.
+- **Heavy rocks: lift together.** Two Links are one glove stronger: with a
+  teammate next to you holding A, you can lift a rock that needs the next
+  glove (no glove: the Power Glove's gray rocks; Power Glove: the Titan's
+  Mitt's dark rocks).
 - **Arrows to teammates.** A teammate off your screen gets an arrow in their
   color at the screen's edge pointing their way (grey while down), when you
   are both on the same overworld, in the same dungeon or in the same room.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
+  *Multiplayer > Player colors > color-blind* switches to colors told apart
+  with any kind of color blindness (bluish green, orange, blue, reddish
+  purple), everywhere: tunics, corner HUD, arrows and tags.
+- **Name tags**: *Multiplayer > Name tags* shows a small P1-P4 over each Link.
+- **Rumble**: a player's controller rumbles when their Link is hurt (harder
+  for bigger hits). Turn it off per player in *Controls* (*Rumble when hurt*).
 - **Free roaming (default).** Everybody goes wherever they want. Players who
   are close together share a screen. A player who walks (mostly) out of view or
   through a door, stairs or a pit on their own continues in a world of their
@@ -86,6 +99,9 @@ Players can drop in and drop out at any time.
     a text box (nobody there can press A).
   - While down, your screen shows a standing teammate (if your world is
     paused) or your own Link; L and R switch between them.
+  - A ghost can still help: A sends a small heart that flutters down onto
+    the nearest standing teammate, once every 20 seconds. A heart in your
+    corner of the screen means it's ready.
   - If Zelda (or another follower) was following the ghost, the reviver
     joins the ghost's world instead, so the follower isn't lost.
 - **Enemies** go after the nearest Link and can be hurt by anyone.
@@ -114,10 +130,13 @@ addresses. `src/mp.c` gives each player a private copy of those RAM ranges
   pose-dependent Link tiles; the PPU (`snes/ppu.c`) draws them on top of the
   regular OAM and recolors palette 7 per player.
 - The optional 2D-HD look (`src/hd2d.c`, `Hd2d` in `zelda3.ini`) is a
-  display-only post pass. `Hd2d_DrawFrame` sets `g_ppu_layer_out`, so the PPU
-  also writes the layer of every 1x pixel (BG1-4, sprites, backdrop); the pass
-  then blurs and grades the frame, leaving the HUD (BG3) untouched and sprites
-  sharp. It never touches game state, so it is safe in netplay.
+  display-only post pass. `Hd2d_DrawFrame` sets `g_ppu_layer_out` and
+  `g_ppu_hidden_out`, so the PPU also writes the layer of every 1x pixel
+  (BG1-4, sprites, backdrop) and the colors of Link pixels a background tile
+  hides. The pass reads the world's RAM for the players and light sources;
+  in a dark room it draws the room without the subscreen darkness layer and
+  lights it itself. Blurs run at half and quarter resolution on up to 3
+  worker threads. It never touches game state, so it is safe in netplay.
 
 ### World instances (free roaming)
 
@@ -210,6 +229,13 @@ All players should run the same build and the same `Language` setting.
 `./zelda3 --mptest <script>` runs the game headless from a script. The
 commands are listed at the top of `src/mptest.c`, and `tests/run_coop_tests.sh`
 runs the regression tests, including a real host/client pair over UDP.
+
+`tests/coop/visual.txt` compares screenshots (`expect_shot`) with baselines
+in `tests/baseline/`, which the first run makes from your own ROM. They are
+never committed (the ROM's graphics can't be shared), so these checks run on
+your computer, not on GitHub. After an intended change to how things look,
+run `tests/update_baselines.sh`. A mismatch leaves the new screenshot and a
+diff with the changed pixels in red in `tests/out/`.
 
 ## Known limitations
 

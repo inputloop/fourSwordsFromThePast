@@ -67,7 +67,9 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Keeping the room in step with the leader.** In a dungeon, the game remembers which half of a big room Link is in, and only updates it as Link walks across the middle. That memory belongs to the whole world, not to one player. It isn't simply "the half Link stands in" (in Link's house it says the other half), but in each room the two differ in the same way. So the mod remembers that difference for the room, and after the leader changes it applies it to the new leader's position. (It skips moments when the leader stands in a doorway, where the game's door code updates the half on its own.) Without that, a player walking out of a room's exit right after becoming leader could be scrolled into the "other half" of the room instead, and end up back where they started.
 
-**Colors.** The tunic color lives in one small palette (16 colors). Before drawing, the mod copies that palette and recolors the tunic for each player: green, red, blue and purple. Because of this, armor upgrades still protect you but no longer change your tunic color.
+**Colors.** The tunic color lives in one small palette (16 colors). Before drawing, the mod copies that palette and recolors the tunic for each player: green, red, blue and purple. Because of this, armor upgrades still protect you but no longer change your tunic color. A color-blind friendly set (bluish green, orange, blue and reddish purple, from the Okabe-Ito palette, which people with any kind of color blindness can tell apart) can be picked in the Multiplayer menu; it is used everywhere a player's color appears.
+
+**Name tags and rumble.** Name tags (an option) draw a small P1-P4 over every Link. When a player's Link loses health, that player's own controller rumbles, harder for bigger hits (it can be turned off per player in the Controls menu). Both only happen on your own computer and change nothing in the game.
 
 **Shared inventory.** Items live outside the Link context, so they are naturally shared. The one exception is the Y-button item: each player picks their own. On each player's screen, the item box at the top shows *their* item. (The game only knows how to draw one item box, so just before a screen is drawn the mod briefly swaps in that player's Link, draws the box, and puts everything back.)
 
@@ -111,7 +113,9 @@ flowchart LR
 
 A few things stay per world: each player's health and magic, the key count of the dungeon you are in, light or dark world, and the follower (like Zelda). Enemies and pots in a room can also differ between two worlds until they merge. A chest can only be emptied once: if a teammate opened it in another copy of the room, it may still look closed in yours, but it is empty.
 
-**Lifting and throwing teammates.** Like in Four Swords, you can pick up a teammate: face them while they stand right next to you and press A. They ride over your head and go wherever you go. Press A again to throw them about four tiles the way you face; they fly in an arc and land. The carried player can wriggle free with B. In the code, a throw is the game's own knockback (the arc Link flies in when an enemy hits him), only stronger and without damage, so walls, ledges and pits work the way they always do. Who carries whom is part of the shared co-op state, so it plays out the same on every computer online.
+**Lifting and throwing teammates.** Like in Four Swords, you can pick up a teammate: face them while they stand right next to you and press A. They ride over your head and go wherever you go. Press A again to throw them about four tiles the way you face; they fly in an arc and land. The carried player can wriggle free with B. In the code, a throw is the game's own knockback (the arc Link flies in when an enemy hits him), only stronger and without damage, so walls stop it the way they always do. The game only checks for pits when a flying Link lands, so a thrown teammate sails over a gap about three tiles wide. While flying from a throw, ledge tiles count as open ground, so the throw carries on over a ledge instead of stopping at it. (Throwing someone up a cliff isn't possible: in this game a cliff face is simply a wall.) One bug was found on the way: a Link that came into a room through a door still had the game's "standing in a doorway" flag while being carried, and in a doorway knockback only goes along the door, so sideways throws went nowhere; a released Link now never counts as in a doorway. Who carries whom is part of the shared co-op state, so it plays out the same on every computer online.
+
+**Heavy rocks: lifting together.** Some rocks need the Power Glove or the Titan's Mitt. In co-op, two Links are one glove stronger: when a teammate stands right next to you (within 24 pixels) and holds A as well, the game counts one more glove level (`Mp_GloveLevelForLift`). Two Links without a glove can lift a gray rock, and two with the Power Glove a dark Titan's Mitt rock. This only ever adds a way through, so a randomizer seed that is beatable alone stays beatable.
 
 **Arrows to teammates.** When a teammate is off your screen, a small arrow in their color at the edge of the screen points their way, with their player number. It works across worlds too, as long as the direction means something: you are both on the same overworld (light or dark), in the same dungeon, or in the same house or cave. A downed teammate's arrow is grey. The arrows are only drawn on your screen and change nothing in the game.
 
@@ -132,6 +136,8 @@ Each player has their own hearts, but nobody dies alone. A player who runs out o
 **Reviving.** A standing teammate stands next to the ghost (within 24 pixels) for 1.5 seconds. The ghost gets up with half a heart. A small bar in the ghost's corner shows the progress.
 
 **Watching while you're down.** A ghost can't do anything, so its screen can show someone else: by default a standing teammate if the ghost's own world is paused, or else the ghost's own Link. Pressing **L** or **R** flips between your own Link and each standing teammate. A note at the bottom of the screen says who you are watching.
+
+**Sending a heart.** A ghost can still help: pressing A sends a small heart that flutters down onto the nearest standing teammate in its world, like a heart an enemy drops. Then the ghost has to wait 20 seconds; a small heart in its corner of the screen shows when it is ready again. This happens inside the game's simulation (`Mp_GhostHelp`), driven by the ghost's own button presses, so online it plays out the same on every computer.
 
 **A ghost alone in a room.** If a ghost is the only player left in its world, that world is paused. It waits, frozen, until a standing teammate walks into the same room or screen. Then the worlds merge and the ghost is right where it fell.
 
@@ -271,10 +277,10 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 | Menu screen | What it does |
 | --- | --- |
-| Multiplayer | Host a game, join by address, find LAN games, add or remove local players, friendly fire |
-| Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen, the 2D-HD look |
+| Multiplayer | Host a game, join by address, find LAN games, add or remove local players, friendly fire, name tags, color-blind friendly colors |
+| Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen, the 2D-HD look and its settings |
 | Gameplay | Randomizer, the Four Swords story and title, plus the original project's extras (switch items with L/R, bug fixes and more) |
-| Controls | Set up each of the four players |
+| Controls | Set up each of the four players (keys, buttons, controller, stick, rumble) |
 | Controls help | A short list of the default keys |
 
 **Controls for each player** (`src/bindings.c`):
@@ -287,13 +293,20 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 **Widescreen.** The game draws extra columns of the world to the left and right, so it fills a wide monitor instead of showing black bars.
 
-**The 2D-HD look (beta).** An optional picture filter in the style of Octopath Traveler, in `src/hd2d.c`. After the game draws a frame, the filter blurs the top and bottom of the screen a little (so the world looks like a tiny model seen through a camera), makes the brightest parts glow, warms up the colors and darkens the corners. To keep Link, the enemies and the hearts and item box crisp, the drawing code (`snes/ppu.c`) also writes down, for every pixel, which layer it came from: background, sprite or HUD. The filter skips the HUD completely and never blurs sprites. It only changes what you see, never the game itself, so online players can each turn it on or off. The four strengths are set in `zelda3.ini`.
+**The 2D-HD look (beta).** An optional picture filter in the style of Octopath Traveler, in `src/hd2d.c`. *Video > 2D-HD settings* turns it on and sets how strong each part is. After the game draws a frame, the filter:
+
+- keeps the players in focus and lets the screen go softly out of focus above and below them, so the world looks like a tiny model seen through a camera (in split screen each pane focuses on its own player), and makes far layers, like a cave's distant floor, softer and hazy,
+- lights dark rooms for real: instead of the game's flat darkness with a cone cut out of it, the room gets a warm glow around each Link that has the Lamp, around lit torches, fire and explosions, over a darkness that lifts as torches are lit,
+- shows a Link hidden behind a roof, door frame or treetop through it (but not when the game hides Link on purpose, like while he walks out of a door),
+- makes the brightest parts glow, warms up the colors and darkens the corners.
+
+To keep Link, the enemies and the hearts and item box crisp, the drawing code (`snes/ppu.c`) also writes down, for every pixel, which layer it came from (background, sprite or HUD), and the colors of Link's pixels when a background tile hides them. The filter skips the HUD completely and never blurs sprites. It reads where the players, torches and fire are from the game's memory, but never changes the game, so online players can each turn it on or off. To stay fast (about 1-2 milliseconds a frame), the blurry copies are made at half and a quarter of the size, and the work is shared by up to four processor cores.
 
 **Settings files.** `zelda3.ini` holds all default settings with explanations. Changes made in the menu are saved to `zelda3.coop.ini`, which overrides the defaults. They are saved automatically when the menu closes, and right away when you host or join a game, so the address you last joined, UPnP, the input delay and the other network settings are remembered.
 
 ## How it is tested and built
 
-The mod has 43 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 48 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -307,7 +320,10 @@ The mod has 43 automatic tests that play the game with no window, by following w
 - free roaming with everyone walking the same way at the same time, so they reach doors, stairs and screen edges together; the test fails if a Link jumps, runs off on its own, ends up outside the room or area its world has loaded, or the camera loses its player,
 - online play over a bad connection: a *lag simulator* (`ZELDA3_NETSIM`) delays messages by 60 milliseconds, randomly adds up to 30 more and throws away 3% of them. Both players wander around, and the test fails if the game ever goes out of sync or the client's own Link is ever moved by a guess (rubber banding),
 - the opening: the new story's text really reaches the game's text buffer, and the original comes back when it is turned off,
-- the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game.
+- the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game,
+- teamwork: throwing a teammate over a pit and a ledge (the test paints pit and ledge tiles into a room), lifting a heavy rock together, a ghost sending a heart,
+- the 2D-HD look: a dark room is lit by the filter, and a Link in a doorway shows through the door frame,
+- screenshots: a few scenes (the HUD, the co-op HUD, the pause menu, the 2D-HD look) are compared with reference screenshots. Those are made from your own copy of the game the first time, and are never uploaded, because the game's graphics belong to Nintendo; so this check runs on your computer, not on GitHub. When something looks different, the test saves the new picture and one with the changed pixels in red.
 
 **Building.** The code is built with a C compiler using the `Makefile` on Linux and Mac. For Windows there are three ways: Visual Studio (`zelda3.vcxproj`), a cross-build script (`tools/build_windows_mingw.sh`), or `run_with_tcc.bat`, which downloads a tiny compiler and builds the game on the player's own PC.
 

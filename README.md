@@ -5,10 +5,12 @@
 *The Legend of Zelda: A Link to the Past* as a native PC game with **four player
 drop-in/drop-out co-op** (same PC, LAN and internet), each Link in its own
 color, free roaming (split screen when couch players go separate ways),
-per-player hearts and magic, lifting and throwing teammates, arrows
-pointing to teammates off screen, private item menus and maps, rollback
-netcode, spectating while you're down, toggleable friendly fire,
-native widescreen and an in-game options menu.
+per-player hearts and magic, lifting and throwing teammates (over pits),
+lifting heavy rocks together, arrows pointing to teammates off screen,
+private item menus and maps, rollback netcode, spectating while you're down
+(and sending teammates hearts), name tags, color-blind friendly colors,
+rumble, toggleable friendly fire, native widescreen, an optional 2D-HD look
+and an in-game options menu.
 
 Built on the [snesrev/zelda3](https://github.com/snesrev/zelda3) C
 reimplementation (vendored from commit `45a149d8`, MIT licensed). You need your
@@ -97,14 +99,26 @@ randomizer for save files created from then on (or set `Randomizer` in the
 ## 2D-HD look (beta)
 
 *Pause menu > Video > 2D-HD look* (or `Hd2d = 1` in `zelda3.ini`) puts a
-lens-and-light pass over the pixel art, in the style of Octopath Traveler:
-the top and bottom of the screen go softly out of focus like a diorama
-(tilt-shift), bright parts glow, colors get a warmer grade, and the corners
-darken. Links, enemies and the HUD stay sharp, because the PPU reports which
-layer every pixel came from. `Hd2dDepthOfField`, `Hd2dBloom`, `Hd2dVignette`
-and `Hd2dGrade` (0-100) set the strength of each part. It only changes the
-picture, so it is safe in netplay and each player can choose. The code is in
-`src/hd2d.c`; this is the groundwork for a fuller 2D-HD mode.
+lens-and-light pass over the pixel art, in the style of Octopath Traveler.
+*Video > 2D-HD settings* sets the strength of each part (0-100, also
+`Hd2dDepthOfField`, `Hd2dLighting`, `Hd2dBloom`, `Hd2dGrade` and
+`Hd2dVignette` in `zelda3.ini`):
+
+- **Depth of field**: the players are in focus and the screen goes softly out
+  of focus above and below them, like a diorama. In split screen, each pane
+  focuses on its own player. Far layers (a cave's distant floor, the void
+  under a pit) are softer and hazy.
+- **Lighting**: dark rooms are lit for real: a warm glow around each Link
+  with the Lamp, lit torches, fire and explosions, over a darkness that lifts
+  as torches are lit. Elsewhere fire adds a soft glow.
+- **Seeing through**: a Link hidden behind a roof, door frame or treetop
+  shows through it (not during scripted moments that hide Link on purpose).
+- **Bloom, color grade and vignette.**
+
+Links, enemies and the HUD stay sharp, because the PPU reports which layer
+every pixel came from. It only changes the picture, so it is safe in netplay
+and each player can choose. It costs about 1-2 ms per frame. The code is in
+`src/hd2d.c`.
 
 ## Quick start (Linux / macOS)
 
