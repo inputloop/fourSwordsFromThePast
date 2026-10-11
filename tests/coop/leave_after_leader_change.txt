@@ -1,0 +1,17 @@
+# P1 walks out of the sanctuary after the camera has been following P2, who
+# stands in the other half of the room. The room's "which half is Link in"
+# state still described P2, so the game took P1's exit for a walk into the
+# other half of the room: it scrolled instead of leaving, and P1 ended up
+# outside the room and back in the sanctuary.
+load 1
+run 400
+join 2
+run 30
+pos 2 1340 600
+run 60
+hold 1 D
+run 600
+status
+view 1
+expect_module 9
+hold 1 -

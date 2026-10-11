@@ -64,7 +64,8 @@ Players can drop in and drop out at any time.
   - The sound is from the world of the first player on this computer.
 - **The leader.** In a group sharing a screen, whoever opens a menu, talks
   to someone or takes an exit becomes the leader that the camera, rooms and
-  cutscenes follow.
+  cutscenes follow. (In a dungeon, the room's "which half is Link in" state is
+  reset to the new leader's position, or an exit could turn into a scroll.)
 - **Downed, not dead.** A Link that runs out of hearts becomes a pale ghost
   that lies where it fell. Someone has to come and stand next to it
   for 1.5 seconds to revive it with half a heart. It is game over only when

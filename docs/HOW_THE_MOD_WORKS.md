@@ -61,6 +61,8 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Who is the leader?** Whoever does something that changes the game's mode becomes the leader: opening the menu, talking to someone, opening a chest or going through a door. A downed leader hands the job to a standing player.
 
+**Keeping the room in step with the leader.** In a dungeon, the game remembers which half of a big room Link is in, and only updates it as Link walks across the middle. That memory belongs to the whole world, not to one player. So when the leader changes, the mod resets it to wherever the new leader stands. Without that, a player walking out of a room's exit right after becoming leader could be scrolled into the "other half" of the room instead, and end up back where they started.
+
 **Colors.** The tunic color lives in one small palette (16 colors). Before drawing, the mod copies that palette and recolors the tunic for each player: green, red, blue and purple. Because of this, armor upgrades still protect you but no longer change your tunic color.
 
 **Shared inventory.** Items live outside the Link context, so they are naturally shared. The one exception is the Y-button item: each player picks their own. On each player's screen, the item box at the top shows *their* item. (The game only knows how to draw one item box, so just before a screen is drawn the mod briefly swaps in that player's Link, draws the box, and puts everything back.)
@@ -276,7 +278,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 33 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 34 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

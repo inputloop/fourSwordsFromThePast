@@ -7,6 +7,7 @@
 #include "ancilla.h"
 #include "misc.h"
 #include "hud.h"
+#include "dungeon.h"
 #include "instance.h"
 #include "features.h"
 #include "assets.h"
@@ -294,10 +295,35 @@ static uint32 Mp_AreaKey() {
   return player_is_indoors << 16 | (player_is_indoors ? dungeon_room_index : overworld_screen_index);
 }
 
+// Which quarter of a dungeon room "Link" is in belongs to the world, but
+// the game only updates it as the leader walks from one half of the room to
+// the other. After the leader changes, it still says where the old leader
+// was: walking out of the room's exit then looks like walking into the other
+// half, and the game scrolls instead of leaving the room. So it is put back
+// in line with wherever the leader stands.
+static void Mp_SyncQuadrantToLeader() {
+  if (!g_mp_coop || !player_is_indoors || main_module_index != 7 || submodule_index != 0)
+    return;
+  uint8 qx = (link_x_coord >> 8) & 1, qy = ((link_y_coord >> 8) & 1) << 1;
+  if (link_quadrant_x != qx) {
+    if (qx)
+      AdjustQuadrantAndCamera_right();
+    else
+      AdjustQuadrantAndCamera_left();
+  }
+  if (link_quadrant_y != qy) {
+    if (qy)
+      AdjustQuadrantAndCamera_down();
+    else
+      AdjustQuadrantAndCamera_up();
+  }
+}
+
 void Mp_EndFrame() {
   // A Link playing alone in a world keeps track of where it is, so players
   // who join this world later aren't mistaken for a group that just arrived.
   if (!Mp_Active()) {
+    Mp_SyncQuadrantToLeader();
     // (Also once a regroup was pending when it split off, or it would never
     // count as settled and could never meet up with anyone again.)
     bool in_bed = link_player_handler_state == kPlayerState_AsleepInBed ||
@@ -307,6 +333,7 @@ void Mp_EndFrame() {
     return;
   }
   Mp_SwapToLeader();
+  Mp_SyncQuadrantToLeader();
   Mp_AttributeObjects();
   if (main_module_index == 18 || main_module_index == 23)  // death / game over
     g_mp.after_death = 1;
