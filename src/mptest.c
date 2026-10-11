@@ -138,8 +138,8 @@ static void PrintStatus(int frame) {
   Inst_Switch(r);
   for (int k = 0; k < 16; k++)
     if (sprite_state[k])
-      printf("  sprite %d type=%x state=%d hp=%d x=%d y=%d\n", k, sprite_type[k], sprite_state[k], sprite_health[k],
-             Sprite_GetX(k), Sprite_GetY(k));
+      printf("  sprite %d type=%x state=%d hp=%d x=%d y=%d z=%d ai=%d floor=%d\n", k, sprite_type[k], sprite_state[k], sprite_health[k],
+             Sprite_GetX(k), Sprite_GetY(k), sprite_z[k], sprite_ai_state[k], sprite_floor[k]);
 }
 
 int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
@@ -742,6 +742,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Upnp_UnmapPort();
     } else if (!strcmp(cmd, "menu")) {
       Ui_HandleKey(SDLK_ESCAPE, true);
+    } else if (!strcmp(cmd, "key")) {
+      // key <up|down|left|right|enter|back> [times]: a button press in the menu
+      uint16 bit = !strcmp(arg1, "up") ? 0x10 : !strcmp(arg1, "down") ? 0x20 : !strcmp(arg1, "left") ? 0x40 :
+                   !strcmp(arg1, "right") ? 0x80 : !strcmp(arg1, "back") ? 1 : 0x100;
+      for (int n = arg2[0] ? atoi(arg2) : 1; n > 0; n--) {
+        uint16 none[4] = {0};
+        Ui_Update(none, bit);
+        Ui_Update(none, 0);
+      }
     } else if (!strcmp(cmd, "corrupt")) {
       g_ram[0xF360] ^= 0x55;  // rupees
     } else if (!strcmp(cmd, "expect_players")) {

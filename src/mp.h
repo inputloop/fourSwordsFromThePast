@@ -55,6 +55,8 @@ typedef struct MpState {
   uint8 at_title;            // on the title / file select screens: the save file isn't loaded yet
   uint8 carried_by[kMpMaxPlayers];  // the teammate (+1) holding this Link over its head, 0 = none
   uint8 merge_grace;         // frames after a Link walked out of view before the worlds may merge again
+  uint16 ghost_cooldown[kMpMaxPlayers];  // frames before a downed player can send a heart again
+  uint16 ghost_prev_input[kMpMaxPlayers];
   uint8 quad_valid;          // quad_offset is known for quad_room
   uint8 quad_offset;         // dungeon quadrant XOR the half of the room the leader stands in
   uint16 quad_room;
@@ -96,6 +98,9 @@ extern int16 g_mp_draw_offset[kMpMaxPlayers][2];
 // Display only: the players playing on this computer (bit per player); a
 // screen shows the HUD item of the first of them in the world it shows.
 extern uint8 g_mp_local_mask;
+// Player colors (display only): 0 standard, 1 color-blind friendly.
+extern uint8 g_mp_color_scheme;
+uint32 Mp_PlayerColorRgb(int p);  // 0xRRGGBB, for the overlay
 
 void Mp_Reset();
 // True when more than one player is in the game.
@@ -116,6 +121,7 @@ uint16 Mp_PlayerY(int p);
 uint8 Mp_PlayerHealth(int p);
 uint8 Mp_PlayerMagic(int p);
 bool Mp_IsAlive(int p);
+enum { kMpGhostHeartCooldown = 20 * 60 };
 
 // Hooks called from the game code
 void Mp_BeginFrame();

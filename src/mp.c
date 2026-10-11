@@ -275,6 +275,7 @@ static void Mp_ReadJoypadInto(uint16 input, uint8 *last_h, uint8 *last_l, uint8 
 }
 
 static void Mp_HandleCarry();
+static void Mp_GhostHelp();
 
 void Mp_ReadJoypads() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
@@ -285,6 +286,50 @@ void Mp_ReadJoypads() {
                       Mp_PlayerRam(p, 0xF6), Mp_PlayerRam(p, 0xF8), Mp_PlayerRam(p, 0xFA));
   }
   Mp_HandleCarry();
+  Mp_GhostHelp();
+}
+
+// A downed player isn't only waiting: A sends a small heart to the nearest
+// living teammate in the same world (it drops from above next to them), once
+// every 20 seconds.
+static void Mp_GhostHelp() {
+  bool stable = Mp_Active() && submodule_index == 0 && (main_module_index == 7 || main_module_index == 9);
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    uint16 in = g_mp.p[p].joined && g_mp.p[p].downed ? g_mp.inputs[p] : 0;
+    bool a = (in & ~g_mp.ghost_prev_input[p]) & 0x100;
+    g_mp.ghost_prev_input[p] = in;
+    if (g_mp.ghost_cooldown[p])
+      g_mp.ghost_cooldown[p]--;
+    if (!a || !stable || g_mp.ghost_cooldown[p])
+      continue;
+    int best = -1, best_d = 0;
+    for (int q = 0; q < kMpMaxPlayers; q++) {
+      if (!Mp_IsAlive(q))
+        continue;
+      int d = abs((int16)(Mp_PlayerX(q) - Mp_PlayerX(p))) + abs((int16)(Mp_PlayerY(q) - Mp_PlayerY(p)));
+      if (best < 0 || d < best_d)
+        best = q, best_d = d;
+    }
+    int k = -1;
+    for (int j = 15; j >= 0 && k < 0; j--)
+      if (sprite_state[j] == 0)
+        k = j;
+    if (best < 0 || k < 0)
+      continue;
+    // Like an enemy's prize drop, without the enemy.
+    sprite_type[k] = 0xd8;  // small heart
+    sprite_state[k] = 9;
+    SpritePrep_LoadProperties(k);
+    Sprite_SetX(k, Mp_PlayerX(best));
+    Sprite_SetY(k, Mp_PlayerY(best) + 8);
+    sprite_floor[k] = *Mp_PlayerRam(best, 0xEE);
+    sprite_z[k] = 24;
+    sprite_z_vel[k] = 0;
+    sprite_ignore_projectile[k]++;
+    sprite_delay_aux4[k] = 21;
+    sprite_stunned[k] = 255;
+    g_mp.ghost_cooldown[p] = kMpGhostHeartCooldown;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1103,10 +1148,22 @@ void Mp_DrawOtherPlayers() {
 
 #include "snes/ppu.h"
 
-// Tunic colors for P1..P4: green, red, blue, purple (5-bit RGB).
-static const uint8 kMpPlayerColors[kMpMaxPlayers][3] = {
-  {6, 26, 8}, {31, 6, 6}, {7, 13, 31}, {24, 8, 31},
+// Tunic colors for P1..P4 (5-bit RGB). Standard: green, red, blue, purple.
+// Color-blind friendly (from the Okabe-Ito palette, told apart with any
+// kind of color blindness): bluish green, orange, blue, reddish purple.
+static const uint8 kMpPlayerColors[2][kMpMaxPlayers][3] = {
+  { {6, 26, 8}, {31, 6, 6}, {7, 13, 31}, {24, 8, 31} },
+  { {0, 20, 14}, {29, 20, 0}, {0, 14, 22}, {25, 15, 21} },
 };
+static const uint32 kMpPlayerColorsRgb[2][kMpMaxPlayers] = {
+  { 0x40d040, 0xf04040, 0x4878ff, 0xc050ff },
+  { 0x00b080, 0xf0a000, 0x2890e0, 0xd080b0 },
+};
+uint8 g_mp_color_scheme;
+
+uint32 Mp_PlayerColorRgb(int p) {
+  return kMpPlayerColorsRgb[g_mp_color_scheme & 1][p & 3];
+}
 static uint16 g_mp_saved_cgram[16];
 static uint16 g_mp_tunic_mask;
 
@@ -1125,7 +1182,7 @@ static uint16 Mp_TunicMask() {
 
 static void Mp_MakePalette(uint16 *dst, const uint16 *src, int player) {
   uint16 mask = Mp_TunicMask();
-  const uint8 *col = kMpPlayerColors[player];
+  const uint8 *col = kMpPlayerColors[g_mp_color_scheme & 1][player];
   for (int i = 0; i < 16; i++) {
     uint16 c = src[i];
     if (mask & (1 << i)) {

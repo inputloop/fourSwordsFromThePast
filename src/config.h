@@ -78,6 +78,8 @@ typedef struct Config {
   bool four_swords_title;  // "Four Swords of the Past" on the title screen
   bool mp_use_upnp;
   int mp_input_delay;  // frames (online only)
+  bool mp_name_tags;   // P1-P4 over each Link
+  bool mp_colorblind;  // color-blind friendly player colors
   uint16 mp_port;
   const char *mp_player_name;
   const char *mp_last_join;

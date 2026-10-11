@@ -41,6 +41,7 @@ void Bindings_ResetPlayer(int p) {
   bp->controller = p;
   bp->deadzone = 30;
   bp->stick_moves = true;
+  bp->rumble = true;
   // Controller buttons are placed like on a SNES pad (B bottom, A right).
   static const int8 kPad[kBindButtons] = {
     kGamepadBtn_DpadUp, kGamepadBtn_DpadDown, kGamepadBtn_DpadLeft, kGamepadBtn_DpadRight,
@@ -327,6 +328,8 @@ bool Bindings_ParseConfig(const char *key, char *value) {
     g_bind[p].deadzone = (uint8)IntMin(IntMax(atoi(value), 5), 90);
   } else if (!SDL_strcasecmp(k, "Stick")) {
     g_bind[p].stick_moves = atoi(value) != 0;
+  } else if (!SDL_strcasecmp(k, "Rumble")) {
+    g_bind[p].rumble = atoi(value) != 0;
   } else {
     return false;
   }
@@ -374,6 +377,7 @@ void Bindings_WriteConfig(void *file) {
       fprintf(f, "P%dController = %d\n", p + 1, bp->controller + 1);
     fprintf(f, "P%dDeadzone = %d\n", p + 1, bp->deadzone);
     fprintf(f, "P%dStick = %d\n", p + 1, bp->stick_moves);
+    fprintf(f, "P%dRumble = %d\n", p + 1, bp->rumble);
   }
 }
 

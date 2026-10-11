@@ -1,0 +1,21 @@
+# A downed player can help: A sends a small heart to the nearest living
+# teammate, falling onto it; then it waits 20 seconds before the next.
+load 2
+run 30
+join 2
+run 60
+hp 1 8
+down 2
+run 10
+hold 2 A
+run 2
+hold 2 -
+run 3
+hold 2 A
+run 2
+hold 2 -
+run 240
+expect_hp 1 16
+run 100
+# Only one heart: the second press came during the wait.
+expect_hp 1 16

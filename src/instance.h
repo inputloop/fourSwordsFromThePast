@@ -100,6 +100,7 @@ typedef struct InstPlace {
 } InstPlace;
 bool Inst_PlayerPlace(int p, InstPlace *out);
 bool Inst_PlayerDowned(int p);
+bool Inst_PlayerCanSendHeart(int p);  // downed, and A would send a teammate a heart
 uint8 Inst_PlayerReviveCtr(int p);
 // The player whose world p's screen shows: p, or while p is a ghost in a
 // world that is paused (only ghosts there), a standing teammate.

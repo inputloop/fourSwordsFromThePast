@@ -487,6 +487,10 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       int v = atoi(value);
       g_config.mp_input_delay = v < 0 ? 0 : v > 8 ? 8 : v;
       return true;
+    } else if (StringEqualsNoCase(key, "NameTags")) {
+      return ParseBool(value, &g_config.mp_name_tags);
+    } else if (StringEqualsNoCase(key, "ColorBlindColors")) {
+      return ParseBool(value, &g_config.mp_colorblind);
     } else if (StringEqualsNoCase(key, "UseUpnp")) {
       return ParseBool(value, &g_config.mp_use_upnp);
     } else if (StringEqualsNoCase(key, "Port")) {

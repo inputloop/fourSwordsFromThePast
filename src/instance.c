@@ -993,6 +993,11 @@ bool Inst_PlayerDowned(int p) {
   return i >= 0 && MpOf(i)->p[p].downed;
 }
 
+bool Inst_PlayerCanSendHeart(int p) {
+  int i = Inst_OfPlayer(p);
+  return i >= 0 && MpOf(i)->p[p].downed && MpOf(i)->ghost_cooldown[p] == 0;
+}
+
 uint8 Inst_PlayerReviveCtr(int p) {
   int i = Inst_OfPlayer(p);
   return i >= 0 ? MpOf(i)->p[p].revive_ctr : 0;

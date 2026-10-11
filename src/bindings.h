@@ -25,6 +25,7 @@ typedef struct BindProfile {
   uint8 controller;                       // physical controller index, or kBindNoController
   uint8 deadzone;                         // percent, for the left stick
   bool stick_moves;                       // left stick acts as the d-pad
+  bool rumble;                            // the controller rumbles when this player is hurt
 } BindProfile;
 
 extern BindProfile g_bind[kBindPlayers];
@@ -56,7 +57,7 @@ uint16 Bindings_GetInput(int player);
 // Inputs for the overlay menu from fixed keys/buttons that work regardless of bindings.
 uint16 Bindings_GetMenuFallbackInput();
 
-// Config file: keys "P1Keys", "P1Pad", "P1Controller", "P1Deadzone", "P1Stick".
+// Config file: keys "P1Keys", "P1Pad", "P1Controller", "P1Deadzone", "P1Stick", "P1Rumble".
 bool Bindings_ParseConfig(const char *key, char *value);
 void Bindings_WriteConfig(void *file);
 // Called by the legacy [KeyMap]/[GamepadMap] Controls settings for player 1.

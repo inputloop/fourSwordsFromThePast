@@ -70,6 +70,7 @@ static bool g_pad_used[kMaxPads];
 static uint32 g_pad_modifiers[kMaxPads];
 static uint16 g_pad_last_cmd[kMaxPads][kGamepadBtn_Count];
 static int PadIndexFromId(SDL_JoystickID id);
+static void RumbleOnDamage();
 static bool g_display_perf;
 static int g_curr_fps;
 static int g_ppu_render_flags = 0;
@@ -555,6 +556,7 @@ int main(int argc, char** argv) {
   g_hd2d.vignette = g_config.hd2d_vignette;
   g_hd2d.grade = g_config.hd2d_grade;
   g_hd2d.lighting = g_config.hd2d_lighting;
+  g_mp_color_scheme = g_config.mp_colorblind;
   Session_SetRandomizer(g_config.randomizer);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);
@@ -660,6 +662,7 @@ int main(int argc, char** argv) {
       SDL_LockMutex(g_audio_mutex);
       Session_Tick(local_inputs, g_config.features0);
       is_replay = Session_LastFrameWasReplay();
+      RumbleOnDamage();
       SDL_UnlockMutex(g_audio_mutex);
     }
 
@@ -881,6 +884,27 @@ static void OpenOneGamepad(int i) {
         printf("Controller %d connected: %s\n", p + 1, SDL_GameControllerName(controller));
         return;
       }
+    }
+  }
+}
+
+// Rumbles a local player's controller when their Link loses health (more
+// for a bigger hit). Only this computer's players, and only on their pads.
+static void RumbleOnDamage() {
+  static uint8 prev_hp[kSessionMaxLocal];
+  const SessionStatus *st = Session_GetStatus();
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    int p = st->local_slot[i];
+    uint8 hp = p >= 0 && Inst_IsJoined(p) ? Inst_PlayerHealth(p) : 0;
+    int lost = prev_hp[i] - hp;
+    prev_hp[i] = hp;
+    if (lost <= 0 || lost > 0x40 || p < 0 || !g_bind[i].rumble)
+      continue;
+    int c = g_bind[i].controller;
+    SDL_GameController *ctl = c < kMaxPads && g_pad_used[c] ? SDL_GameControllerFromInstanceID(g_pad_ids[c]) : NULL;
+    if (ctl) {
+      uint16 strength = (uint16)IntMin(0x5000 + lost * 0x1800, 0xffff);
+      SDL_GameControllerRumble(ctl, strength, strength / 2, 120 + lost * 20);
     }
   }
 }

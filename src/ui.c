@@ -184,7 +184,6 @@ static void DrawHeart(int x, int y, int fill, uint32 color) {
   }
 }
 
-static const uint32 kPlayerColorRgb[kMpMaxPlayers] = { 0x40d040, 0xf04040, 0x4878ff, 0xc050ff };
 
 // ---------------------------------------------------------------------------
 // Menu model
@@ -197,6 +196,7 @@ enum {
   kScreen_Seed,
   kScreen_Lan,
   kScreen_Video,
+  kScreen_Hd2d,
   kScreen_Gameplay,
   kScreen_Controls,
   kScreen_Bindings,
@@ -465,6 +465,17 @@ static void ScreenMultiplayer() {
     Label("Friendly fire");
     snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s (host decides)", OnOff(Inst_GetFriendlyFire()));
   }
+  Item("Name tags", OnOff(g_config.mp_name_tags));
+  if (Act() != kAct_None) {
+    g_config.mp_name_tags ^= 1;
+    g_ui.dirty_settings = true;
+  }
+  Item("Player colors", g_config.mp_colorblind ? "color-blind" : "standard");
+  if (Act() != kAct_None) {
+    g_config.mp_colorblind ^= 1;
+    g_mp_color_scheme = g_config.mp_colorblind;
+    g_ui.dirty_settings = true;
+  }
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);
@@ -579,6 +590,9 @@ static void ScreenVideo() {
     g_hd2d.enabled = g_config.hd2d;
     g_ui.dirty_settings = true;
   }
+  Item("2D-HD settings", ">");
+  if (Act() == kAct_Select || Act() == kAct_Right)
+    Goto(kScreen_Hd2d);
   Item("No sprite flicker", OnOff(g_config.no_sprite_limits));
   if (Act() != kAct_None) {
     g_config.no_sprite_limits ^= 1;
@@ -608,6 +622,39 @@ static void ScreenVideo() {
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);
+}
+
+// A 0-100 strength changed in steps of 10 with Left/Right.
+static void Strength(const char *label, uint8 *config, uint8 *live) {
+  char buf[16];
+  snprintf(buf, sizeof(buf), "< %3d%% >", *config);
+  Item(label, buf);
+  int a = Act(), v = *config;
+  if (a == kAct_Left || a == kAct_Right || a == kAct_Select) {
+    v = a == kAct_Left ? v - 10 : v + 10;
+    v = v < 0 ? 0 : v > 100 ? (a == kAct_Select ? 0 : 100) : v;
+    *config = *live = (uint8)v;
+    g_ui.dirty_settings = true;
+  }
+}
+
+static void ScreenHd2d() {
+  snprintf(g_ui.title, sizeof(g_ui.title), "2D-HD LOOK (BETA)");
+  Item("2D-HD look", OnOff(g_config.hd2d));
+  if (Act() != kAct_None) {
+    g_config.hd2d ^= 1;
+    g_hd2d.enabled = g_config.hd2d;
+    g_ui.dirty_settings = true;
+  }
+  Strength("Depth of field", &g_config.hd2d_depth_of_field, &g_hd2d.depth_of_field);
+  Strength("Lighting", &g_config.hd2d_lighting, &g_hd2d.lighting);
+  Strength("Bloom", &g_config.hd2d_bloom, &g_hd2d.bloom);
+  Strength("Color grade", &g_config.hd2d_grade, &g_hd2d.grade);
+  Strength("Vignette", &g_config.hd2d_vignette, &g_hd2d.vignette);
+  Item("Back", NULL);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Video);
+  snprintf(g_ui.footer, sizeof(g_ui.footer), "Left/Right: change strength");
 }
 
 static void ScreenGameplay() {
@@ -714,7 +761,8 @@ static void ScreenControls() {
   Label("  Back+Start on any controller");
   Label("Drop in: Start on a new controller");
   Label("Revive: stand next to a downed Link");
-  Label("While down: L/R picks who to watch");
+  Label("While down: L/R picks who to watch,");
+  Label("  A sends a teammate a heart");
   Label("Lift teammate: A, A again throws");
   Item("Back", NULL);
   if (Act() == kAct_Select)
@@ -774,6 +822,11 @@ static void ScreenBindings() {
     bp->deadzone = (uint8)IntMin(IntMax(bp->deadzone + (a == kAct_Left ? -5 : 5), 5), 90);
     g_ui.dirty_settings = true;
   }
+  Item("Rumble when hurt", OnOff(bp->rumble));
+  if (Act() != kAct_None) {
+    bp->rumble = !bp->rumble;
+    g_ui.dirty_settings = true;
+  }
   Item("Swap A/B and X/Y on controller", NULL);
   if (Act() == kAct_Select) {
     Bindings_SwapFaceButtons(p);
@@ -814,6 +867,7 @@ static void BuildScreen() {
   case kScreen_Seed: ScreenSeed(); break;
   case kScreen_Lan: ScreenLan(); break;
   case kScreen_Video: ScreenVideo(); break;
+  case kScreen_Hd2d: ScreenHd2d(); break;
   case kScreen_Gameplay: ScreenGameplay(); break;
   case kScreen_Controls: ScreenControls(); break;
   case kScreen_Bindings: ScreenBindings(); break;
@@ -947,7 +1001,8 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
     if (g_ui.screen == kScreen_Main)
       Goto(kScreen_None);
     else
-      Goto(g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Lan ? kScreen_Multiplayer : kScreen_Main);
+      Goto(g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Lan ? kScreen_Multiplayer :
+           g_ui.screen == kScreen_Hd2d ? kScreen_Video : kScreen_Main);
     g_ui.action = kAct_None;
   }
   if (g_ui.action != kAct_None && Ui_IsOpen()) {
@@ -1096,7 +1151,7 @@ static void DrawTeammateArrows() {
       if (fabsf(dx) > 0.01f) t = fminf(t, (cx - 10) / fabsf(dx));
       if (fabsf(dy) > 0.01f) t = fminf(t, (cy - 10) / fabsf(dy));
       int px = view->x + (int)(cx + dx * t), py = view->y + (int)(cy + dy * t);
-      uint32 color = them.downed ? 0xa0a0a0 : kPlayerColorRgb[q];
+      uint32 color = them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(q);
       DrawArrow(px, py, ux, uy, 8, 0x000000);
       DrawArrow(px - (int)(ux * 1.5f), py - (int)(uy * 1.5f), ux, uy, 6, color);
       char label[4];
@@ -1106,6 +1161,32 @@ static void DrawTeammateArrows() {
       ly = IntMax(view->y + 1, IntMin(ly, view->y + view->h - 8));
       ShadeRect(lx - 1, ly - 1, TextWidth(label) + 2, 9);
       DrawText(lx, ly, label, color);
+    }
+  }
+}
+
+// A small P1-P4 tag over every Link on screen (an option).
+static void DrawNameTags() {
+  if (!g_config.mp_name_tags || Inst_NumJoined() < 2 || (main_module_index != 7 && main_module_index != 9))
+    return;
+  for (int v = 0; v < g_nviews; v++) {
+    const UiView *view = &g_views[v];
+    InstPlace me, them;
+    if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
+      continue;
+    int extra = (view->w - 256) / 2;
+    for (int q = 0; q < kMpMaxPlayers; q++) {
+      if (!Inst_PlayerPlace(q, &them) || them.space != me.space)
+        continue;
+      char label[4];
+      snprintf(label, sizeof(label), "P%d", q + 1);
+      int tw = TextWidth(label);
+      int x = view->x + (int16)(them.x - me.cam_x) + extra + 2 - tw / 2;
+      int y = view->y + (int16)(them.y - me.cam_y) - 22;
+      if (x < view->x || x + tw > view->x + view->w || y < view->y || y + 8 > view->y + view->h)
+        continue;
+      ShadeRect(x - 1, y - 1, tw + 2, 9);
+      DrawText(x, y, label, them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(q));
     }
   }
 }
@@ -1145,18 +1226,23 @@ static void DrawCornerHud() {
     ShadeRect(x, y, panel_w, panel_h);
     char label[4];
     snprintf(label, sizeof(label), "P%d", p + 1);
-    DrawText(x + 2, y + 2 + (rows - 1) * 4, label, kPlayerColorRgb[p]);
+    DrawText(x + 2, y + 2 + (rows - 1) * 4, label, Mp_PlayerColorRgb(p));
     if (Inst_PlayerDowned(p)) {
       DrawText(x + 18, y + 2, "DOWN", 0xffffff);
+      // A heart at the end: A would send a teammate a heart now.
+      bool heart = Inst_PlayerCanSendHeart(p);
+      int bar = panel_w - 46 - (heart ? 10 : 0);
       int w = (panel_w - 20) * Inst_PlayerReviveCtr(p) / kMpReviveFrames;
-      FillRect(x + 44, y + 4, panel_w - 46, 3, 0x303030);
-      FillRect(x + 44, y + 4, IntMin(w, panel_w - 46), 3, kPlayerColorRgb[p]);
+      FillRect(x + 44, y + 4, bar, 3, 0x303030);
+      FillRect(x + 44, y + 4, IntMin(w, bar), 3, Mp_PlayerColorRgb(p));
+      if (heart)
+        DrawHeart(x + panel_w - 9, y + 1, 2, 0xf04060);
       continue;
     }
     int hp = Inst_PlayerHealth(p);
     for (int i = 0; i < hearts; i++) {
       int fill = hp >= (i + 1) * 8 ? 2 : hp >= i * 8 + 4 ? 1 : 0;
-      DrawHeart(x + 16 + (i % per_row) * 8, y + 1 + (i / per_row) * 8, fill, kPlayerColorRgb[p]);
+      DrawHeart(x + 16 + (i % per_row) * 8, y + 1 + (i / per_row) * 8, fill, Mp_PlayerColorRgb(p));
     }
     int bar_w = panel_w - 18, magic = IntMin(Inst_PlayerMagic(p), 128);
     FillRect(x + 16, y + panel_h - 4, bar_w, 2, 0x303030);
@@ -1311,6 +1397,7 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   DrawTitleBanner();
   DrawSeedNotice();
   DrawTeammateArrows();
+  DrawNameTags();
   DrawCornerHud();
   DrawNotifications();
   DrawMenu();
@@ -1332,6 +1419,9 @@ void Ui_SaveSettings() {
   fprintf(f, "LinearFiltering = %d\n", g_config.linear_filtering);
   fprintf(f, "NoSpriteLimits = %d\n", g_config.no_sprite_limits);
   fprintf(f, "Hd2d = %d\n", g_config.hd2d);
+  fprintf(f, "Hd2dDepthOfField = %d\nHd2dLighting = %d\nHd2dBloom = %d\nHd2dGrade = %d\nHd2dVignette = %d\n",
+          g_config.hd2d_depth_of_field, g_config.hd2d_lighting, g_config.hd2d_bloom, g_config.hd2d_grade,
+          g_config.hd2d_vignette);
   fprintf(f, "DimFlashes = %d\n", (g_config.features0 & kFeatures0_DimFlashes) != 0);
   fprintf(f, "OutputMethod = %s\n", g_config.output_method == kOutputMethod_OpenGL ? "OpenGL" :
           g_config.output_method == kOutputMethod_OpenGL_ES ? "OpenGL ES" :
@@ -1360,6 +1450,8 @@ void Ui_SaveSettings() {
   fprintf(f, "UseUpnp = %d\n", g_ui.use_upnp);
   fprintf(f, "Port = %d\n", g_config.mp_port);
   fprintf(f, "InputDelay = %d\n", g_config.mp_input_delay);
+  fprintf(f, "NameTags = %d\n", g_config.mp_name_tags);
+  fprintf(f, "ColorBlindColors = %d\n", g_config.mp_colorblind);
   if (g_config.mp_player_name)
     fprintf(f, "PlayerName = %s\n", g_config.mp_player_name);
   fprintf(f, "LastJoinAddress = %s\n", g_ui.join_addr);
