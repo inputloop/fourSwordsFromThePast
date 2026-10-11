@@ -93,7 +93,7 @@ flowchart LR
 - **Taking an exit alone** (a door, stairs, a pit, the edge of an area). The frame is run normally, and the result becomes the new world for the traveler. Then the old world is rewound to before that frame and replayed without the traveler. That way the people left behind never see the traveler leave in a strange way.
 - **Walking out of view.** If a non-leader walks (mostly) off the edge of the screen, a copy of the world is made for them, with them as leader. Their camera then slides over to center on them. A Link standing on stairs or in a doorway right at the screen's edge is still in view, so it stays.
 
-**Merging.** When two worlds are in the same room or overworld screen, and their cameras are within 48 pixels of each other, the players of one world move into the other. The extra world is thrown away. The camera rule keeps anyone's view from jumping.
+**Merging.** When two worlds are in the same room or overworld screen, and their cameras are within 48 pixels of each other, the players of one world move into the other. The extra world is thrown away. The camera rule keeps anyone's view from jumping. Right after someone walks out of view, the two worlds wait a second before they may merge, because the new camera is still sliding over to its player; otherwise they would merge straight back and split again, and the camera would jump between leaders.
 
 **Seeing each other before merging.** Two worlds in the same room can have cameras far apart, for example while one player walks back toward the other. So nobody is invisible until the worlds merge, each world remembers where its Links were drawn. When a screen is drawn, the Links of every other world in the same room or area are drawn on it too, shifted by the difference between the two cameras. Drawing them changes nothing in the game, so it is safe online. A player who opened the item menu or a map has a world of their own that shows the menu, so they are drawn as they last looked, standing where they paused.
 
@@ -278,7 +278,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 35 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 36 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

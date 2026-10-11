@@ -333,6 +333,8 @@ static void Mp_SyncQuadrantToLeader() {
 }
 
 void Mp_EndFrame() {
+  if (g_mp.merge_grace)
+    g_mp.merge_grace--;
   // A Link playing alone in a world keeps track of where it is, so players
   // who join this world later aren't mistaken for a group that just arrived.
   if (!Mp_Active()) {
@@ -1026,7 +1028,7 @@ void Mp_PrepareRender(Ppu *ppu) {
         int x = (set->oam[i * 2] & 0xff) | (set->high[i] & 1) << 8;
         int y = set->oam[i * 2] >> 8;
         x = (x + dx) & 0x1ff, y = (y + dy) & 0xff;
-        set->oam[i * 2] = x & 0xff | y << 8;
+        set->oam[i * 2] = (x & 0xff) | y << 8;
         set->high[i] = (set->high[i] & ~1) | x >> 8;
       }
     }

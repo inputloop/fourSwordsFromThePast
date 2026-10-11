@@ -5,7 +5,8 @@
 *The Legend of Zelda: A Link to the Past* as a native PC game with **four player
 drop-in/drop-out co-op** (same PC, LAN and internet), each Link in its own
 color, free roaming (split screen when couch players go separate ways),
-per-player hearts in the screen corners, toggleable friendly fire,
+per-player hearts and magic, private item menus and maps, rollback
+netcode, spectating while you're down, toggleable friendly fire,
 native widescreen and an in-game options menu.
 
 Built on the [snesrev/zelda3](https://github.com/snesrev/zelda3) C

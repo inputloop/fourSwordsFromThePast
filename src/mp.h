@@ -52,6 +52,7 @@ typedef struct MpState {
   uint8 module_snapshot[2];
   uint8 exit_blocked_timer;  // > 0 shows the "everyone must head that way" hint
   uint8 regroup_grace;       // frames before regrouped Links can split off by leaving the view
+  uint8 merge_grace;         // frames after a Link walked out of view before the worlds may merge again
   uint8 quad_valid;          // quad_offset is known for quad_room
   uint8 quad_offset;         // dungeon quadrant XOR the half of the room the leader stands in
   uint16 quad_room;

@@ -211,6 +211,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         failures++;
       }
       ByteArray_Destroy(&arr);
+    } else if (!strcmp(cmd, "expect_bg3hofs")) {
+      // expect_bg3hofs <x>: the HUD layer's horizontal scroll (after drawing)
+      if (g_zenv.ppu->bgLayer[2].hScroll != atoi(arg1)) {
+        printf("FAIL: BG3 scroll is %d, expected %s at frame %d\n", g_zenv.ppu->bgLayer[2].hScroll, arg1, frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         Inst_RunFrame(held);

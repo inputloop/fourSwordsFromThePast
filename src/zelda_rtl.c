@@ -205,6 +205,12 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
 
   int height = render_flags & kPpuRenderFlags_Height240 ? 240 : 224;
 
+  // The mid-screen BG3 scroll change below must not outlive this drawing: when
+  // the same frame is drawn again (the game paused under the menu), the top of
+  // the screen would be drawn with it too, shifting the HUD.
+  BgLayer saved_bg3 = g_zenv.ppu->bgLayer[2];
+  uint8 saved_scroll_prev = g_zenv.ppu->scrollPrev, saved_scroll_prev2 = g_zenv.ppu->scrollPrev2;
+
   for (int i = 0; i <= height; i++) {
     if (i == 128 && irq_flag) {
       zelda_ppu_write(BG3HOFS, selectfile_var8);
@@ -220,6 +226,8 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
     SimpleHdma_DoLine(&hdma_chans[0]);
     SimpleHdma_DoLine(&hdma_chans[1]);
   }
+  g_zenv.ppu->bgLayer[2] = saved_bg3;
+  g_zenv.ppu->scrollPrev = saved_scroll_prev, g_zenv.ppu->scrollPrev2 = saved_scroll_prev2;
   Mp_FinishRender(g_zenv.ppu);
 }
 

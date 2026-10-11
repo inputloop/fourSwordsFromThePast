@@ -29,6 +29,7 @@ typedef struct Instance {
 } Instance;
 
 static Instance g_inst[kInstMax];
+enum { kMergeGrace = 60 };
 
 // How each player last looked in normal gameplay (display only), so a player
 // who opened the item menu or a map in a world of their own is still drawn
@@ -154,13 +155,6 @@ int Inst_NumJoined() {
   int n = 0;
   for (int p = 0; p < kMpMaxPlayers; p++)
     n += Inst_IsJoined(p);
-  return n;
-}
-
-static int NumJoinedIn(int i) {
-  int n = 0;
-  for (int p = 0; p < kMpMaxPlayers; p++)
-    n += MpOf(i)->p[p].joined;
   return n;
 }
 
@@ -317,6 +311,11 @@ static bool RunInstance(int i, const uint16 *inputs) {
     bool follower_goes_along = travel == 1 && p == g_snap_mp.leader;
     SplitOff(j, p, follower_goes_along);
     if (!travel) {
+      // The new world's camera still has to catch up with its Link; until
+      // then everybody looks in view of both cameras, and the worlds would
+      // merge right back (with the camera jumping from one leader to the
+      // other), only to split again.
+      g_mp.merge_grace = g_inst[j].mp.merge_grace = kMergeGrace;
       Mp_RemovePlayer(p);
       break;
     }
@@ -384,6 +383,8 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
   // Ghosts lying in this room show up as soon as someone standing is here.
   if (!HasAlive(b))
     return true;
+  if (MpOf(a)->merge_grace || MpOf(b)->merge_grace)
+    return false;
   // Only once the cameras are nearly in the same place, so nobody's view jumps.
   if (abs((int16)(va->cam_x - vb->cam_x)) > 48 || abs((int16)(va->cam_y - vb->cam_y)) > 48)
     return false;

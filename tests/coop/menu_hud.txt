@@ -1,0 +1,14 @@
+# With the overlay menu open the game is paused and the same frame is drawn
+# again and again. Drawing must not leave the mid-screen HUD scroll change
+# behind, or the HUD at the top of the screen slides 32 pixels to the left.
+load 2
+run 30
+join 2
+run 10
+menu
+tick 2
+shot tests/out/menu_hud0.ppm
+shot tests/out/menu_hud1.ppm
+expect_bg3hofs 0
+menu
+tick 2
