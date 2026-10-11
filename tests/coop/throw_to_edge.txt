@@ -1,0 +1,58 @@
+# The glitch from a playtest: P1 throws P2 toward the west edge of the area
+# outside Link's house and runs past it. P2 leads; the game only lets the
+# leader move on to the next area, so P1 walked past the area's edge without
+# a screen transition, ended up outside the area (where the camera can't
+# follow) and the worlds kept splitting and merging. A teammate at the edge
+# now gets a world of its own there and moves on to the next area.
+rando 40
+run 100
+status
+run 100
+status
+run 200
+status
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 L
+hold 2 L
+run 100
+hold 1 DL
+hold 2 DL
+run 60
+hold 1 L
+hold 2 L
+run 100
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+pos 2 2135 2936
+run 2
+pram 1 2f 04
+run 2
+hold 1 A
+run 2
+hold 1 -
+run 10
+hold 1 A
+run 2
+hold 1 -
+run 60
+expect_near 2 2074 2941
+hold 1 L
+run 100
+hold 1 -
+run 200
+expect_playing 1
+expect_playing 2
+check_area
+expect_apart 1 2

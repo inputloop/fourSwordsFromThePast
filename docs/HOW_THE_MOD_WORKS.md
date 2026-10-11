@@ -63,6 +63,8 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Screen transitions with a camera that is still catching up.** When Link walks off the edge of an overworld area, the game slides the camera to the next area a few pixels per frame and stops when the camera exactly reaches its target. With one Link the camera is always stopped at the area's edge when that happens. In co-op it can still be sliding over to its Link (after the worlds split, or after the leader changed because someone went down), so the slide used to step right past its target and scroll on forever, dragging Link across the map. Now, in co-op, the slide starts from where a single Link's camera would be, and it stops once it reaches or passes its target.
 
+**Teammates at the edge of an area.** The game only checks the leader for walking off the edge of an overworld area, and only at the moment it crosses the line. A teammate who isn't leading (or is thrown) could walk right past the edge with no screen transition and end up outside the area, where the camera can't follow. Now a teammate who reaches the edge is held there and gets a world of their own, as its leader, so their next step there takes them on to the next area. A Link flying through the air from a knockback or a throw is also kept inside the area.
+
 **Keeping the room in step with the leader.** In a dungeon, the game remembers which half of a big room Link is in, and only updates it as Link walks across the middle. That memory belongs to the whole world, not to one player. It isn't simply "the half Link stands in" (in Link's house it says the other half), but in each room the two differ in the same way. So the mod remembers that difference for the room, and after the leader changes it applies it to the new leader's position. (It skips moments when the leader stands in a doorway, where the game's door code updates the half on its own.) Without that, a player walking out of a room's exit right after becoming leader could be scrolled into the "other half" of the room instead, and end up back where they started.
 
 **Colors.** The tunic color lives in one small palette (16 colors). Before drawing, the mod copies that palette and recolors the tunic for each player: green, red, blue and purple. Because of this, armor upgrades still protect you but no longer change your tunic color.
@@ -287,7 +289,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 ## How it is tested and built
 
-The mod has 41 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 42 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

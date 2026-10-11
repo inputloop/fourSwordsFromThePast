@@ -809,6 +809,31 @@ static void Mp_LimitLeaderMovement() {
   }
 }
 
+// Keeps the resident Link inside the overworld area its world has loaded,
+// short of the line where the leader would move on to the next area.
+// Returns true if it was at (or past) that line. The game only checks the
+// leader for leaving the area, and only as it crosses the line: a teammate
+// walking (or being thrown) past it ended up outside the area, where the
+// camera can't follow and from where it never moved on either.
+static bool Mp_KeepInOverworldArea() {
+  if (main_module_index != 9 || submodule_index != 0 || player_is_indoors)
+    return false;
+  // (The area loaded, by its top left corner; the game's per-frame "area of
+  // the player" can be stale right after coming out of a building.)
+  int area = BYTE(overworld_area_index) & 0x3f;
+  int bx = kOverworld_OffsetBaseX[area], by = kOverworld_OffsetBaseY[area];
+  int rb = overworld_right_bottom_bound_for_scroll;
+  int tx = (int16)(link_x_coord - bx), ty = (int16)(link_y_coord - by);
+  int cx = tx < 6 ? 6 : tx > rb + 3 ? rb + 3 : tx;
+  int cy = ty < 4 ? 4 : ty > rb - 1 ? rb - 1 : ty;
+  // Only a nudge back from just past the edge, never a teleport.
+  if ((cx == tx && cy == ty) || abs(cx - tx) > 48 || abs(cy - ty) > 48)
+    return false;
+  link_x_coord = bx + cx;
+  link_y_coord = by + cy;
+  return true;
+}
+
 // Called by the gameplay modules after the leader's player control ran.
 void Mp_RunOtherPlayers(void (*control)(void)) {
   if (!Mp_Active() || submodule_index != 0 || (main_module_index != 7 && main_module_index != 9))
@@ -870,6 +895,13 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     control();
     g_mp.in_other_update = 0;
     if (main_module_index == m && submodule_index == s) {
+      // A teammate at the area's edge gets a world of its own, as the one
+      // leading it, so its next step there takes it on to the next area.
+      if (g_mp.independent && Mp_KeepInOverworldArea() && g_mp.split_request < 0 &&
+          *Mp_PlayerRam(p, 0x5D) == 0) {
+        g_mp.split_request = p;
+        g_mp.split_travel = 0;
+      }
       if (!g_mp.independent) {
         Mp_LimitMovement(old_x, old_y, lx, ly);
       } else if (g_mp.split_request < 0 && !g_mp.regroup_grace) {
@@ -905,6 +937,10 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     Mp_EndObject();
   }
   Mp_SwapToLeader();
+  // A leader knocked back or thrown doesn't move on to the next area either
+  // (the game checks that only while walking): keep it inside too.
+  if (g_mp.independent && link_player_handler_state != 0)
+    Mp_KeepInOverworldArea();
   Mp_PlaceCarried();
   Mp_HandleRevives();
   if (g_mp.friendly_fire)

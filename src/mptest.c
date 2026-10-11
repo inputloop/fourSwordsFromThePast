@@ -129,9 +129,10 @@ static void PrintStatus(int frame) {
     if (!Inst_IsJoined(p))
       continue;
     SwitchToPlayer(p);
-    printf("  P%d world=%d x=%d y=%d hp=%d downed=%d oam=%d dir=%d bframes=%d oamy=%x state=%d\n", p + 1, Inst_Current(), Mp_PlayerX(p), Mp_PlayerY(p),
+    printf("  P%d world=%d x=%d y=%d hp=%d downed=%d oam=%d dir=%d bframes=%d oamy=%x state=%d z=%d vx=%d aux=%d inc=%d carried=%d\n", p + 1, Inst_Current(), Mp_PlayerX(p), Mp_PlayerY(p),
            Mp_PlayerHealth(p), g_mp.p[p].downed, g_mp_render.p[p].count, *Mp_PlayerRam(p, 0x2F),
-           *Mp_PlayerRam(p, 0x3C), *Mp_PlayerRam(p, 0x44), *Mp_PlayerRam(p, 0x5D));
+           *Mp_PlayerRam(p, 0x3C), *Mp_PlayerRam(p, 0x44), *Mp_PlayerRam(p, 0x5D), (int16)WORD(*Mp_PlayerRam(p, 0x24)), (int8)*Mp_PlayerRam(p, 0x28),
+           *Mp_PlayerRam(p, 0x4D), *Mp_PlayerRam(p, 0x46), g_mp.carried_by[p]);
   }
   Inst_Switch(r);
   for (int k = 0; k < 16; k++)
