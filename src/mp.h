@@ -26,6 +26,7 @@ enum {
   kMpCtxMaxBytes = 512,
   kMpReviveFrames = 90,
   kMpMaxExtraOam = 64,
+  kMpMaxAncillaOam = 24,
 };
 
 typedef struct MpPlayer {
@@ -54,7 +55,8 @@ typedef struct MpState {
   uint8 group_exits;         // 1: rooms change only when everyone heads the same way
   uint8 independent;         // 1: players roam freely; splitting off asks for a new world instance
   int8 split_request;        // player that leaves this world instance this frame, or -1
-  uint8 split_travel;        // 1: it went through an exit (the others replay the frame without it)
+  uint8 split_travel;        // 1: it went through an exit, 2: it opened a menu or map
+                             // (the others replay the frame without it)
   uint16 inputs[kMpMaxPlayers];
   MpPlayer p[kMpMaxPlayers];
 } MpState;
@@ -64,6 +66,11 @@ typedef struct MpRenderPlayer {
   uint8 visible;
   uint16 oam[kMpMaxExtraOam * 2];
   uint8 high[kMpMaxExtraOam];
+  // Sprites of this player's projectiles (hookshot, ...) that use Link's own
+  // tiles, so they are drawn with this player's tiles instead of the leader's.
+  uint8 anc_count;
+  uint16 anc_oam[kMpMaxAncillaOam * 2];
+  uint8 anc_high[kMpMaxAncillaOam];
   uint16 tiles[0x200];
 } MpRenderPlayer;
 
@@ -76,6 +83,9 @@ extern MpRenderState g_mp_render;
 // Display only: shifts how another player's Link is drawn (netplay smooths
 // out corrections of predicted movement with it).
 extern int16 g_mp_draw_offset[kMpMaxPlayers][2];
+// Display only: the players playing on this computer (bit per player); a
+// screen shows the HUD item of the first of them in the world it shows.
+extern uint8 g_mp_local_mask;
 
 void Mp_Reset();
 // True when more than one player is in the game.
@@ -109,6 +119,7 @@ void Mp_BeginObject();
 void Mp_EndObject();
 void Mp_PreSprite(int k);
 void Mp_PreAncilla(int k);
+void Mp_PostAncilla(int k);
 bool Mp_SuppressCamera();
 // Runs the camera scroll of the gameplay modules. A player who just got their
 // own world instance may stand away from the center; the camera catches up.

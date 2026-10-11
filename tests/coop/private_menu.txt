@@ -1,0 +1,25 @@
+# Opening the item menu (or a map) gives that player a world of their own,
+# so the others keep playing; closing it merges the worlds again.
+load 2
+run 30
+join 2
+run 20
+hold 2 S
+run 1
+hold 2 -
+run 40
+expect_instances 2
+expect_module 9
+view 2
+expect_module 14
+view 1
+hold 1 D
+run 30
+hold 1 -
+expect_near 1 3920 1622
+hold 2 S
+run 1
+hold 2 -
+run 60
+expect_instances 1
+expect_same 1 2

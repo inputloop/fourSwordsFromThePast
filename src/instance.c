@@ -297,10 +297,11 @@ static bool RunInstance(int i, const uint16 *inputs) {
     int p = g_mp.split_request, j;
     if (p < 0 || !can_split || Mp_NumJoined() < 2 || (j = FreeSlot()) < 0)
       break;
-    bool travel = g_mp.split_travel;
+    uint8 travel = g_mp.split_travel;
     TRACE("  split P%d from world %d into %d travel=%d module=%d/%d\n", p + 1, i, j, travel, main_module_index, submodule_index);
     // The follower follows whoever led the group before this frame.
-    bool follower_goes_along = travel && p == g_snap_mp.leader;
+    // (Not into a menu: split_travel 2.)
+    bool follower_goes_along = travel == 1 && p == g_snap_mp.leader;
     SplitOff(j, p, follower_goes_along);
     if (!travel) {
       Mp_RemovePlayer(p);

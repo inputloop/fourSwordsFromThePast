@@ -39,6 +39,7 @@
 //   story <0|1>         the Four Swords opening story
 //   title <0|1>         "Four Swords of the Past" on the title screen
 //   inputdelay <frames> online input delay
+//   pram <p> <hexaddr> <hexval>  change a byte of player p's own Link state
 //   resetcounters       zero the netplay statistics (resyncs, rollbacks, own corrections)
 //   expect_own_corrections <n>  fail if our own Link was corrected more than n times
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
@@ -185,6 +186,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Inst_RunFrame(held);
       }
     } else if (!strcmp(cmd, "shot")) {
+      g_mp_local_mask = 1 << view;
       ZeldaDrawPpuFrame((uint8 *)pixels, width * 4, render_flags);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
@@ -458,6 +460,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Session_SetStory(atoi(arg1));
     } else if (!strcmp(cmd, "title")) {
       g_config.four_swords_title = atoi(arg1);
+    } else if (!strcmp(cmd, "pram")) {
+      // pram <p> <hexaddr> <hexval>: change a byte of player p's own state (its Link context)
+      int p = atoi(arg1) - 1;
+      SwitchToPlayer(p);
+      *Mp_PlayerRam(p, strtol(arg2, NULL, 16)) = strtol(arg3, NULL, 16);
     } else if (!strcmp(cmd, "resetcounters")) {
       Session_ResetCounters();
     } else if (!strcmp(cmd, "expect_own_corrections")) {

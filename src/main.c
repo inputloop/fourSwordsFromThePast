@@ -191,6 +191,12 @@ static void DrawSplitScreen(uint8 *pixel_buffer, int pitch, const int *views, in
 static void DrawPpuFrameWithPerf() {
   int views[kInstMax];
   int nviews = GetViews(views);
+  // Each screen shows the HUD item of a player playing on this computer.
+  const SessionStatus *st = Session_GetStatus();
+  g_mp_local_mask = 0;
+  for (int i = 0; i < kSessionMaxLocal; i++)
+    if (st->local_slot[i] >= 0)
+      g_mp_local_mask |= 1 << st->local_slot[i];
   int cols = nviews >= 2 ? 2 : 1, rows = nviews >= 3 ? 2 : 1;
   g_disp_width = g_snes_width * cols;
   g_disp_height = g_snes_height * rows;

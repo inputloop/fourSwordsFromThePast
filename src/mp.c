@@ -284,7 +284,7 @@ void Mp_BeginFrame() {
   if (g_mp.resident != g_mp.leader)
     Mp_SwapToLeader();
   for (int p = 0; p < kMpMaxPlayers; p++)
-    g_mp_render.p[p].visible = 0;
+    g_mp_render.p[p].visible = 0, g_mp_render.p[p].anc_count = 0;
 }
 
 static uint32 Mp_AreaKey() {
@@ -387,6 +387,8 @@ void Mp_PreSprite(int k) {
   Mp_SwapTo(target);
 }
 
+static OamEnt g_mp_oam_before[128];
+
 void Mp_PreAncilla(int k) {
   if (!Mp_Active())
     return;
@@ -395,6 +397,30 @@ void Mp_PreAncilla(int k) {
   if (!g_mp.p[owner].joined)
     owner = g_mp.leader;
   Mp_SwapTo(owner);
+  memcpy(g_mp_oam_before, oam_buf, sizeof(g_mp_oam_before));
+}
+
+// Some projectiles (the hookshot's head and chain, ...) are drawn with tiles
+// from Link's own graphics, which are only uploaded for the leader. The
+// sprites another player's projectile just added that use those tiles are
+// moved over to that player's own sprite set, which has its own Link tiles.
+void Mp_PostAncilla(int k) {
+  int owner = g_mp.resident;
+  if (!Mp_Active() || owner == g_mp.leader)
+    return;
+  MpRenderPlayer *rp = &g_mp_render.p[owner];
+  for (int i = 0; i < 128; i++) {
+    OamEnt *e = &oam_buf[i];
+    if (e->y == 0xf0 || !memcmp(e, &g_mp_oam_before[i], sizeof(OamEnt)))
+      continue;
+    if ((e->flags & 1) || e->charnum >= 0x20 || rp->anc_count >= kMpMaxAncillaOam)
+      continue;
+    rp->anc_oam[rp->anc_count * 2 + 0] = e->x | e->y << 8;
+    rp->anc_oam[rp->anc_count * 2 + 1] = e->charnum | e->flags << 8;
+    rp->anc_high[rp->anc_count] = bytewise_extended_oam[i];
+    rp->anc_count++;
+    e->y = 0xf0;
+  }
 }
 
 bool Mp_SuppressCamera() {
@@ -840,10 +866,45 @@ static void Mp_MakePalette(uint16 *dst, const uint16 *src, int player) {
   }
 }
 
+uint8 g_mp_local_mask = 1;
+static uint8 g_mp_render_ram[0x20000];
+static MpState g_mp_render_mp;
+static uint16 g_mp_saved_hud[165], g_mp_saved_hud_addr;
+static bool g_mp_hud_swapped;
+
+// The HUD's item box shows the leader's Y item. On a screen that belongs to
+// another player, show that player's own item instead (drawing only: the
+// game's memory is put back right after).
+static void Mp_ShowViewersItem() {
+  g_mp_hud_swapped = false;
+  if (!Mp_Active() || (main_module_index != 7 && main_module_index != 9))
+    return;
+  int v = -1;
+  for (int p = 0; p < kMpMaxPlayers && v < 0; p++)
+    if ((g_mp_local_mask >> p & 1) && g_mp.p[p].joined)
+      v = p;
+  if (v < 0 || v == g_mp.leader || *Mp_PlayerRam(v, 0x202) == hud_cur_item)
+    return;
+  memcpy(g_mp_render_ram, g_ram, sizeof(g_mp_render_ram));
+  g_mp_render_mp = g_mp;
+  g_mp_saved_hud_addr = word_7E0219;
+  memcpy(g_mp_saved_hud, &g_zenv.vram[g_mp_saved_hud_addr], sizeof(g_mp_saved_hud));
+  Mp_SwapTo(v);
+  Hud_RefreshIcon();
+  // Only the item icon (2x2 tiles at column 5, row 1 of the HUD).
+  for (int y = 1; y <= 2; y++)
+    for (int x = 5; x <= 6; x++)
+      g_zenv.vram[g_mp_saved_hud_addr + y * 32 + x] = hud_tile_indices_buffer[y * 32 + x];
+  memcpy(g_ram, g_mp_render_ram, sizeof(g_mp_render_ram));
+  g_mp = g_mp_render_mp;
+  g_mp_hud_swapped = true;
+}
+
 void Mp_PrepareRender(Ppu *ppu) {
   ppu->numExtraSpriteSets = 0;
   if (!Mp_Active() && !g_mp_coop)
     return;
+  Mp_ShowViewersItem();
   memcpy(g_mp_saved_cgram, &ppu->cgram[0xf0], sizeof(g_mp_saved_cgram));
   int n = 0;
   for (int p = 0; p < kMpMaxPlayers; p++) {
@@ -855,6 +916,10 @@ void Mp_PrepareRender(Ppu *ppu) {
     set->bank = n + 1;
     memcpy(set->oam, rp->oam, rp->count * 4);
     memcpy(set->high, rp->high, rp->count);
+    int na = rp->anc_count < kPpuMaxExtraSprites - rp->count ? rp->anc_count : kPpuMaxExtraSprites - rp->count;
+    memcpy(set->oam + rp->count * 2, rp->anc_oam, na * 4);
+    memcpy(set->high + rp->count, rp->anc_high, na);
+    set->count += na;
     int dx = g_mp_draw_offset[p][0], dy = g_mp_draw_offset[p][1];
     if (dx | dy) {
       for (int i = 0; i < rp->count; i++) {
@@ -875,6 +940,10 @@ void Mp_PrepareRender(Ppu *ppu) {
 }
 
 void Mp_FinishRender(Ppu *ppu) {
+  if (g_mp_hud_swapped) {
+    memcpy(&g_zenv.vram[g_mp_saved_hud_addr], g_mp_saved_hud, sizeof(g_mp_saved_hud));
+    g_mp_hud_swapped = false;
+  }
   if (ppu->numExtraSpriteSets || Mp_Active() || g_mp_coop)
     memcpy(&ppu->cgram[0xf0], g_mp_saved_cgram, sizeof(g_mp_saved_cgram));
 }
@@ -921,6 +990,13 @@ void Mp_RunRouting(void (*routing)(void)) {
     if (Mp_IsTravel(m0, main_module_index, submodule_index)) {
       g_mp.split_request = g_mp.leader;
       g_mp.split_travel = 1;
+    }
+    // Someone opened the item menu or a map: they look at it in a world of
+    // their own, so the others play on (and each player equips their own
+    // items). When it is closed, the worlds merge again.
+    if (main_module_index == 14 && (submodule_index == 1 || submodule_index == 3 || submodule_index == 7)) {
+      g_mp.split_request = g_mp.leader;
+      g_mp.split_travel = 2;
     }
     return;
   }
