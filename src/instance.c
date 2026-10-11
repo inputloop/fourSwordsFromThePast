@@ -379,7 +379,9 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
     if (!g_mp.p[p].joined)
       continue;
     int sx = (int16)(Mp_PlayerX(p) - va->cam_x), sy = (int16)(Mp_PlayerY(p) - va->cam_y);
-    if (sx < 32 || sx > 256 - 48 || sy < 32 || sy > 224 - 64)
+    // (Well inside the edges where a Link gets a world of its own, so the
+    // worlds don't split and merge back and forth.)
+    if (sx < 8 || sx > 256 - 24 || sy < 8 || sy > 224 - 24)
       return false;
     if (g_mp.p[p].downed)
       continue;

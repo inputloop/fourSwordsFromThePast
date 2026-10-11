@@ -460,6 +460,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Session_SetStory(atoi(arg1));
     } else if (!strcmp(cmd, "title")) {
       g_config.four_swords_title = atoi(arg1);
+    } else if (!strcmp(cmd, "dumprender")) {
+      // dumprender <p>: the extra sprites of player p (count, first entries' flags)
+      int p = atoi(arg1) - 1;
+      SwitchToPlayer(view);
+      MpRenderPlayer *rp = &g_mp_render.p[p];
+      printf("[frame %d] P%d render: visible=%d count=%d leader=P%d resident=P%d area_key=%x aux=%d", frame, p + 1, rp->visible, rp->count, g_mp.leader + 1, g_mp.resident + 1, g_mp.area_key, link_auxiliary_state);
+      for (int i = 0; i < rp->count && i < 4; i++)
+        printf(" [x%d y%d chr%02x fl%02x]", rp->oam[i * 2] & 0xff, rp->oam[i * 2] >> 8, rp->oam[i * 2 + 1] & 0xff, rp->oam[i * 2 + 1] >> 8);
+      printf("\n");
     } else if (!strcmp(cmd, "pram")) {
       // pram <p> <hexaddr> <hexval>: change a byte of player p's own state (its Link context)
       int p = atoi(arg1) - 1;

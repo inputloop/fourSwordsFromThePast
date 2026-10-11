@@ -662,8 +662,11 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
         // Heading out of view: this Link gets its own world and camera.
         // (Not right after a regroup: Links put next to the leader at, say, an
         // entrance look out of view until the camera has caught up.)
+        // Only once it has mostly left the screen: a Link standing on stairs
+        // or in a doorway at the screen's edge is still in view.
+        int extra = (enhanced_features0 & kFeatures0_ExtendScreen64) ? 40 : 0;
         int sx = (int16)(link_x_coord - BG2HOFS_copy2), sy = (int16)(link_y_coord - BG2VOFS_copy2);
-        if (sx < 8 || sx > 256 - 24 || sy < 8 || sy > 224 - 40) {
+        if (sx < -8 - extra || sx > 256 - 8 + extra || sy < -16 || sy > 224 - 8) {
           g_mp.split_request = p;
           g_mp.split_travel = 0;
         }

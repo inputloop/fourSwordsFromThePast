@@ -1,0 +1,17 @@
+# A Link waiting in a doorway at the bottom of the screen stays in view (and
+# in the same world) while the leader climbs the entrance stairs, so the two
+# don't disappear for each other.
+load 2
+run 20
+enter c9
+run 80
+join 2
+run 10
+hold 1 U
+run 10
+expect_same 1 2
+run 10
+expect_same 1 2
+run 20
+expect_same 1 2
+hold 1 -
