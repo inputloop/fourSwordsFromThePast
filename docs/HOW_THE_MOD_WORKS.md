@@ -63,7 +63,11 @@ The original code never knows other players exist. It just runs once per Link.
 
 **Colors.** The tunic color lives in one small palette (16 colors). Before drawing, the mod copies that palette and recolors the tunic for each player: green, red, blue and purple. Because of this, armor upgrades still protect you but no longer change your tunic color.
 
-**Shared inventory.** Items live outside the Link context, so they are naturally shared. The one exception is the Y-button item: each player picks their own.
+**Shared inventory.** Items live outside the Link context, so they are naturally shared. The one exception is the Y-button item: each player picks their own. On each player's screen, the item box at the top shows *their* item. (The game only knows how to draw one item box, so just before a screen is drawn the mod briefly swaps in that player's Link, draws the box, and puts everything back.)
+
+**Private menus and maps.** Opening the item menu or a map would normally pause the whole game. Instead, the player who opens it gets a world of their own for it, the same way as going through a door alone. The others keep playing. When the menu closes, that player is standing in the same spot with the same camera, so the worlds merge right away.
+
+**Projectiles drawn with the right picture.** Some items, like the hookshot, draw their chain with pictures from Link's own graphics. The game only loads those for one Link, so another player's hookshot used to show the wrong pictures. The mod now draws those parts together with that player's own Link sprites, which have the right pictures.
 
 ## Free roaming: separate worlds that split and merge
 
@@ -83,7 +87,7 @@ flowchart LR
 **Splitting.** There are two ways a player gets their own world:
 
 - **Taking an exit alone** (a door, stairs, a pit, the edge of an area). The frame is run normally, and the result becomes the new world for the traveler. Then the old world is rewound to before that frame and replayed without the traveler. That way the people left behind never see the traveler leave in a strange way.
-- **Walking out of view.** If a non-leader gets close to the edge of the screen, a copy of the world is made for them, with them as leader. Their camera then slides over to center on them.
+- **Walking out of view.** If a non-leader walks (mostly) off the edge of the screen, a copy of the world is made for them, with them as leader. Their camera then slides over to center on them. A Link standing on stairs or in a doorway right at the screen's edge is still in view, so it stays.
 
 **Merging.** When two worlds are in the same room or overworld screen, and their cameras are within 48 pixels of each other, the players of one world move into the other. The extra world is thrown away. The camera rule keeps anyone's view from jumping.
 
@@ -110,6 +114,8 @@ Each player has their own hearts, but nobody dies alone. A player who runs out o
 - enemies ignore it.
 
 **Reviving.** A standing teammate stands next to the ghost (within 24 pixels) for 1.5 seconds. The ghost gets up with half a heart. A small bar in the ghost's corner shows the progress.
+
+**Watching while you're down.** A ghost can't do anything, so its screen can show someone else: by default a standing teammate if the ghost's own world is paused, or else the ghost's own Link. Pressing **L** or **R** flips between your own Link and each standing teammate. A note at the bottom of the screen says who you are watching.
 
 **A ghost alone in a room.** If a ghost is the only player left in its world, that world is paused. It waits, frozen, until a standing teammate walks into the same room or screen. Then the worlds merge and the ghost is right where it fell.
 
