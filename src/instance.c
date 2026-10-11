@@ -383,7 +383,8 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
   // Ghosts lying in this room show up as soon as someone standing is here.
   if (!HasAlive(b))
     return true;
-  if (MpOf(a)->merge_grace || MpOf(b)->merge_grace)
+  // (A world of ghosts is paused, so its grace would never run out.)
+  if ((MpOf(a)->merge_grace && HasAlive(a)) || (MpOf(b)->merge_grace && HasAlive(b)))
     return false;
   // Only once the cameras are nearly in the same place, so nobody's view jumps.
   if (abs((int16)(va->cam_x - vb->cam_x)) > 48 || abs((int16)(va->cam_y - vb->cam_y)) > 48)
@@ -899,7 +900,7 @@ static void RecordLastSeen() {
         ls->valid &= InMenu(i);  // keep showing it while in a menu
         continue;
       }
-      bool leader = p == m->leader;
+      bool leader = p == g_inst[i].render.self_player;
       const MpRenderPlayer *rp = leader ? &g_inst[i].render.self : &g_inst[i].render.p[p];
       ls->valid = rp->visible && rp->count;
       if (!ls->valid)
@@ -931,7 +932,7 @@ int Inst_LinksFromOtherWorlds(InstRemoteLink *out, int max) {
         continue;
       const LastSeen *ls = &g_last_seen[p];
       if (live && key == key0) {
-        bool leader = p == m->leader;
+        bool leader = p == g_inst[i].render.self_player;
         const MpRenderPlayer *rp = leader ? &r->self : &r->p[p];
         if (!rp->visible || !rp->count)
           continue;

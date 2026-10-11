@@ -1,0 +1,16 @@
+# A player who joins on the title screen, before a save file is loaded, starts
+# the game with the leader's hearts and magic (a new randomized file starts
+# with a full magic meter), not with what there was before the file loaded.
+rando 40
+run 200
+join 2
+run 10
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+status
+expect_pram 1 f36e 80
+expect_pram 2 f36e 80

@@ -306,6 +306,8 @@ static uint32 Mp_AreaKey() {
 // half through it. (Not while the leader stands in a doorway: there the
 // game's door code moves the quadrant on its own time.)
 static void Mp_SyncQuadrantToLeader() {
+  if (!player_is_indoors)
+    g_mp.quad_valid = 0;  // (a room entered again may be entered elsewhere)
   if (!g_mp_coop || !player_is_indoors || main_module_index != 7 || submodule_index != 0 ||
       is_standing_in_doorway)
     return;
@@ -335,6 +337,8 @@ static void Mp_SyncQuadrantToLeader() {
 void Mp_EndFrame() {
   if (g_mp.merge_grace)
     g_mp.merge_grace--;
+  if (main_module_index <= 5)
+    g_mp.at_title = 1;
   // A Link playing alone in a world keeps track of where it is, so players
   // who join this world later aren't mistaken for a group that just arrived.
   if (!Mp_Active()) {
@@ -348,6 +352,17 @@ void Mp_EndFrame() {
     return;
   }
   Mp_SwapToLeader();
+  // Players who joined on the title or file select screen got hearts and magic
+  // before there was a save file; start them like the leader instead.
+  if (g_mp.at_title && (main_module_index == 7 || main_module_index == 9)) {
+    g_mp.at_title = 0;
+    for (int p = 0; p < kMpMaxPlayers; p++) {
+      if (g_mp.p[p].joined && p != g_mp.leader) {
+        *Mp_PlayerRam(p, 0xF36D) = link_health_current;
+        *Mp_PlayerRam(p, 0xF36E) = link_magic_power;
+      }
+    }
+  }
   Mp_SyncQuadrantToLeader();
   Mp_AttributeObjects();
   if (main_module_index == 18 || main_module_index == 23)  // death / game over
@@ -443,6 +458,7 @@ void Mp_EndLeaderOam() {
   MpRenderPlayer *rp = &g_mp_render.self;
   rp->count = 0;
   rp->visible = 0;
+  g_mp_render.self_player = g_mp.leader;
   if (!g_mp_coop)
     return;
   for (int i = 0; i < 128 && rp->count < kMpMaxExtraOam; i++) {
