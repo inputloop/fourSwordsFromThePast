@@ -851,14 +851,30 @@ static FORCEINLINE uint32 PpuLookupColor(Ppu *ppu, PpuZbufType z, size_t i) {
 }
 
 uint8_t *g_ppu_layer_out;
+uint32_t *g_ppu_hidden_out;
 int g_ppu_layer_pitch;
 
 static void PpuWriteLayerLine(Ppu *ppu, uint y, bool known) {
   uint8_t *out = g_ppu_layer_out + (y - 1) * g_ppu_layer_pitch;
+  uint32_t *hidden = g_ppu_hidden_out ? g_ppu_hidden_out + (y - 1) * g_ppu_layer_pitch : NULL;
+  // Link pixels (sprite palette 7) that a background tile in front covers.
+  bool sprites = known && ppu->lineHasSprites && (ppu->screenEnabled[0] & 0x10);
   int w = 256 + ppu->extraLeftRight * 2;
   for (int d = 0; d < w && d < g_ppu_layer_pitch; d++) {
     int i = d - ppu->extraLeftRight + kPpuExtraLeftRight;
-    out[d] = known && i >= 0 && i < kPpuXPixels ? (ppu->bgBuffers[0].data[i] >> 8) & 0xf : 0xff;
+    bool in = known && i >= 0 && i < kPpuXPixels;
+    uint8_t layer = in ? (ppu->bgBuffers[0].data[i] >> 8) & 0xf : 0xff;
+    out[d] = layer;
+    if (hidden) {
+      uint32_t c = 0;
+      PpuZbufType z = in ? ppu->objBuffer.data[i] : 0;
+      if (sprites && layer < 4 && layer != 2 && (z & 0xf0) == 0xf0 && (z & 0xf)) {
+        uint32_t color = PpuLookupColor(ppu, z, i);
+        c = 0xff000000 | ppu->brightnessMult[color & 0x1f] << 16 | ppu->brightnessMult[(color >> 5) & 0x1f] << 8 |
+            ppu->brightnessMult[(color >> 10) & 0x1f];
+      }
+      hidden[d] = c;
+    }
   }
 }
 

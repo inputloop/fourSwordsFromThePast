@@ -389,6 +389,9 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     } else if (StringEqualsNoCase(key, "Hd2dGrade")) {
       g_config.hd2d_grade = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
       return true;
+    } else if (StringEqualsNoCase(key, "Hd2dLighting")) {
+      g_config.hd2d_lighting = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
+      return true;
     } else if (StringEqualsNoCase(key, "LinkGraphics")) {
       g_config.link_graphics = value;
       return true;
@@ -595,6 +598,7 @@ void ParseConfigFile(const char *filename) {
   g_config.hd2d_bloom = 40;
   g_config.hd2d_vignette = 45;
   g_config.hd2d_grade = 50;
+  g_config.hd2d_lighting = 70;
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)

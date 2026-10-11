@@ -181,7 +181,7 @@ static void DrawSplitScreen(uint8 *pixel_buffer, int pitch, const int *views, in
   for (int v = 0; v < nviews; v++) {
     Inst_Switch(views[v]);
     uint8 *dst = pixel_buffer + (v & 1) * g_snes_width * 4 + (v >> 1) * g_snes_height * pitch;
-    Hd2d_DrawFrame(dst, pitch, render_flags);
+    Hd2d_DrawFrame(dst, pitch, render_flags, v);
   }
   if (nviews == 3) {
     for (int y = 0; y < g_snes_height; y++)
@@ -238,7 +238,7 @@ static void DrawPpuFrameWithPerf() {
     static float history[64], average;
     static int history_pos;
     uint64 before = SDL_GetPerformanceCounter();
-    Hd2d_DrawFrame(pixel_buffer, pitch, g_ppu_render_flags);
+    Hd2d_DrawFrame(pixel_buffer, pitch, g_ppu_render_flags, 0);
     uint64 after = SDL_GetPerformanceCounter();
     float v = (double)SDL_GetPerformanceFrequency() / (after - before);
     average += v - history[history_pos];
@@ -246,7 +246,7 @@ static void DrawPpuFrameWithPerf() {
     history_pos = (history_pos + 1) & 63;
     g_curr_fps = average * (1.0f / 64);
   } else {
-    Hd2d_DrawFrame(pixel_buffer, pitch, g_ppu_render_flags);
+    Hd2d_DrawFrame(pixel_buffer, pitch, g_ppu_render_flags, 0);
   }
   if (g_display_perf)
     RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
@@ -554,6 +554,7 @@ int main(int argc, char** argv) {
   g_hd2d.bloom = g_config.hd2d_bloom;
   g_hd2d.vignette = g_config.hd2d_vignette;
   g_hd2d.grade = g_config.hd2d_grade;
+  g_hd2d.lighting = g_config.hd2d_lighting;
   Session_SetRandomizer(g_config.randomizer);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);

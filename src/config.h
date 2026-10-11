@@ -63,7 +63,7 @@ typedef struct Config {
   bool extend_y;
   bool no_sprite_limits;
   bool hd2d;                   // the 2D-HD look (hd2d.c)
-  uint8 hd2d_depth_of_field, hd2d_bloom, hd2d_vignette, hd2d_grade;
+  uint8 hd2d_depth_of_field, hd2d_bloom, hd2d_vignette, hd2d_grade, hd2d_lighting;
   bool display_perf_title;
   uint8 enable_msu;
   bool resume_msu;

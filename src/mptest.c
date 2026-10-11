@@ -248,9 +248,25 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: BG3 scroll is %d, expected %s at frame %d\n", g_zenv.ppu->bgLayer[2].hScroll, arg1, frame);
         failures++;
       }
+    } else if (!strcmp(cmd, "expect_hd2d")) {
+      // expect_hd2d <min hidden> <max hidden> <dark 0|1>: draws the frame
+      // with the 2D-HD look and checks how many Link pixels hidden behind
+      // scenery it showed, and whether it lit a dark room itself.
+      bool on = g_hd2d.enabled;
+      g_hd2d.enabled = true;
+      Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
+      g_hd2d.enabled = on;
+      int n = Hd2d_HiddenPixels();
+      if (n < atoi(arg1) || n > atoi(arg2) || Hd2d_LitDarkRoom() != atoi(arg3)) {
+        printf("FAIL: 2D-HD showed %d hidden pixels (expected %s-%s), dark room %d at frame %d\n",
+               n, arg1, arg2, Hd2d_LitDarkRoom(), frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "hd2d")) {
-      // hd2d <0|1>: the 2D-HD look for screenshots
+      // hd2d <0|1> [lighting]: the 2D-HD look for screenshots
       g_hd2d.enabled = atoi(arg1);
+      if (arg2[0])
+        g_hd2d.lighting = atoi(arg2);
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         Inst_RunFrame(held);
@@ -258,7 +274,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "shot")) {
       g_mp_local_mask = 1 << view;
       Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
-      Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags);
+      Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
@@ -504,7 +520,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       uint32 *wide = calloc(width * 2 * height * 4, 1);
       for (int v = 0; v < 2; v++) {
         SwitchToPlayer(atoi(v ? arg3 : arg2) - 1);
-        Hd2d_DrawFrame((uint8 *)(wide + v * width), width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7);
+        Hd2d_DrawFrame((uint8 *)(wide + v * width), width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7, v);
       }
       Inst_Switch(r);
       Ui_Draw((uint8 *)wide, width * 2 * 4, width * 2, height, 1);
