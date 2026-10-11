@@ -1,0 +1,17 @@
+# Players in different worlds in the same area see each other: P2 walks off
+# the bottom of P1's screen (its own world) and back, and is drawn on P1's
+# screen while the two worlds are still apart, not only after they merge.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+hold 2 D
+run 260
+expect_apart 1 2
+expect_not_sees 1 2
+hold 2 U
+run 64
+expect_apart 1 2
+expect_sees 1 2
+hold 2 -

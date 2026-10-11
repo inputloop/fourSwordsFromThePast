@@ -76,6 +76,9 @@ typedef struct MpRenderPlayer {
 
 typedef struct MpRenderState {
   MpRenderPlayer p[kMpMaxPlayers];
+  // The leader's own Link sprites (drawn through the regular OAM), so other
+  // worlds in the same place can show this world's leader too.
+  MpRenderPlayer self;
 } MpRenderState;
 
 extern MpState g_mp;
@@ -113,6 +116,9 @@ void Mp_RunRouting(void (*routing)(void));
 void Mp_EndFrame();
 void Mp_RunOtherPlayers(void (*control)(void));
 void Mp_DrawOtherPlayers();
+// Called around drawing the leader's Link: remembers its sprites.
+void Mp_BeginLeaderOam();
+void Mp_EndLeaderOam();
 void Mp_ReadJoypads();
 bool Mp_OnFatalDamage();
 void Mp_BeginObject();

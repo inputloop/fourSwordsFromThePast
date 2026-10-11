@@ -18,6 +18,7 @@
 #define ZELDA3_INSTANCE_H_
 
 #include "types.h"
+#include "mp.h"
 
 enum {
   kInstMax = 4,
@@ -52,6 +53,18 @@ bool Inst_GetIndependent();
 bool Inst_RunFrame(const uint16 *inputs);
 // The player whose instance is heard; the camera instance for local display.
 void Inst_SetAudioPlayer(int p);
+
+// Display only: Links of other worlds that are in the same room or overworld
+// area as the current world, so players see each other before their worlds
+// merge. Their sprites are in screen coordinates of their own world's camera;
+// (dx, dy) moves them to the current world's camera.
+typedef struct InstRemoteLink {
+  int player;
+  const MpRenderPlayer *rp;
+  const uint16 *tiles;  // Link tiles (0x200 words of VRAM from 0x4000)
+  int dx, dy;
+} InstRemoteLink;
+int Inst_LinksFromOtherWorlds(InstRemoteLink *out, int max);
 
 // Netplay snapshots and state hashing cover every instance.
 void Inst_SaveState(ByteArray *arr);

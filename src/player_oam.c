@@ -761,7 +761,9 @@ void CalculateSwordHitBox() {  // 879e63
 }
 
 void LinkOam_Main() {
+  Mp_BeginLeaderOam();
   LinkOam_MainOne();
+  Mp_EndLeaderOam();
   Mp_DrawOtherPlayers();
 }
 

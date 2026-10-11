@@ -839,6 +839,48 @@ int Inst_PlayerPos(int p, uint16 *x, uint16 *y) {
   return i;
 }
 
+// Where world i is and where its camera looks, if it is in normal gameplay.
+static bool WorldView(int i, uint32 *key, uint16 *cam_x, uint16 *cam_y) {
+  const uint8 *ram = g_inst[i].ram;
+  uint8 m = ram[0x10], s = ram[0x11];  // main_module_index, submodule_index
+  if (!((m == 7 || m == 9) && s == 0))
+    return false;
+  // player_is_indoors, dungeon_room_index, overworld_area_index
+  *key = ram[0x1B] << 16 | (ram[0x1B] ? WORD(ram[0xA0]) : WORD(ram[0x40A]));
+  *cam_x = WORD(ram[0xE2]), *cam_y = WORD(ram[0xE8]);  // BG2HOFS/BG2VOFS_copy2
+  return true;
+}
+
+int Inst_LinksFromOtherWorlds(InstRemoteLink *out, int max) {
+  uint32 key0, key;
+  uint16 x0, y0, x, y;
+  int n = 0;
+  Unbind();  // the current world's render state is in g_mp_render
+  if (!WorldView(g_cur, &key0, &x0, &y0))
+    return 0;
+  for (int i = 0; i < kInstMax; i++) {
+    if (i == g_cur || !g_inst[i].active || !WorldView(i, &key, &x, &y) || key != key0)
+      continue;
+    const MpState *m = &g_inst[i].mp;
+    const MpRenderState *r = &g_inst[i].render;
+    for (int p = 0; p < kMpMaxPlayers && n < max; p++) {
+      if (!m->p[p].joined)
+        continue;
+      bool leader = p == m->leader;
+      const MpRenderPlayer *rp = leader ? &r->self : &r->p[p];
+      if (!rp->visible || !rp->count)
+        continue;
+      out[n].player = p;
+      out[n].rp = rp;
+      out[n].tiles = leader ? &g_inst[i].ppu->vram[0x4000] : rp->tiles;
+      out[n].dx = (int16)(x - x0);
+      out[n].dy = (int16)(y - y0);
+      n++;
+    }
+  }
+  return n;
+}
+
 int Inst_SpectateTarget(int p) {
   int i = Inst_OfPlayer(p);
   if (i < 0 || !MpOf(i)->p[p].downed || HasAlive(i))

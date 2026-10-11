@@ -181,6 +181,25 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: P%s and P%s are %s at frame %d\n", arg1, arg2, same ? "together" : "apart", frame);
         failures++;
       }
+    } else if (!strcmp(cmd, "expect_sees") || !strcmp(cmd, "expect_not_sees")) {
+      // expect_sees <a> <b>: player a's screen shows player b, who is in another world.
+      int a = atoi(arg1) - 1, b = atoi(arg2) - 1;
+      bool seen = false;
+      SwitchToPlayer(a);
+      InstRemoteLink rl[kMpMaxPlayers * 2];
+      int nr = Inst_LinksFromOtherWorlds(rl, countof(rl));
+      for (int k = 0; k < nr; k++) {
+        if (rl[k].player != b)
+          continue;
+        int x = (rl[k].rp->oam[0] & 0xff) | (rl[k].rp->high[0] & 1) << 8, y = rl[k].rp->oam[0] >> 8;
+        x = (x >= 256 ? x - 512 : x) + rl[k].dx;
+        y = (y >= 240 ? y - 256 : y) + rl[k].dy;
+        seen |= x > -16 && x < 256 && y > -16 && y < 224;
+      }
+      if (seen != !strcmp(cmd, "expect_sees")) {
+        printf("FAIL: P%s %s P%s at frame %d\n", arg1, seen ? "sees" : "does not see", arg2, frame);
+        failures++;
+      }
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         Inst_RunFrame(held);

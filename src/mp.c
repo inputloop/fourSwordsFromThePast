@@ -7,6 +7,7 @@
 #include "ancilla.h"
 #include "misc.h"
 #include "hud.h"
+#include "instance.h"
 #include "features.h"
 #include "assets.h"
 
@@ -388,6 +389,29 @@ void Mp_PreSprite(int k) {
 }
 
 static OamEnt g_mp_oam_before[128];
+
+void Mp_BeginLeaderOam() {
+  if (g_mp_coop)
+    memcpy(g_mp_oam_before, oam_buf, sizeof(g_mp_oam_before));
+}
+
+void Mp_EndLeaderOam() {
+  MpRenderPlayer *rp = &g_mp_render.self;
+  rp->count = 0;
+  rp->visible = 0;
+  if (!g_mp_coop)
+    return;
+  for (int i = 0; i < 128 && rp->count < kMpMaxExtraOam; i++) {
+    OamEnt *e = &oam_buf[i];
+    if (e->y == 0xf0 || !memcmp(e, &g_mp_oam_before[i], sizeof(OamEnt)))
+      continue;
+    rp->oam[rp->count * 2 + 0] = e->x | e->y << 8;
+    rp->oam[rp->count * 2 + 1] = e->charnum | e->flags << 8;
+    rp->high[rp->count] = bytewise_extended_oam[i];
+    rp->count++;
+  }
+  rp->visible = 1;
+}
 
 void Mp_PreAncilla(int k) {
   if (!Mp_Active())
@@ -935,6 +959,33 @@ void Mp_PrepareRender(Ppu *ppu) {
     }
     memcpy(set->tiles, rp->tiles, sizeof(set->tiles));
     Mp_MakePalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, p);
+    n++;
+  }
+  // Links of other worlds in this same room or area, so players approaching
+  // each other see each other before their worlds merge.
+  InstRemoteLink rl[kMpMaxPlayers * 2];
+  int nr = Inst_LinksFromOtherWorlds(rl, countof(rl));
+  for (int k = 0; k < nr && n < kPpuMaxExtraSpriteSets; k++) {
+    PpuExtraSpriteSet *set = &ppu->extraSprites[n];
+    const MpRenderPlayer *rp = rl[k].rp;
+    set->count = 0;
+    set->bank = n + 1;
+    for (int i = 0; i < rp->count && set->count < kPpuMaxExtraSprites; i++) {
+      int x = (rp->oam[i * 2] & 0xff) | (rp->high[i] & 1) << 8, y = rp->oam[i * 2] >> 8;
+      x = (x >= 256 ? x - 512 : x) + rl[k].dx;
+      y = (y >= 240 ? y - 256 : y) + rl[k].dy;
+      // OAM y has 8 bits: above -16 it would wrap to the bottom of the screen.
+      if (x < -64 || x > 320 || y < -16 || y >= 224)
+        continue;
+      set->oam[set->count * 2] = (x & 0xff) | (y & 0xff) << 8;
+      set->oam[set->count * 2 + 1] = rp->oam[i * 2 + 1];
+      set->high[set->count] = (rp->high[i] & ~1) | (x >> 8 & 1);
+      set->count++;
+    }
+    if (!set->count)
+      continue;
+    memcpy(set->tiles, rl[k].tiles, sizeof(set->tiles));
+    Mp_MakePalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, rl[k].player);
     n++;
   }
   ppu->numExtraSpriteSets = n;
