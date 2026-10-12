@@ -1,0 +1,52 @@
+# The flute on a shared screen (free roaming off), played by a teammate who
+# doesn't lead: it led while the flute's map was up, and then the lead went
+# back to the old leader as for any menu, whose place was still in the area
+# left behind: everybody was put there, outside the new area, stuck.
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+together 1
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+pram 1 202 0d
+pram 1 303 08
+setleader 2
+run 2
+expect_leader 2
+pram 1 202 0d
+pram 1 303 08
+hold 1 Y
+run 4
+hold 1 -
+run 300
+expect_module 14
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 9
+expect_same 1 2
+expect_pram 2 4b 0
+expect_pram 2 2e4 0
+expect_pram 1 4b 0
+expect_pram 1 2e4 0
+check_area
+hold 2 U
+hold 1 U
+run 300
+hold 1 -
+hold 2 -
+check_area

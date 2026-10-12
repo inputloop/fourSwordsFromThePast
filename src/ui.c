@@ -1387,6 +1387,13 @@ static void DrawEdgeArrow(const UiView *view, int sx, int sy, uint32 color, cons
   DrawText(lx, ly, label, color);
 }
 
+// Is player p looking at the item menu, a map or the flute's map? They fill
+// the screen, so nothing of the world is drawn over them.
+static bool ViewIsFullScreenMenu(int p) {
+  uint8 m = Inst_PlayerViewModule(p), s = Inst_PlayerViewSubmodule(p);
+  return m == 14 && (s == 1 || s == 3 || s == 7 || s == 10);
+}
+
 // Arrows at the edge of each screen pointing at teammates who are out of
 // view (in this world or another one), as long as they are somewhere the
 // direction means something: the same overworld, dungeon or room.
@@ -1398,11 +1405,8 @@ static void DrawTeammateArrows() {
     InstPlace me, them;
     if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
       continue;
-    uint8 m = Inst_PlayerViewModule(view->player), s = Inst_PlayerViewSubmodule(view->player);
-    if (m < 6 || m == 0x14 || m == 0x1a)
-      continue;
-    // (Nor over the item menu, the maps or the flute's map: they fill the screen.)
-    if (m == 14 && (s == 1 || s == 3 || s == 7 || s == 10))
+    uint8 m = Inst_PlayerViewModule(view->player);
+    if (m < 6 || m == 0x14 || m == 0x1a || ViewIsFullScreenMenu(view->player))
       continue;
     int extra = (view->w - 256) / 2;  // widescreen: columns left of the camera
     for (int q = 0; q < kMpMaxPlayers; q++) {
@@ -1704,7 +1708,8 @@ static void DrawMiniMaps() {
   if (main_module_index == 0x14 || main_module_index == 0x1a)
     return;
   for (int v = 0; v < g_nviews; v++)
-    DrawMiniMap(&g_views[v]);
+    if (g_views[v].player < 0 || !ViewIsFullScreenMenu(g_views[v].player))
+      DrawMiniMap(&g_views[v]);
 }
 
 // A small P1-P4 tag over every Link on screen (an option).

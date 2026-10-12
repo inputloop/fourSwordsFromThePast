@@ -663,8 +663,8 @@ void Ancilla_ExecuteAll() {  // 88832b
   for (int i = 9; i >= 0; i--) {
     cur_object_index = i;
     if (ancilla_type[i]) {
-      Mp_PreAncilla(i);
-      Ancilla_ExecuteOne(ancilla_type[i], i);
+      if (Mp_PreAncilla(i))
+        Ancilla_ExecuteOne(ancilla_type[i], i);
       if (Mp_Active()) {
         Mp_PostAncilla(i);
         Mp_EndObject();

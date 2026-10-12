@@ -1,0 +1,55 @@
+# The flute played, then the item menu opened before the bird arrives: the
+# bird waits for its caller (it used to carry off the Link standing still
+# for its player in the menu, and the whole world into the flute's map that
+# only that player could use). After the menu, it comes after all.
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+pram 1 202 0d
+pram 1 303 08
+expect_leader 2
+hold 1 Y
+run 4
+hold 1 -
+run 20
+hold 1 S
+run 4
+hold 1 -
+run 60
+run 300
+view 2
+expect_module 9
+hold 2 A
+run 4
+hold 2 -
+run 300
+view 1
+hold 1 S
+run 4
+hold 1 -
+run 300
+expect_module 14
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 9
+expect_same 1 2
+expect_pram 1 4b 0
+expect_pram 2 4b 0
+expect_pram 2 2e4 0

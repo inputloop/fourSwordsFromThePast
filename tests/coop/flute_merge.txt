@@ -1,0 +1,55 @@
+# While the bird carries a Link (here P2, who doesn't lead its world), that
+# world doesn't merge with another one: merged away, the bird was lost and
+# the Link stayed hidden and held still for good. P1's world is put right
+# next to it (camera and all) while the bird carries P2; then P2 and P3 fly
+# off together and land able to move, and P1 stays behind.
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+join 3
+run 10
+hold 1 D
+hold 2 D
+hold 3 D
+run 150
+hold 1 -
+hold 2 -
+hold 3 -
+clearsprites
+run 30
+groupcam 0
+setleader 1
+run 2
+pos 2 2500 2845
+pos 3 2520 2845
+run 200
+pram 2 202 0d
+pram 2 303 08
+hold 2 Y
+run 4
+hold 2 -
+run 180
+expect_pram 2 4b c
+pos 1 2470 2845
+view 1
+cam 2304 2741
+expect_apart 1 2
+run 300
+expect_apart 1 2
+hold 2 A
+run 4
+hold 2 -
+run 300
+expect_pram 2 4b 0
+expect_pram 2 2e4 0
+expect_pram 3 4b 0
+expect_pram 3 2e4 0
+view 2
+expect_module 9

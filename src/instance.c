@@ -611,6 +611,15 @@ typedef struct InstView {
 static void GetView(int i, InstView *v) {
   Inst_Switch(i);
   v->stable = Mp_InStableGameplay() && !flag_is_link_immobilized;
+  // Not while the flute's bird is about (it lives in this world only), nor
+  // while a Link is held still, as one the bird carries is: merged away,
+  // nothing would ever let go of it.
+  for (int k = 0; k < 10; k++)
+    v->stable &= ancilla_type[k] != 0x27;
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    if (MpOf(i)->p[p].joined && !MpOf(i)->p[p].downed)
+      v->stable &= !*Mp_PlayerRam(p, 0x2E4);  // flag_is_link_immobilized
+
   // A world of ghosts can't press A: one stuck on a text box (Zelda calling
   // out, say) is still ready to be joined.
   if (!v->stable && !HasAlive(i) && main_module_index == 14)

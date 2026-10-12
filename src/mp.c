@@ -258,12 +258,13 @@ void Mp_NudgeSwitchPresser(int dy) {
 // whoever it was holding is set down where it is.
 // Hands what player p was doing in this world over to the leader, as p
 // leaves it. Not the bird p called with the flute, though: it goes too (here
-// it would pick up whoever leads now).
+// it would pick up whoever leads now). (One setting p down after a flight
+// still lands, as it lets go of its Link and brings the follower along.)
 static void Mp_HandOverObjects(int p) {
   for (int i = 0; i < 10; i++) {
     if (g_mp.ancilla_owner[i] != p)
       continue;
-    if (ancilla_type[i] == 0x27) {  // the travel bird
+    if (ancilla_type[i] == 0x27 && !ancilla_L[i]) {  // the bird, on its way to p or off with it
       if (ancilla_step[i])
         tagalong_var5 = 0;  // (it had picked p up and hidden the follower)
       ancilla_type[i] = 0;
@@ -813,12 +814,16 @@ void Mp_BeginObject() {
 // Called after running a piece of game code under some player's context. If
 // that code switched the game module, that player now leads.
 void Mp_EndObject() {
-  if (g_mp.resident != g_mp.leader &&
+  // (Never to a player in the item menu, whose Link only stands here: the
+  // world would wait for its buttons.)
+  if (g_mp.resident != g_mp.leader && !g_mp.away[g_mp.resident] &&
       (g_mp.module_snapshot[0] != main_module_index || g_mp.module_snapshot[1] != submodule_index)) {
     // A menu or map (module 14) opened in a shared screen: the one who
     // opened it leads while it is open (its item choices land in its own
     // state), and the camera's player gets the lead back when it closes.
-    if (main_module_index == 14 && !g_mp.independent && !g_mp.menu_leader)
+    // Not the flute's map: the bird takes everybody to the one who played
+    // the flute, who leads on from there.
+    if (main_module_index == 14 && submodule_index != 10 && !g_mp.independent && !g_mp.menu_leader)
       g_mp.menu_leader = g_mp.leader + 1;
     g_mp.leader = g_mp.resident;
   }
@@ -925,15 +930,19 @@ void Mp_EndLeaderOam() {
   rp->visible = 1;
 }
 
-void Mp_PreAncilla(int k) {
+bool Mp_PreAncilla(int k) {
   if (!Mp_Active())
-    return;
+    return true;
   Mp_BeginObject();
   int owner = g_mp.ancilla_owner[k];
   if (!g_mp.p[owner].joined)
     owner = g_mp.leader;
   Mp_SwapTo(owner);
   memcpy(g_mp_oam_before, oam_buf, sizeof(g_mp_oam_before));
+  // The flute's bird waits while the one who called it is in the item menu
+  // (its Link only stands here): it would carry off the empty-handed Link,
+  // and the whole world into a map that nobody here can use.
+  return !(g_mp.away[owner] && ancilla_type[k] == 0x27 && !ancilla_step[k]);
 }
 
 // Some projectiles (the hookshot's head and chain, ...) are drawn with tiles

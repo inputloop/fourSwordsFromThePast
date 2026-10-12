@@ -1,0 +1,44 @@
+# The Link the bird is setting down leaves the game during the landing: the
+# bird still lands and brings the follower along to where the team is (it
+# used to vanish with its Link, and the follower stayed behind at the area
+# the team left).
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 -
+hold 2 -
+clearsprites
+poke f3cc c
+run 30
+pram 1 202 0d
+pram 1 303 08
+expect_leader 2
+pram 1 202 0d
+pram 1 303 08
+hold 1 Y
+run 4
+hold 1 -
+run 300
+expect_module 14
+hold 1 A
+run 4
+hold 1 -
+run 33
+expect_pram 1 4b c
+leave 1
+run 60
+expect_ram 1a00 28
+expect_ram 1a14 3
+expect_ram 1a28 78
+expect_ram 1a3c 6

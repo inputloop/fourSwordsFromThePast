@@ -184,7 +184,8 @@ bool Mp_OnFatalDamage();
 void Mp_BeginObject();
 void Mp_EndObject();
 void Mp_PreSprite(int k);
-void Mp_PreAncilla(int k);
+// Runs ancilla k as its owner. False: it waits this frame (not run).
+bool Mp_PreAncilla(int k);
 void Mp_PostAncilla(int k);
 bool Mp_SuppressCamera();
 // Runs the camera scroll of the gameplay modules. A player who just got their
