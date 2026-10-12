@@ -16,6 +16,7 @@ Here is everything it adds to the original game:
 - **Ghosts and revives.** A Link that runs out of hearts becomes a ghost. A teammate can stand next to it to bring it back.
 - **Friendly fire** can be turned on or off.
 - **An item randomizer** that shuffles where items are found, and still makes sure the game can be beaten.
+- **A full inventory for testing.** New save files can start with every item at its best.
 - **A Four Swords opening.** The title says "Four Swords of the Past", and the legend that plays after it tells how four heroes were born from one blade.
 - **Widescreen and HD options**, and an in-game menu for all settings and controls.
 
@@ -196,7 +197,7 @@ flowchart LR
 
 - the buttons of all four player slots,
 - who joined or left this frame,
-- settings like friendly fire and the randomizer,
+- settings like friendly fire, the randomizer and the full inventory,
 - whether music is playing (the only thing in the original game that depends on timing).
 
 The host sends each frame to every client, and every computer runs it. The host never waits for a slow connection; it keeps going at 60 frames per second.
@@ -287,6 +288,16 @@ The check is careful on purpose. For example, it treats every chest in a dungeon
 
 To be safe, a few chests in unknown or hard-to-reach spots (like the castle basement, which normally opens during the escape) only ever get filler items.
 
+## Starting with every item (for testing)
+
+*Pause menu > Gameplay > Start new games with all items* (`FullInventory` in `zelda3.ini`) is meant for testing: a save file created while it is on starts with every item at its best. That means the golden sword, the mirror shield, the red mail, the bow with silver arrows, the Titan's Mitt, all rods, canes and medallions, 20 full hearts, four bottles, and the most bombs, arrows and rupees. The shovel and the mushroom share their slots with the flute and the magic powder, so the file gets the flute and the powder. Pendants, crystals and dungeon items are not given. The code is `GiveFullInventory` in `src/select_file.c`.
+
+**Why it starts open.** In the original game the sword can't be swung before Link meets his uncle, and with a better sword than the uncle's, Zelda is no longer in her cell. So a full file starts open like a randomized one: no intro and no castle escape. In a file that isn't randomized the uncle is gone too, because all he does is hand over his sword and shield.
+
+**Nothing goes down a level.** The original game writes an item's level when Link gets it, without looking at what he has. The Master Sword would replace the golden sword, and the Bow's chest would take the silver arrows away. A full file is marked in the save (address 7EF4F8), and in a marked file a found item never lowers one Link already has. Files made without the option behave exactly as in the original game.
+
+Online, the host's setting is used, like the randomizer's: it travels with every frame, because the file is made inside the game's simulation on every machine.
+
 ## The Four Swords story and title
 
 The mod gives the game a new opening that fits its four heroes. Both parts can be turned off in *Pause menu > Gameplay*.
@@ -315,7 +326,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 | --- | --- |
 | Multiplayer | Host a game, join by address, find LAN games, add or remove local players, friendly fire, name tags, color-blind friendly colors |
 | Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen, the 2D-HD look and its settings |
-| Gameplay | Randomizer, the Four Swords story and title, plus the original project's extras (switch items with L/R, bug fixes and more) |
+| Gameplay | Randomizer, starting with all items, the Four Swords story and title, plus the original project's extras (switch items with L/R, bug fixes and more) |
 | Controls | Set up each of the four players (keys, buttons, controller, stick, rumble) |
 | Controls help | A short list of the default keys |
 
@@ -342,7 +353,7 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 
 ## How it is tested and built
 
-The mod has 105 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 107 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -357,6 +368,7 @@ The mod has 105 automatic tests that play the game with no window, by following 
 - online play over a bad connection: a *lag simulator* (`ZELDA3_NETSIM`) delays messages by 60 milliseconds, randomly adds up to 30 more and throws away 3% of them. Both players wander around, and the test fails if the game ever goes out of sync or the client's own Link is ever moved by a guess (rubber banding); two more pairs fight waves of soldiers over a 150 ms and a 300 ms link (each way), spawned inside the simulation at the same frame on both machines, and fail on a resync, a guessed button or more than a few killed soldiers coming back (`tests/cmpdump.py` compares the two machines' state frame by frame), and a client that joins by room code, keeps a copy of the host's game, loses its connection for eight seconds, restarts its game, and is finally removed by the host (it must get the same seat back both times),
 - the opening: the new story's text really reaches the game's text buffer, and the original comes back when it is turned off,
 - the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game,
+- starting with every item: the new file's items, the open start, a teammate's Y item and bottle, the sword swinging, items found later (the uncle's, the Master Sword, the Bow and more) not lowering anything, also in a randomized file, a plain file still working as in the original, and the host's setting reaching an online client,
 - teamwork: throwing a teammate over a pit and a ledge (the test paints pit and ledge tiles into a room), lifting a heavy rock together, a ghost sending a heart, a floor switch held by a teammate, hookshotting to a teammate over pits, ping markers, and a teammate carried in and out of a dungeon entrance, a house door and down a ledge (still held each time, and drawn whole while it blinks),
 - room codes decode back exactly (also typed loosely) and mistyped ones are refused,
 - the low-health beep sounding for a teammate who isn't the leader, and not for a ghost,

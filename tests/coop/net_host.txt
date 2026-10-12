@@ -1,5 +1,8 @@
 # Netplay host. Run together with net_client.txt.
 load 2
+# The host decides that new games start with all items (the client's own
+# setting is off).
+fullinv 1
 host 47474
 waitplayers 2
 tick 60

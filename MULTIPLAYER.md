@@ -50,6 +50,8 @@ Players can drop in and drop out at any time.
 - **Friendly fire**: toggle it in the Multiplayer screen (the host decides).
   When on, swords, arrows, rods, boomerangs and bombs hurt
   teammates.
+- **Gameplay settings for new games** (the randomizer, *Start new games with
+  all items*, the Four Swords story): the host's are used.
 - **Free roaming** is always on: nobody ever has to wait for the others or
   head the same way.
 - Online, the pause and turbo hotkeys do nothing (they would stop or outrun
@@ -253,7 +255,8 @@ world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
 ### Netplay
 
 `src/session.c` describes every game frame as an `MpFrameInput`: all four
-joypads, join/leave events, friendly fire, the enabled game features, and the
+joypads, join/leave events, friendly fire, the enabled game features, the
+settings for new games (story, randomizer, full inventory), and the
 "music playing" flag the game reads from the sound chip (the only input that
 otherwise depends on timing). The game is deterministic, so feeding the same
 frames gives the same game everywhere.

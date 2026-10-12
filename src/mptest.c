@@ -9,6 +9,7 @@
 //   newgame / loadslot  make a new save file in slot 1 and load it / load slot 1
 //   spoke <hexoff> <hexval>  change a byte of save slot 1 (fixing its checksum)
 //   rando <off|random|hexseed>  randomizer setting for new save files
+//   fullinv <0|1>       new save files start with every item
 //   join <p> / leave <p>
 //   hold <p> <keys>     keys held by player p (B Y s=select S=start U D L R A X l r, P=ping, "-" for none)
 //   run <frames>
@@ -89,6 +90,7 @@
 //   keepcopy <file 1-3> <path>  keep a copy of the game we play in (a client's) in that file of the save at path
 //   expect_save_file <path> <file> <empty|valid|copy>  that file is empty / in use and intact / this game as it is now
 //   expect_saves_blocked <0|1>  our own save file is protected (we play someone else's world)
+//   expect_fullinv <0|1>  new save files start with every item (a client: as the host's frames say)
 //   removefile <path>
 //   bindline <key> <value>  a controls line of the settings file (value without spaces)
 //   expect_keys <p> <button 0-12> <text>  the keys of a button as the Controls screen shows them
@@ -628,6 +630,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // rando <off|random|hexseed>: randomizer setting for new save files
       Rando_SetNewGameSetting(!strcmp(arg1, "off") ? kRando_Off : !strcmp(arg1, "random") ? kRando_RandomSeed :
                               (uint32)strtoul(arg1, NULL, 16));
+    } else if (!strcmp(cmd, "fullinv")) {
+      FileSelect_SetFullInventory(atoi(arg1));
+      Session_SetFullInventory(atoi(arg1));
     } else if (!strcmp(cmd, "chestdump")) {
       for (int i = 0; i < (int)kDungeonRoomChests_SIZE; i += 3)
         printf("chest %3d room %03x big %d item %02x\n", i / 3, WORD(kDungeonRoomChests[i]) & 0x7fff,
@@ -1109,6 +1114,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       char ip[64];
       bool ok = Upnp_StunPublicIp(arg1, ip, sizeof(ip));
       printf("stun %s: %s\n", arg1, ok ? ip : "no answer");
+    } else if (!strcmp(cmd, "expect_fullinv")) {
+      // expect_fullinv <0|1>: new save files start with every item (on a
+      // client: the host's setting, as it arrived with the frames)
+      if (Session_GetFullInventory() != (atoi(arg1) != 0)) {
+        printf("FAIL: full inventory for new files %d, expected %d at frame %d\n", Session_GetFullInventory(),
+               atoi(arg1) != 0, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "expect_saves_blocked")) {
       // expect_saves_blocked <0|1>: the game may not write our own save file
       // (we play in a world from someone else's game)

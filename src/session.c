@@ -12,9 +12,10 @@
 #include "randomizer.h"
 #include "story.h"
 #include "variables.h"
+#include "select_file.h"
 
 enum {
-  kProtoVersion = 19,
+  kProtoVersion = 20,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -116,6 +117,7 @@ static struct {
   uint32 rando;
   int input_delay;
   bool story;
+  bool full_inv;
   uint16 host_in[16][kSessionMaxLocal];  // host: local joypads by frame, for the input delay
   uint8 slot_owner[kMpMaxPlayers];
   uint8 slot_local[kMpMaxPlayers];
@@ -267,6 +269,7 @@ static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   Inst_SetFriendlyFire(fi->flags & 1);
   Story_SetEnabled(fi->flags & 4);
   Rando_SetNewGameSetting(fi->flags & 8 ? fi->rando : kRando_Off);
+  FileSelect_SetFullInventory(fi->flags & 0x10);
   g_wanted_zelda_features = fi->features;
   g_apui00_override = deterministic_audio ? (fi->flags >> 1) & 1 : -1;
   g_last_was_replay = Inst_RunFrame(fi->inputs);
@@ -334,7 +337,8 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
   *known = 0;
   memcpy(g_s.host_in[(g_s.frame + 1) & 15], local_inputs, sizeof(g_s.host_in[0]));
   fi->features = features;
-  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.story ? 4 : 0) | (g_s.rando ? 8 : 0);
+  fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.story ? 4 : 0) | (g_s.rando ? 8 : 0) |
+              (g_s.full_inv ? 0x10 : 0);
   fi->rando = g_s.rando;
   uint8 reserved[kMpMaxPlayers] = { 0 };
   QueueJoinLeave(fi, 0, &g_s.pending_join_mask, &g_s.pending_leave_mask, reserved);
@@ -466,6 +470,14 @@ void Session_SetRandomizer(uint32 setting) {
 
 uint32 Session_GetRandomizer() {
   return g_s.st.mode == kSessionClient ? Rando_GetNewGameSetting() : g_s.rando;
+}
+
+void Session_SetFullInventory(bool on) {
+  g_s.full_inv = on;
+}
+
+bool Session_GetFullInventory() {
+  return g_s.st.mode == kSessionClient ? FileSelect_GetFullInventory() : g_s.full_inv;
 }
 
 

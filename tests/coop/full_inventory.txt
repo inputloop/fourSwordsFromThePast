@@ -1,0 +1,210 @@
+# "Start new games with all items", a testing aid: a new save file starts
+# with every item at its best, 20 full hearts, four bottles and the most
+# bombs, arrows and rupees, and the story starts open (no intro, no castle
+# escape, the uncle is gone). A teammate who joined on the title screen
+# starts with the leader's Y item and bottle.
+fullinv 1
+run 200
+join 2
+run 10
+newgame
+run 400
+expect_ram f340 4
+expect_ram f341 2
+expect_ram f342 1
+expect_ram f343 32
+expect_ram f344 2
+expect_ram f34b 1
+expect_ram f34c 3
+expect_ram f34f 1
+expect_ram f353 2
+expect_ram f354 2
+expect_ram f357 1
+expect_ram f359 4
+expect_ram f35a 3
+expect_ram f35b 2
+expect_ram f35c 6
+expect_ram f35f 2
+expect_ram f362 e7
+expect_ram f363 3
+expect_ram f36c a0
+expect_ram f36d a0
+expect_ram f36e 80
+expect_ram f370 7
+expect_ram f371 7
+expect_ram f377 46
+expect_ram f379 fe
+expect_ram f37b 1
+expect_ram f3c5 2
+expect_ram f3c6 15
+expect_ram f4f0 0
+expect_ram f4f8 46
+# "Start from Link's house"
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+expect_pram 2 f36d a0
+expect_pram 2 202 1
+expect_pram 2 303 3
+expect_pram 2 f34f 1
+# The sword swings right away (with no story progress it wouldn't).
+hold 1 B
+run 3
+expect_ram_not 3c 0
+hold 1 -
+run 50
+# Items found later never take one down a level: the uncle's sword and
+# shield, the Master Sword, the Bow, the Power Glove, the shovel, the blue
+# boomerang and the fighter's shield.
+receive 0
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_module 7
+receive 1
+run 900
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_module 7
+receive b
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_module 7
+receive 1b
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_module 7
+receive 13
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_module 7
+receive c
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_module 7
+receive 4
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_module 7
+expect_ram f340 4
+expect_ram f341 2
+expect_ram f34c 3
+expect_ram f354 2
+expect_ram f359 4
+expect_ram f35a 3
+# A plain file works as in the original game: the Bow's chest gives the
+# plain bow even over the silver one. (Here a reference save.)
+fullinv 0
+expect_fullinv 0
+load 2
+run 100
+expect_ram f4f8 0
+poke f340 4
+receive b
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_ram f340 2

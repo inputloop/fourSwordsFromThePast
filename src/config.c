@@ -539,6 +539,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.four_swords_story);
     } else if (StringEqualsNoCase(key, "FourSwordsTitle")) {
       return ParseBool(value, &g_config.four_swords_title);
+    } else if (StringEqualsNoCase(key, "FullInventory")) {
+      return ParseBool(value, &g_config.full_inventory);
     } else if (StringEqualsNoCase(key, "Randomizer")) {
       // off | random | seed:XXXXXXXX (hex)
       const char *seed_str = StringStartsWithNoCase(value, "seed:");

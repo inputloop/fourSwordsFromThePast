@@ -730,13 +730,18 @@ void AncillaAdd_ItemReceipt(uint8 ain, uint8 yin, int chest_pos) {  // 8985e8
   uint8 t;
 
   int j = link_receiveitem_index;
-  if (j == 0) {
+  // A file made with a full inventory keeps its best items: otherwise the
+  // Master Sword, the Bow's chest or the Power Glove's would take it down a
+  // level. (0xff is a sword at the smiths.)
+  uint16 addr = kMemoryLocationToGiveItemTo[j];
+  bool keep_best = FileSelect_IsFullInventoryFile();
+  if (j == 0 && !(keep_best && link_shield_type)) {
     g_ram[kMemoryLocationToGiveItemTo[4]] = kValueToGiveItemTo[0];
   }
 
   uint8 v = kValueToGiveItemTo[j];
-  uint8 *p = &g_ram[kMemoryLocationToGiveItemTo[j]];
-  if (!sign8(v))
+  uint8 *p = &g_ram[addr];
+  if (!sign8(v) && !(keep_best && addr >= 0xf340 && addr <= 0xf35b && *p != 0xff && *p > v))
     *p = v;
 
   if (j == 0x1f)

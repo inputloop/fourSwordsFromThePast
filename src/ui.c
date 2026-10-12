@@ -17,6 +17,7 @@
 #include "bindings.h"
 #include "assets.h"
 #include "messaging.h"
+#include "select_file.h"
 
 // ---------------------------------------------------------------------------
 // 5x7 pixel font
@@ -900,6 +901,12 @@ static void ScreenGameplay() {
         snprintf(g_ui.seed_note, sizeof(g_ui.seed_note), "Couldn't write %s", path);
     }
   }
+  Item("Start new games with all items", OnOff(Session_GetFullInventory()));
+  if (Act() != kAct_None && !client) {
+    g_config.full_inventory = !g_config.full_inventory;
+    Session_SetFullInventory(g_config.full_inventory);
+    g_ui.dirty_settings = true;
+  }
   Item("Four Swords opening story", OnOff(Session_GetStory()));
   if (Act() != kAct_None && !client) {
     g_config.four_swords_story = !g_config.four_swords_story;
@@ -1732,16 +1739,19 @@ static void DrawSeedNotice() {
   if (main_module_index != 1 && main_module_index != 4)  // file select, naming a file
     return;
   uint32 rando = Rando_GetNewGameSetting();  // what new files actually get
-  if (rando == kRando_Off)
-    return;
-  char buf[48];
+  char buf[2][48];
+  int n = 0;
   if (rando == kRando_RandomSeed)
-    snprintf(buf, sizeof(buf), "New files: randomized, new seed");
-  else
-    snprintf(buf, sizeof(buf), "New files: randomized, seed %08X", rando);
-  int w = TextWidth(buf) + 8, x = (g_cv.width - w) / 2, y = g_cv.height - 14;
-  ShadeRect(x, y, w, 12);
-  DrawText(x + 4, y + 3, buf, 0xffe080);
+    snprintf(buf[n++], sizeof(buf[0]), "New files: randomized, new seed");
+  else if (rando != kRando_Off)
+    snprintf(buf[n++], sizeof(buf[0]), "New files: randomized, seed %08X", rando);
+  if (FileSelect_GetFullInventory())
+    snprintf(buf[n++], sizeof(buf[0]), "New files: all items (for testing)");
+  for (int i = 0; i < n; i++) {
+    int w = TextWidth(buf[i]) + 8, x = (g_cv.width - w) / 2, y = g_cv.height - 14 * (n - i);
+    ShadeRect(x, y, w, 12);
+    DrawText(x + 4, y + 3, buf[i], 0xffe080);
+  }
 }
 
 // Each player's selected item, as the HUD's item box would show it for them
@@ -2089,6 +2099,7 @@ void Ui_SaveSettings() {
     fprintf(f, "%s = %d\n", kKeys[i].key, (g_config.features0 & kKeys[i].bit) != 0);
   fprintf(f, "FourSwordsStory = %d\n", g_config.four_swords_story);
   fprintf(f, "FourSwordsTitle = %d\n", g_config.four_swords_title);
+  fprintf(f, "FullInventory = %d\n", g_config.full_inventory);
   uint32 rando = Session_GetRandomizer();
   if (rando > kRando_RandomSeed)
     fprintf(f, "Randomizer = seed:%08X\n", rando);

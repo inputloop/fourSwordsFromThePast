@@ -109,6 +109,27 @@ randomizer for save files created from then on (or set `Randomizer` in the
 - `src/randomizer.c` has the location logic. `./zelda3 --mptest` with
   `randocheck <first seed> <count> [verbose]` checks seeds and prints spoilers.
 
+## Full inventory (for testing)
+
+*Pause menu > Gameplay > Start new games with all items* (or
+`FullInventory = 1` in the `[Features]` section of `zelda3.ini`) gives save
+files created from then on every item at its best: the bow with silver
+arrows, the magical boomerang, all rods, canes and medallions, the flute
+(instead of the shovel), the powder (instead of the mushroom), the Titan's
+Mitt, the golden sword, the mirror shield and the red mail, 20 full hearts,
+full magic at half the cost, four bottles (a fairy, a blue and a red potion
+and an empty one), and the most bombs, arrows and rupees. Pendants, crystals and
+dungeon keys, maps and compasses are left alone.
+
+- Such a file starts open, like a randomized one (no intro, no castle
+  escape, the uncle is gone): the sword wouldn't swing before the uncle is
+  met, and with a better sword than his Zelda isn't in her cell.
+- Nothing found later takes an item down a level (the Master Sword, the
+  Bow's chest, the Power Glove, the shovel, ...). Files made without the
+  option work exactly as in the original game.
+- It combines with the randomizer, and the file select screen says when new
+  files will get it. In netplay the host's setting is used.
+
 ## 2D-HD look (beta)
 
 *Pause menu > Video > 2D-HD look* (or `Hd2d = 1` in `zelda3.ini`) puts a

@@ -562,6 +562,7 @@ int main(int argc, char** argv) {
   Session_SetStory(g_config.four_swords_story);
   g_mp_color_scheme = g_config.mp_colorblind;
   Session_SetRandomizer(g_config.randomizer);
+  Session_SetFullInventory(g_config.full_inventory);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);
 

@@ -266,6 +266,7 @@ void Mp_Join(int p) {
   g_ram[kRam_LeftHealth + p] = 0;
   *Mp_PlayerRam(p, 0x202) = hud_cur_item;
   *Mp_PlayerRam(p, 0x303) = current_item_y;
+  *Mp_PlayerRam(p, 0xF34F) = link_item_bottle_index;  // (0 would be no bottle at all)
   Mp_SwapTo(r);
 }
 
@@ -723,14 +724,18 @@ void Mp_EndFrame() {
     return;
   }
   Mp_SwapToLeader();
-  // Players who joined on the title or file select screen got hearts and magic
-  // before there was a save file; start them like the leader instead.
+  // Players who joined on the title or file select screen got hearts, magic
+  // and a Y item before there was a save file; start them like the leader
+  // instead.
   if (g_mp.at_title && (main_module_index == 7 || main_module_index == 9)) {
     g_mp.at_title = 0;
     for (int p = 0; p < kMpMaxPlayers; p++) {
       if (g_mp.p[p].joined && p != g_mp.leader) {
         *Mp_PlayerRam(p, 0xF36D) = link_health_current;
         *Mp_PlayerRam(p, 0xF36E) = link_magic_power;
+        *Mp_PlayerRam(p, 0x202) = hud_cur_item;
+        *Mp_PlayerRam(p, 0x303) = current_item_y;
+        *Mp_PlayerRam(p, 0xF34F) = link_item_bottle_index;
       }
     }
   }

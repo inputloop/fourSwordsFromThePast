@@ -1,7 +1,9 @@
 # Netplay client: joins, plays, survives a forced desync and leaves.
+expect_fullinv 0
 connect 127.0.0.1:47474
 waitplay
 expect_players 2
+expect_fullinv 1
 hold 1 R
 tick 120
 hold 1 -
@@ -14,3 +16,5 @@ expect_resyncs 1
 disconnect
 tick 30
 status
+# Offline again: its own setting.
+expect_fullinv 0

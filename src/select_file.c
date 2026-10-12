@@ -862,6 +862,69 @@ void NameFile_DoTheNaming() {  // 8cda4d
   sound_effect_1 = 0x2c;
 }
 
+// Save file byte that marks a file made with a full inventory.
+enum { kFullInvMarkerOffs = 0x4F8, kFullInvMarker = 0x46 };
+
+static bool g_new_game_full_inventory;
+
+void FileSelect_SetFullInventory(bool on) { g_new_game_full_inventory = on; }
+bool FileSelect_GetFullInventory() { return g_new_game_full_inventory; }
+
+bool FileSelect_IsFullInventoryFile() {
+  return g_ram[0xF000 + kFullInvMarkerOffs] == kFullInvMarker;
+}
+
+// A testing aid: every item at its best, 20 hearts, full magic at half the
+// cost, the most bombs, arrows and rupees. (The flute takes the shovel's
+// slot and the powder the mushroom's.) Pendants, crystals and dungeon items
+// are left alone. The story starts open like a randomized game's: without
+// that the sword wouldn't swing before the uncle is met, and with a better
+// sword than his Zelda isn't in her cell to be rescued.
+static void GiveFullInventory(uint8 *sram) {
+  static const uint8 kItems[0x18] = {  // 0x340-0x357
+    4,     // bow with silver arrows
+    2,     // magical boomerang
+    1,     // hookshot
+    50,    // bombs
+    2,     // magic powder
+    1, 1,  // fire rod, ice rod
+    1, 1, 1,  // Bombos, Ether, Quake
+    1, 1,  // lamp, hammer
+    3,     // flute (the bird can be called)
+    1, 1,  // bug net, Book of Mudora
+    1,     // selected bottle
+    1, 1, 1,  // Cane of Somaria, Cane of Byrna, magic cape
+    2,     // magic mirror
+    2,     // Titan's Mitt
+    1, 1, 1,  // Pegasus Boots, Zora's Flippers, Moon Pearl
+  };
+  memcpy(sram + 0x340, kItems, sizeof(kItems));
+  sram[0x359] = 4;  // golden sword
+  sram[0x35A] = 3;  // mirror shield
+  sram[0x35B] = 2;  // red mail
+  // A fairy (only one: in co-op it saves a Link from going down), a blue and
+  // a red potion, and an empty bottle.
+  static const uint8 kBottles[4] = { 6, 5, 3, 2 };
+  memcpy(sram + 0x35C, kBottles, 4);
+  WORD(sram[0x360]) = WORD(sram[0x362]) = 999;  // rupees
+  sram[0x36C] = sram[0x36D] = 0xA0;  // 20 hearts, all full (the most there can be)
+  sram[0x36E] = 0x80;  // full magic
+  sram[0x370] = sram[0x371] = 7;  // the most bombs and arrows that can be carried
+  sram[0x377] = 70;  // arrows
+  sram[0x379] |= 0x04 | 0x02;  // dash with the boots, swim with the flippers
+  sram[0x37B] = 1;  // magic costs half
+  // The open start, as for a randomized file (randomizer.c). The uncle is
+  // gone already in a file that isn't randomized: he'd only hand over his
+  // sword and shield.
+  bool randomized = sram[0x4F0] == 'R';  // (the randomizer's mark)
+  sram[0x3C5] = 2;
+  sram[0x3C6] |= 0x14 | (randomized ? 0 : 1);
+  sram[0x3C7] = 1;
+  sram[0x3C8] = 0;
+  sram[0x3CC] = 0;
+  sram[kFullInvMarkerOffs] = kFullInvMarker;
+}
+
 // Fills in a new save file (the name is already there).
 void FileSelect_InitNewSave(uint8 *sram) {
   WORD(sram[0x3e5]) = 0x55aa;
@@ -876,6 +939,9 @@ void FileSelect_InitNewSave(uint8 *sram) {
   };
   memcpy(sram + 0x340, kSramInit_Normal, 60);
   Rando_OnNewFile(sram);
+  sram[kFullInvMarkerOffs] = 0;
+  if (g_new_game_full_inventory)
+    GiveFullInventory(sram);
   Intro_FixCksum(sram);
 }
 

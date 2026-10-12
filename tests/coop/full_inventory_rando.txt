@@ -1,0 +1,77 @@
+# All items in a randomized game: the file is randomized and full, the uncle
+# still waits in the passage with the seed's two items (seed 2: 3 bombs and
+# 50 rupees, the most there can be already), and a randomized Bow doesn't
+# take the silver arrows away.
+rando 2
+fullinv 1
+run 200
+newgame
+run 400
+expect_ram f4f0 52
+expect_ram f4f8 46
+expect_ram f3c5 2
+expect_ram f3c6 14
+expect_ram f359 4
+expect_ram f340 4
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+receive b
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_ram f340 4
+expect_module 7
+enter 55
+run 300
+hold 1 U
+run 330
+hold 1 R
+run 90
+hold 1 -
+run 30
+hold 1 A
+run 4
+hold 1 -
+run 120
+hold 1 A
+run 4
+hold 1 -
+run 120
+hold 1 A
+run 4
+hold 1 -
+run 120
+hold 1 A
+run 4
+hold 1 -
+run 120
+hold 1 A
+run 4
+hold 1 -
+run 120
+hold 1 A
+run 4
+hold 1 -
+run 120
+hold 1 A
+run 4
+hold 1 -
+run 120
+hold 1 A
+run 4
+hold 1 -
+run 120
+expect_ram f3c6 15
+expect_ram f4f7 3
+expect_ram f359 4
+expect_ram f35a 3
+expect_module 7
