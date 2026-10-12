@@ -18,6 +18,11 @@ Built on the [snesrev/zelda3](https://github.com/snesrev/zelda3) C
 reimplementation (vendored from commit `45a149d8`, MIT licensed). You need your
 own US ROM to extract the game's assets.
 
+**Community:** join the fourSwordsFromThePast Discord at
+https://discord.gg/jEsJGwhyNS for this mod (co-op, netplay, the randomizer,
+2D-HD). Questions about the underlying zelda3 engine itself go to snesrev's
+server, linked in the upstream section below.
+
 <p align="center">
   <img src="docs/screenshots/four-links.png" width="49%" alt="Four Links in green, red, blue and purple on top of the Pyramid at sunset, each with their own hearts in a screen corner">
   <img src="docs/screenshots/battle.png" width="49%" alt="Four Links fighting soldiers in front of the Eastern Palace">
@@ -171,7 +176,7 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 
 A reimplementation of Zelda 3.
 
-Our discord server is: https://discord.gg/AJJbJAzNNJ
+The upstream zelda3 project's Discord server (snesrev's, for the engine itself): https://discord.gg/AJJbJAzNNJ
 
 ## About
 
