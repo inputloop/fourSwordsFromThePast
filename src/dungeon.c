@@ -4519,7 +4519,7 @@ void PushPressurePlate(uint8 attr) {  // 81c5cf
   saved_module_for_menu = submodule_index;
   submodule_index = 23;
   subsubmodule_index = 32;
-  link_y_coord += 2;
+  Mp_NudgeSwitchPresser(2);  // (the Link on the plate: any of them in co-op)
   if ((WORD(dung_bg2_attr_table[word_7E04B6]) & 0xfe00) != 0x2400)
     word_7E04B6++;
   Dungeon_UpdateTileMapWithCommonTile((word_7E04B6 & 0x3f) << 3, (word_7E04B6 >> 3) & 0x1f8, 0x10);
@@ -4973,7 +4973,19 @@ void RoomTag_OperateWaterFlooring() {  // 81cc95
   }
 }
 
-bool RoomTag_MaybeCheckShutters(uint8 *attr_out) {  // 81cd39
+static bool RoomTag_MaybeCheckShutters_One(uint8 *attr_out);
+static bool RoomTag_CheckForPressedSwitch_One(uint8 *y_out);
+
+// In co-op every standing Link's weight counts on a floor switch.
+bool RoomTag_MaybeCheckShutters(uint8 *attr_out) {
+  return Mp_AnyLinkOnSwitch(&RoomTag_MaybeCheckShutters_One, attr_out);
+}
+
+bool RoomTag_CheckForPressedSwitch(uint8 *y_out) {
+  return Mp_AnyLinkOnSwitch(&RoomTag_CheckForPressedSwitch_One, y_out);
+}
+
+static bool RoomTag_MaybeCheckShutters_One(uint8 *attr_out) {  // 81cd39
   int p, t;
   word_7E04B6 = 0;
   if (flag_is_link_immobilized || link_auxiliary_state)
@@ -5005,7 +5017,7 @@ int RoomTag_GetTilemapCoords() {  // 81cda5
 
 }
 
-bool RoomTag_CheckForPressedSwitch(uint8 *y_out) {  // 81cdcc
+static bool RoomTag_CheckForPressedSwitch_One(uint8 *y_out) {  // 81cdcc
   int p, t;
   word_7E04B6 = 0;
   if (flag_is_link_immobilized || link_auxiliary_state)
@@ -7690,7 +7702,7 @@ void Module07_16_UpdatePegs() {  // 82972a
 void Module07_17_PressurePlate() {  // 8297c8
   if (--subsubmodule_index)
     return;
-  link_y_coord -= 2;
+  Mp_NudgeSwitchPresser(-2);
   Dungeon_UpdateTileMapWithCommonTile((word_7E04B6 & 0x3f) << 3, (word_7E04B6 >> 3) & 0x1f8, 0xe);
   submodule_index = saved_module_for_menu;
 }

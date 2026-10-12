@@ -85,7 +85,7 @@
 //   menu                toggle the overlay menu (navigate with hold + tick)
 //   key <up|down|left|right|enter|back> [times]  a button press in the menu
 // Debug only (not for tests): trace <0|1>, chestdump, dumprender <p>, dumpworldmap <file> <dark>,
-//   findtile <p> <hexattr>, spoiler <hexseed> <file>, upnp (asks the router for a port mapping).
+//   findtile <p> <hexattr>, findroomtag <hextag>, spoiler <hexseed> <file>, upnp (asks the router for a port mapping).
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -110,6 +110,7 @@
 #include "snes/ppu.h"
 #include "sprite.h"
 #include "overworld.h"
+#include "dungeon.h"
 #include "assets.h"
 #include "session.h"
 #include "ui.h"
@@ -1183,15 +1184,33 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "message")) {
       dialogue_message_index = strtol(arg1, NULL, 16);
       Main_ShowTextMessage();
+    } else if (!strcmp(cmd, "findroomtag")) {
+      // findroomtag <hextag>: (debug) prints the dungeon rooms whose header has that tag routine
+      int want = strtol(arg1, NULL, 16);
+      for (int room = 0; room < 0x128; room++) {
+        const uint8 *h = GetRoomHeaderPtr(room);
+        if (h[5] == want || h[6] == want)
+          printf("room %x tags %x %x\n", room, h[5], h[6]);
+      }
     } else if (!strcmp(cmd, "findtile")) {
-      // findtile <p> <hexattr>: (overworld) prints the tiles with that
-      // behavior within 200 pixels of player p
+      // findtile <p> <hexattr>: (debug) prints the tiles with that behavior
+      // within 200 pixels of player p (in a dungeon: on its floor of the room)
       int p = PlayerArg(arg1), want = strtol(arg2, NULL, 16), n = 0;
       SwitchToPlayer(p);
-      for (int dy = -200; dy <= 200 && n < 12; dy += 8)
+      if (player_is_indoors) {
+        // (the whole room, its 64x64 tiles, on that player's floor)
+        int base_x = Mp_PlayerX(p) & ~0x1ff, base_y = Mp_PlayerY(p) & ~0x1ff, fl = *Mp_PlayerRam(p, 0xEE) ? 0x1000 : 0;
+        for (int t = 0; t < 4096 && n < 12; t++)
+          if (dung_bg2_attr_table[t + fl] == want)
+            printf("tile %x at %d,%d\n", want, base_x + (t & 63) * 8, base_y + (t >> 6) * 8), n++;
+      }
+      for (int dy = -200; dy <= 200 && n < 12 && !player_is_indoors; dy += 8)
         for (int dx = -200; dx <= 200 && n < 12; dx += 8) {
           uint16 x = Mp_PlayerX(p) + dx, y = Mp_PlayerY(p) + dy;
-          if (Overworld_GetTileAttributeAtLocation(x >> 3, y) == want)
+          int attr = player_is_indoors ?
+              dung_bg2_attr_table[(y >> 3 & 63) * 64 + (x >> 3 & 63) + (*Mp_PlayerRam(p, 0xEE) ? 0x1000 : 0)] :
+              Overworld_GetTileAttributeAtLocation(x >> 3, y);
+          if (attr == want)
             printf("tile %x at %d,%d\n", want, x & ~7, y & ~7), n++;
         }
     } else if (!strcmp(cmd, "settiles")) {

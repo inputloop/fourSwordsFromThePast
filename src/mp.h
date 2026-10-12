@@ -44,7 +44,8 @@ typedef struct MpState {
   uint8 in_other_update;
   uint8 after_death;
   uint8 menu_leader;         // shared screen: who led (+1) before a teammate opened a menu, 0 = nobody
-  uint8 pad[2];
+  uint8 switch_presser;      // the Link (+1) standing on the floor switch last found pressed, 0 = the resident
+  uint8 pad[1];
   uint32 area_key;
   uint8 ancilla_owner[10];
   uint8 ancilla_seen[10];
@@ -174,6 +175,12 @@ void Mp_RemovePlayer(int p);
 void Mp_RecordLeaving(int p);
 // Gets a downed player back on its feet with that much health.
 void Mp_Revive(int p, uint8 health);
+// Floor switches: runs check (one of the game's "is Link on a switch"
+// tests) for the resident Link and then every other standing one; true
+// when some Link stands on a switch, which is remembered as the presser.
+bool Mp_AnyLinkOnSwitch(bool (*check)(uint8 *out), uint8 *out);
+// Moves the Link that pressed the switch by dy (the plate sinking under it).
+void Mp_NudgeSwitchPresser(int dy);
 // The teammate carrier holds over its head, or -1.
 int Mp_CarriedBy(int carrier);
 void Mp_SetLeader(int p);

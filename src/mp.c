@@ -200,6 +200,34 @@ void Mp_RecordLeaving(int p) {
   g_ram[kRam_LeftMagic + p] = Mp_PlayerMagic(p);
 }
 
+bool Mp_AnyLinkOnSwitch(bool (*check)(uint8 *out), uint8 *out) {
+  bool hit = check(out);
+  g_mp.switch_presser = 0;
+  if (hit || !Mp_Active())
+    return hit;
+  // Any Link's weight counts: one can hold a plate down while the others
+  // go through the door it opens. (Not a ghost, nor a Link held over a
+  // teammate's head or flying from a throw.)
+  int r = g_mp.resident;
+  for (int p = 0; p < kMpMaxPlayers && !hit; p++) {
+    if (p == r || !Mp_IsAlive(p) || g_mp.carried_by[p] || g_mp.thrown[p])
+      continue;
+    Mp_SwapTo(p);
+    if ((hit = check(out)))
+      g_mp.switch_presser = p + 1;
+  }
+  Mp_SwapTo(r);
+  return hit;
+}
+
+void Mp_NudgeSwitchPresser(int dy) {
+  int p = g_mp.switch_presser - 1;
+  if (p >= 0 && p != g_mp.resident && g_mp.p[p].joined)
+    WORD(*Mp_PlayerRam(p, 0x20)) += dy;  // link_y_coord
+  else
+    link_y_coord += dy;
+}
+
 // Forgets what the co-op layer knows about a player who leaves this world
 // (or has just arrived): nothing carried, thrown, away or cooling down, and
 // whoever it was holding is set down where it is.
