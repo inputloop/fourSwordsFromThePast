@@ -151,7 +151,8 @@ Players can drop in and drop out at any time.
   - Swimming, dashing or as a bunny, a Link moves on to the next area at its
     edge like a walking one.
   - The flute's bird (and the mirror) take the whole shared screen along:
-    the others are set down next to whoever played it.
+    the others are set down next to whoever played it (a downed teammate
+    stays where it fell). The bird waits while its caller is in a menu.
   - The sound is from the world of the first player on this computer.
 - **The leader.** In a group sharing a screen, whoever talks to someone or
   takes an exit becomes the leader that rooms, doors and cutscenes follow.

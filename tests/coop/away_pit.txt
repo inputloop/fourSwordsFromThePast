@@ -1,0 +1,25 @@
+# A player in the item menu, whose Link only stands in the world, has the
+# floor give way under it: that Link falls alone, and the player who is
+# playing stays where it is. (For a while the one playing was sent through
+# the hole instead, as the lead never went to a player in a menu.) The test
+# makes the tiles under P1 a pit.
+load 3
+run 30
+join 2
+run 10
+enter 77
+run 200
+clearsprites
+pos 1 3792 3980
+pos 2 3850 3980
+setleader 2
+run 20
+hold 1 S
+run 4
+hold 1 -
+run 40
+view 2
+settiles 3768 3960 3830 4024 20
+run 150
+expect_near 2 3850 3980
+expect_apart 1 2

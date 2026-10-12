@@ -122,8 +122,11 @@ and an empty one), and the most bombs, arrows and rupees. Pendants, crystals and
 dungeon keys, maps and compasses are left alone.
 
 - Such a file starts open, like a randomized one (no intro, no castle
-  escape, the uncle is gone): the sword wouldn't swing before the uncle is
-  met, and with a better sword than his Zelda isn't in her cell.
+  escape): the sword wouldn't swing before the uncle is met, and with a
+  better sword than his Zelda isn't in her cell. In a file that isn't
+  randomized the uncle is gone too, since he'd only hand over his sword and
+  shield; in a randomized one he still waits in the passage with the seed's
+  two items.
 - Nothing found later takes an item down a level (the Master Sword, the
   Bow's chest, the Power Glove, the shovel, ...). Files made without the
   option work exactly as in the original game.

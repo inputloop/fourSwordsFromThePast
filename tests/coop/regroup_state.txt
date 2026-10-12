@@ -1,0 +1,52 @@
+# A Link put next to the leader (joining, or regrouped) takes on what it
+# does there, not the leader's own doings: a bunny spell that hit the
+# leader stays the leader's (a teammate joining it started a transformation
+# that never ended: hidden and unhurtable for good), and in the Dark World
+# without the Moon Pearl it is a bunny too (it was a Link with the bunny
+# flag, swinging a sword). Swimming: see swim_edge.txt.
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+hold 1 D
+run 150
+hold 1 -
+clearsprites
+run 30
+# P1 is hit by a bunny spell, then P2 joins.
+pram 1 3f6 1
+run 60
+expect_pram 1 5d 1c
+join 2
+run 60
+expect_pram 2 5d 0
+expect_pram 2 56 0
+expect_pram 2 4b 0
+expect_pram 2 37b 0
+expect_pram 2 3f7 0
+run 600
+expect_pram 2 4b 0
+expect_pram 1 5d 0
+# A bunny in the Dark World without the Moon Pearl: a teammate put next to
+# it is one too.
+setleader 1
+poke f357 0
+pram 1 56 1
+pram 1 2e0 1
+pram 1 5d 17
+run 30
+expect_pram 1 5d 17
+pos 2 1000 3700
+run 1
+expect_pram 2 56 1
+expect_pram 2 5d 17
+hold 2 B
+run 3
+hold 2 -
+run 1
+expect_pram 2 3c 0

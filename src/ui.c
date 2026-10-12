@@ -563,6 +563,7 @@ static void ScreenMultiplayer() {
     int a = Act();
     if (a != kAct_None) {
       Session_SetFriendlyFire(!Session_GetFriendlyFire());
+      g_config.mp_friendly_fire = Session_GetFriendlyFire();
       g_ui.dirty_settings = true;
     }
   } else {
@@ -2108,14 +2109,15 @@ void Ui_SaveSettings() {
   fprintf(f, "FourSwordsStory = %d\n", g_config.four_swords_story);
   fprintf(f, "FourSwordsTitle = %d\n", g_config.four_swords_title);
   fprintf(f, "FullInventory = %d\n", g_config.full_inventory);
-  uint32 rando = Session_GetRandomizer();
+  // (This computer's own settings: a client's session shows the host's.)
+  uint32 rando = g_config.randomizer;
   if (rando > kRando_RandomSeed)
     fprintf(f, "Randomizer = seed:%08X\n", rando);
   else
     fprintf(f, "Randomizer = %s\n", rando ? "random" : "off");
   Bindings_WriteConfig(f);
   fprintf(f, "[Multiplayer]\n");
-  fprintf(f, "FriendlyFire = %d\n", Session_GetFriendlyFire());
+  fprintf(f, "FriendlyFire = %d\n", g_config.mp_friendly_fire);
   fprintf(f, "UseUpnp = %d\n", g_ui.use_upnp);
   fprintf(f, "Port = %d\n", g_config.mp_port);
   fprintf(f, "InputDelay = %d\n", g_config.mp_input_delay);

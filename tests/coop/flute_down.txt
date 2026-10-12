@@ -1,0 +1,46 @@
+# The one who played the flute goes down before the bird arrives: the bird
+# doesn't come. (It carried off the ghost, and the teammate who leads with
+# it into the flute's map.) The ghost stays where it fell and is revived.
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+pram 1 202 0d
+pram 1 303 08
+expect_leader 2
+hold 2 R
+run 30
+hold 2 -
+run 10
+pram 1 202 0d
+pram 1 303 08
+hold 1 Y
+run 4
+hold 1 -
+run 10
+down 1
+run 200
+view 2
+expect_module 9
+expect_downed 1
+expect_near 1 2232 2845
+hold 2 L
+run 30
+hold 2 -
+run 200
+expect_alive 1
+expect_module 9

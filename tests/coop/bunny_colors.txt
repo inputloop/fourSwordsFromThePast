@@ -1,0 +1,44 @@
+# A bunny spell's colors belong to the world it was cast in: a bunny moving
+# on to the next area while still a bunny left its old world in bunny
+# colors for good. The colors of the world left behind go back to the gear's.
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 L
+hold 2 L
+run 100
+hold 1 DL
+hold 2 DL
+run 60
+hold 1 L
+hold 2 L
+run 60
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+setleader 1
+# P2 is hit by a bunny beam: a bunny for a while
+pram 2 3f6 1
+run 40
+expect_pram 2 5d 1c
+# The bunny walks on to the next area
+hold 2 L
+run 120
+hold 2 -
+run 30
+expect_apart 1 2
+view 1
+expect_ram c6e6 b7
+expect_ram c6e7 11

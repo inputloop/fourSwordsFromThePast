@@ -11,6 +11,8 @@
 #include "instance.h"
 #include "features.h"
 #include "assets.h"
+#include "tagalong.h"
+#include "load_gfx.h"
 
 MpState g_mp;
 MpRenderState g_mp_render;
@@ -204,10 +206,35 @@ static void Mp_RegroupPlayer(int p) {
     0x4D, 0x46, 0x2C6,   // link_auxiliary_state, link_incapacitated_timer, link_recoilmode_timer
     0x27, 0x28, 0x29,    // link_actual_vel_y/x/z
     0x24, 0x25,          // link_z_coord
+    0x3F5, 0x3F6, 0x3F7, 0x2E2,  // a bunny spell's timer, a transformation under way
   };
   for (size_t i = 0; i < countof(kClear); i++)
     *Mp_PlayerRam(p, kClear[i]) = 0;
   *Mp_PlayerRam(p, 0x31F) = 0x20;  // countdown_for_blink
+  // It swims in the leader's water, and is a bunny like the leader in the
+  // Dark World without the Moon Pearl; a bunny spell that hit the leader is
+  // the leader's own. (The game starts swimming only on entering deep water,
+  // and keeps a bunny one only in the bunny's own state.)
+  uint8 st = link_player_handler_state;  // (the leader's)
+  if (st == kPlayerState_Swimming) {
+    *Mp_PlayerRam(p, 0x5D) = st;
+    // Its own strokes, from rest (as Link_ResetSwimmingState): the countdown,
+    // hard stroke and faster flags, and the accelerations (swimcoll_var3, 5,
+    // 1, 9 and 7, two words each).
+    static const uint16 kSwimFresh[] = { 0x2CB, 0x34F, 0x32A };
+    static const uint16 kSwimAccel[] = { 0x326, 0x32B, 0x32F, 0x334, 0x33C };
+    for (size_t i = 0; i < countof(kSwimFresh); i++)
+      *Mp_PlayerRam(p, kSwimFresh[i]) = 0;
+    for (size_t i = 0; i < countof(kSwimAccel); i++)
+      for (int j = 0; j < 4; j++)
+        *Mp_PlayerRam(p, kSwimAccel[i] + j) = 0;
+  } else if (st == kPlayerState_PermaBunny) {
+    *Mp_PlayerRam(p, 0x5D) = st;
+  } else {
+    *Mp_PlayerRam(p, 0x345) = 0;  // link_is_in_deep_water
+    *Mp_PlayerRam(p, 0x56) = 0;   // link_is_bunny
+    *Mp_PlayerRam(p, 0x2E0) = 0;  // link_is_bunny_mirror
+  }
   Mp_SwapTo(r);
 }
 
@@ -268,6 +295,18 @@ static void Mp_HandOverObjects(int p) {
       if (ancilla_step[i])
         tagalong_var5 = 0;  // (it had picked p up and hidden the follower)
       ancilla_type[i] = 0;
+    } else if (ancilla_type[i] == 0x27 && ancilla_step[i]) {
+      // Setting p down: it lands without anyone and flies off, and the
+      // follower comes along to the leader as it would to p. (Not the rest of
+      // its letting go: the leader wasn't hidden or held.)
+      ancilla_step[i] = 0;
+      tagalong_var5 = 0;
+      g_mp.ancilla_owner[i] = g_mp.leader;
+      if (!((follower_indicator == 12 || follower_indicator == 13) && follower_dropped)) {
+        uint8 speed = link_speed_setting, state = link_player_handler_state, running = link_is_running;
+        Follower_Initialize();
+        link_speed_setting = speed, link_player_handler_state = state, link_is_running = running;
+      }
     } else {
       g_mp.ancilla_owner[i] = g_mp.leader;
     }
@@ -275,6 +314,18 @@ static void Mp_HandOverObjects(int p) {
   for (int i = 0; i < 16; i++)
     if (g_mp.sprite_owner[i] == p)
       g_mp.sprite_owner[i] = g_mp.leader;
+}
+
+// Player p (a bunny?) is leaving this world: if no bunny is left, the
+// world's Link colors go back to the gear's (a bunny spell puts the bunny's
+// into the world's palette, and only puts them back where it ends).
+static void Mp_BunnyColorsLeave(bool was_bunny) {
+  if (!was_bunny)
+    return;
+  for (int q = 0; q < kMpMaxPlayers; q++)
+    if (g_mp.p[q].joined && *Mp_PlayerRam(q, 0x56))  // link_is_bunny
+      return;
+  LoadActualGearPalettes();
 }
 
 static void Mp_ClearCoopState(int p) {
@@ -340,8 +391,10 @@ void Mp_Leave(int p) {
   } else if (p == g_mp.resident) {
     Mp_SwapTo(g_mp.leader);
   }
+  bool was_bunny = *Mp_PlayerRam(p, 0x56) != 0;  // link_is_bunny
   g_mp.p[p].joined = 0;
   Mp_HandOverObjects(p);
+  Mp_BunnyColorsLeave(was_bunny);
   g_mp_render.p[p].count = 0;
 }
 
@@ -814,9 +867,10 @@ void Mp_BeginObject() {
 // Called after running a piece of game code under some player's context. If
 // that code switched the game module, that player now leads.
 void Mp_EndObject() {
-  // (Never to a player in the item menu, whose Link only stands here: the
-  // world would wait for its buttons.)
-  if (g_mp.resident != g_mp.leader && !g_mp.away[g_mp.resident] &&
+  // (Not into a text box or menu for a player in the item menu, whose Link
+  // only stands here: the world would wait for its buttons. A fall or other
+  // trip that Link makes on its own takes it, as the leader, elsewhere.)
+  if (g_mp.resident != g_mp.leader && !(g_mp.away[g_mp.resident] && main_module_index == 14) &&
       (g_mp.module_snapshot[0] != main_module_index || g_mp.module_snapshot[1] != submodule_index)) {
     // A menu or map (module 14) opened in a shared screen: the one who
     // opened it leads while it is open (its item choices land in its own
@@ -934,15 +988,30 @@ bool Mp_PreAncilla(int k) {
   if (!Mp_Active())
     return true;
   Mp_BeginObject();
+  // (One added since the last swap is its maker's, the resident: otherwise
+  // its first frame ran as whoever owned that slot before.)
+  Mp_AttributeObjects();
   int owner = g_mp.ancilla_owner[k];
   if (!g_mp.p[owner].joined)
     owner = g_mp.leader;
   Mp_SwapTo(owner);
   memcpy(g_mp_oam_before, oam_buf, sizeof(g_mp_oam_before));
-  // The flute's bird waits while the one who called it is in the item menu
-  // (its Link only stands here): it would carry off the empty-handed Link,
-  // and the whole world into a map that nobody here can use.
-  return !(g_mp.away[owner] && ancilla_type[k] == 0x27 && !ancilla_step[k]);
+  // The flute's bird on its way to the one who called it:
+  if (ancilla_type[k] == 0x27 && !ancilla_L[k] && !ancilla_step[k]) {
+    // Gone down meanwhile: the bird doesn't come (it would carry the ghost
+    // off, and everybody here along into the flute's map).
+    if (g_mp.p[owner].downed) {
+      ancilla_type[k] = 0;
+      return false;
+    }
+    // In the item menu or a map (its Link only stands here): the bird waits
+    // out of sight, and flies in again afterwards, or it would carry off the
+    // Link standing in for that player and the whole world into a map that
+    // nobody here can use.
+    if (g_mp.away[owner] && ancilla_timer[k] < 2)
+      ancilla_timer[k] = 2;
+  }
+  return true;
 }
 
 // Some projectiles (the hookshot's head and chain, ...) are drawn with tiles
@@ -1257,6 +1326,10 @@ bool Mp_OnFatalDamage() {
       g_mp.p[me].revive_ctr = 0;
       // Whatever the Link carried (a bush, a pot, a teammate) is let go.
       Mp_LetGo(me);
+      // The bird it called with the flute doesn't come (see Mp_PreAncilla).
+      for (int i = 0; i < 10; i++)
+        if (g_mp.ancilla_owner[i] == me && ancilla_type[i] == 0x27 && !ancilla_L[i] && !ancilla_step[i])
+          ancilla_type[i] = 0;
       // A ghost lies still where it fell: no knockback, no hop.
       link_player_handler_state = 0;
       link_auxiliary_state = 0;
@@ -2012,8 +2085,10 @@ void Mp_RemovePlayer(int p) {
   } else if (p == g_mp.resident) {
     Mp_SwapTo(g_mp.leader);
   }
+  bool was_bunny = *Mp_PlayerRam(p, 0x56) != 0;  // link_is_bunny
   g_mp.p[p].joined = 0;
   Mp_HandOverObjects(p);
+  Mp_BunnyColorsLeave(was_bunny);
   g_mp_render.p[p].count = 0;
 }
 

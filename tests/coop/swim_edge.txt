@@ -44,3 +44,9 @@ hold 1 -
 run 60
 status
 expect_apart 1 2
+# A player joining next to the swimming leader swims too (it was put there
+# walking, on the deep water).
+join 3
+run 30
+expect_pram 3 345 1
+expect_pram 3 5d 4
