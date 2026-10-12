@@ -202,7 +202,9 @@ void Mp_RecordLeaving(int p) {
 
 bool Mp_AnyLinkOnSwitch(bool (*check)(uint8 *out), uint8 *out) {
   bool hit = check(out);
-  g_mp.switch_presser = 0;
+  // (Who pressed it: the plate's sinking moves that Link, also if the lead
+  // changes meanwhile. 0: a game for one.)
+  g_mp.switch_presser = hit && Mp_Active() ? g_mp.resident + 1 : 0;
   if (hit || !Mp_Active())
     return hit;
   // Any Link's weight counts: one can hold a plate down while the others
@@ -222,10 +224,10 @@ bool Mp_AnyLinkOnSwitch(bool (*check)(uint8 *out), uint8 *out) {
 
 void Mp_NudgeSwitchPresser(int dy) {
   int p = g_mp.switch_presser - 1;
-  if (p >= 0 && p != g_mp.resident && g_mp.p[p].joined)
-    WORD(*Mp_PlayerRam(p, 0x20)) += dy;  // link_y_coord
-  else
+  if (p < 0)
     link_y_coord += dy;
+  else if (g_mp.p[p].joined)  // (gone meanwhile: nobody to move)
+    WORD(*Mp_PlayerRam(p, 0x20)) += dy;  // link_y_coord
 }
 
 // Forgets what the co-op layer knows about a player who leaves this world
@@ -533,8 +535,11 @@ static void Mp_HandleCarry() {
     bool hopping = cs >= 11 && cs <= 16;
     bool carrier_busy = cs != 0 && !hopping && cs != 20;
     bool carrier_hit = *Mp_PlayerRam(c, 0x4D) != 0 && !hopping;  // link_auxiliary_state (2 while hopping)
+    // (Nothing is let go in mid-air while the carrier hops down a ledge:
+    // the carried Link would start from the cliff face. It waits for the
+    // landing.)
     if (!Mp_Active() || !Mp_CarryGoesAlong() || !g_mp.p[q].joined || !Mp_IsAlive(c) || g_mp.p[q].downed ||
-        (stable && (carrier_hit || carrier_busy || *Mp_PlayerRam(q, 0x4D) != 0))) {
+        (stable && !hopping && (carrier_hit || carrier_busy || *Mp_PlayerRam(q, 0x4D) != 0))) {
       g_mp.carried_by[q] = 0;
       if (g_mp.p[q].joined && *Mp_PlayerRam(q, 0x4D) == 0)
         WORD(*Mp_PlayerRam(q, 0x24)) = 0;  // set down where it is
@@ -544,7 +549,7 @@ static void Mp_HandleCarry() {
     // The carried Link can only wriggle free.
     bool b = *Mp_PlayerRam(q, 0xF4) & 0x80;  // filtered_joypad_H: B
     *Mp_PlayerRam(q, 0xF0) = *Mp_PlayerRam(q, 0xF2) = *Mp_PlayerRam(q, 0xF4) = *Mp_PlayerRam(q, 0xF6) = 0;
-    if (b && stable)
+    if (b && stable && !hopping)
       Mp_Release(q, false);
   }
   if (!stable) {
@@ -570,9 +575,11 @@ static void Mp_HandleCarry() {
     if (!Mp_IsAlive(p) || !(*Mp_PlayerRam(p, 0xF6) & 0x80))  // filtered_joypad_L: A
       continue;
     int q = Mp_CarriedBy(p);
+    uint8 ps = *Mp_PlayerRam(p, 0x5D);
     if (q >= 0) {
       *Mp_PlayerRam(p, 0xF6) &= ~0x80;
-      Mp_Release(q, true);
+      if (!(ps >= 11 && ps <= 16))  // (not while hopping down a ledge)
+        Mp_Release(q, true);
     } else if (Mp_IsFreeToCarry(p) && (q = Mp_TeammateInFront(p)) >= 0) {
       *Mp_PlayerRam(p, 0xF6) &= ~0x80;
       g_mp.carried_by[q] = p + 1;
@@ -653,7 +660,7 @@ static void Mp_RestoreMenuLeader();
 // for a third of a second it marks "help" where the Link is (a ghost always
 // calls for help). The marker is part of the world's state, so it shows the
 // same on every computer; everybody in the same area or room sees it.
-static void Mp_HandlePings() {
+void Mp_HandlePings() {
   enum { kHelpHold = 20, kCooldown = 30 };
   bool playing = main_module_index == 7 || main_module_index == 9;
   for (int p = 0; p < kMpMaxPlayers; p++) {
@@ -680,7 +687,8 @@ static void Mp_HandlePings() {
       x += kAheadX[dir], y += kAheadY[dir];
     }
     pg->x = x, pg->y = y;
-    pg->key = Mp_AreaKeyPublic();
+    uint32 key = Mp_AreaKeyPublic();
+    pg->area = (uint16)key, pg->indoors = (uint8)(key >> 16), pg->pad = 0;
     pg->ttl = kMpPingFrames;
     pg->kind = kind;
     g_mp.ping_cooldown[p] = kCooldown;
@@ -907,7 +915,7 @@ static bool Mp_SafeGround(uint16 x, uint16 y, uint8 floor) {
 // deep water. Runs in the owner's context right after its hookshot moved.
 static void Mp_HookTeammate(int k) {
   int o = g_mp.resident;
-  if (ancilla_type[k] != 0x1f || related_to_hookshot || ancilla_step[k] || hookshot_effect_index != k ||
+  if (ancilla_type[k] != 0x1f || related_to_hookshot || ancilla_step[k] || ancilla_L[k] || hookshot_effect_index != k ||
       ancilla_item_to_link[k] < 4 || !Mp_IsAlive(o))
     return;
   uint16 ax = Ancilla_GetX(k), ay = Ancilla_GetY(k), ox = link_x_coord, oy = link_y_coord;
@@ -915,14 +923,32 @@ static void Mp_HookTeammate(int k) {
   for (int q = 0; q < kMpMaxPlayers; q++) {
     if (q == o || !Mp_IsAlive(q) || g_mp.carried_by[q] || g_mp.thrown[q] || *Mp_PlayerRam(q, 0xEE) != floor)
       continue;
+    // Only a teammate standing on the ground (not hopping down a ledge or
+    // flying from a hit).
+    uint16 tz = WORD(*Mp_PlayerRam(q, 0x24));
+    if (*Mp_PlayerRam(q, 0x5D) != 0 || *Mp_PlayerRam(q, 0x4D) != 0 || (tz != 0 && tz != 0xffff))
+      continue;
     uint16 tx = Mp_PlayerX(q), ty = Mp_PlayerY(q);
     if ((uint16)(tx + 12 - ax) >= 24 || (uint16)(ty + 20 - ay) >= 28)
       continue;
     int dir = ancilla_dir[k] & 3;  // up, down, left, right
     static const int8 kBesideX[4] = { 0, 0, 16, -16 }, kBesideY[4] = { 16, -16, 0, 0 };
+    // The pull only goes the way the hook flew: beside the teammate, or
+    // else where they stand (when beside them is a pit or deep water). The
+    // spot has to be on solid ground and ahead (a teammate overlapping the
+    // owner would pull it backwards, then past them): otherwise the hook
+    // flies on as if they weren't there.
     uint16 ex = dir >= 2 ? tx + kBesideX[dir] : ox, ey = dir < 2 ? ty + kBesideY[dir] : oy;
-    if (!Mp_SafeGround(ex, ey, floor))
+    if (!Mp_SafeGround(ex, ey, floor)) {
+      // (Right where the teammate stands is as safe as it is for them; a
+      // spot off to the side of it has to be checked.)
       ex = dir >= 2 ? tx : ox, ey = dir < 2 ? ty : oy;
+      if ((ex != tx || ey != ty) && !Mp_SafeGround(ex, ey, floor))
+        continue;
+    }
+    int ahead = dir == 0 ? (int16)(oy - ey) : dir == 1 ? (int16)(ey - oy) : dir == 2 ? (int16)(ox - ex) : (int16)(ex - ox);
+    if (ahead < 2)
+      continue;
     // The pull heads for the hook plus an offset (kHookshotArrA/B in
     // player.c), 4 pixels a frame, for as many frames as the hook flew out:
     // enough of them to get all the way.
@@ -1509,7 +1535,7 @@ void Mp_DrawOtherPlayers() {
     // moving its sprites past the right edge with the 9th x bit, which the
     // x recomputed below undoes: the Link showed as broken 8x8 pieces. The
     // widescreen way hides them below the screen instead.
-    uint16 features = enhanced_features0;
+    uint32 features = enhanced_features0;
     enhanced_features0 |= kFeatures0_WidescreenVisualFixes;
     LinkOam_MainOne();
     enhanced_features0 = features;

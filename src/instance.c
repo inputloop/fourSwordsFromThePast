@@ -855,8 +855,13 @@ bool Inst_RunFrame(const uint16 *inputs) {
       // Only ghosts here: the world waits, frozen, for someone to come by.
       // It first settles into normal gameplay so it can be joined.
       Inst_Switch(i);
-      if (!Mp_InStableGameplay())
+      if (!Mp_InStableGameplay()) {
         replay |= RunInstance(i, kNoInputs);
+      } else {
+        // (Pings still count down, and a ghost can still call for help.)
+        Mp_SetInputs(inputs);
+        Mp_HandlePings();
+      }
     }
   }
   g_apu_push_enabled = true;
@@ -1178,7 +1183,7 @@ bool Inst_PlayerPing(int p, InstPing *out) {
     return false;
   Inst_Switch(i);
   const MpPing *pg = &g_mp.ping[p];
-  bool ok = Mp_AreaKeyPublic() == pg->key;
+  bool ok = Mp_AreaKeyPublic() == MpPingKey(pg);
   if (ok) {
     out->world = i;
     out->x = pg->x, out->y = pg->y;

@@ -42,13 +42,20 @@ enum {
   kMpPingFrames = 180,     // how long a ping marker shows
 };
 
-// A ping marker: "look here", or "help".
+// A ping marker: "look here", or "help". (No padding anywhere: the state
+// is hashed byte by byte to check that online games agree.)
 typedef struct MpPing {
   uint16 x, y;             // where (the middle of the ring), in the world's coordinates
-  uint32 key;              // the area or room it was placed in (Mp_AreaKeyPublic)
+  uint16 area;             // the area or room it was placed in ...
+  uint8 indoors;           // ... (together: Mp_AreaKeyPublic)
   uint8 ttl;               // frames left to show, 0 = none
   uint8 kind;              // 0 look here, 1 help
+  uint8 pad;
 } MpPing;
+
+static inline uint32 MpPingKey(const MpPing *pg) {
+  return (uint32)pg->indoors << 16 | pg->area;
+}
 
 typedef struct MpState {
   uint8 leader;
@@ -128,6 +135,9 @@ uint32 Mp_PlayerColorRgb(int p);  // 0xRRGGBB, for the overlay
 void Mp_Reset();
 // True when more than one player is in the game.
 bool Mp_Active();
+// Ping button presses and the markers' countdown, at the end of a frame.
+// (Also for a world of ghosts only, which is otherwise frozen.)
+void Mp_HandlePings();
 // A standing Link other than the one in RAM has less health than this.
 bool Mp_OtherLinkBelow(uint8 limit);
 // The HUD item box tiles for player p's selected item (false: no item).

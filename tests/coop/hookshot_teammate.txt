@@ -51,7 +51,8 @@ pram 1 303 0e
 run 60
 clearsprites
 expect_instances 1
-settiles 5352 2436 5399 2463 20
+# (The band starts right below P2's feet: standing on it P2 would fall.)
+settiles 5352 2440 5399 2463 20
 hold 1 Y
 run 2
 hold 1 -
@@ -86,3 +87,37 @@ run 40
 expect_near 2 5384 2436
 expect_hp 1 40
 expect_leader 1
+# 4. A teammate overlapping just ahead isn't latched onto: the pull would
+#    go the wrong way and then carry the owner past them (here into a pit
+#    in front of both). The hook flies on, and nobody moves.
+load 2
+run 30
+join 2
+run 10
+enter 4a
+run 200
+clearsprites
+poke f342 01
+pos 1 5370 2490
+pos 2 5370 2480
+hold 1 U
+run 6
+hold 1 -
+pram 1 2f 00
+pram 1 202 03
+pram 1 303 0e
+run 60
+clearsprites
+expect_instances 1
+pos 1 5370 2490
+pos 2 5370 2480
+run 2
+settiles 5352 2448 5399 2471 20
+pos 1 5370 2490
+pos 2 5370 2480
+hold 1 Y
+run 2
+hold 1 -
+run 60
+expect_near 1 5370 2490
+expect_alive 1

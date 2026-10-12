@@ -59,3 +59,33 @@ run 2
 hold 2 -
 run 1
 expect_ping 2 help
+# 7. A ghost alone in its world (which waits, frozen) can still call for
+#    help, and a marker in such a world still runs out. (P1 walks into the
+#    palace, P2 stays outside.)
+load 2
+poke f35c 2
+run 30
+join 2
+run 60
+hold 1 U
+run 300
+hold 1 -
+run 30
+expect_instances 2
+expect_apart 1 2
+hold 2 P
+run 2
+hold 2 -
+run 1
+expect_ping 2 here
+down 2
+run 40
+expect_downed 2
+expect_instances 2
+run 150
+expect_ping 2 none
+hold 2 P
+run 2
+hold 2 -
+run 1
+expect_ping 2 help

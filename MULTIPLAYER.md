@@ -86,7 +86,8 @@ Players can drop in and drop out at any time.
   you face, in an arc like a knockback (walls still stop them). The one being carried
   can wriggle free with B. Getting hurt, or either player going down, drops
   the carried Link. The carried Link comes along through doors, stairs,
-  entrances and exits and down ledges, still over your head.
+  entrances and exits and down ledges, still over your head (nobody is let
+  go in mid-air during a ledge hop: that waits for the landing).
   - A thrown Link flies over pits (about three tiles wide) and over ledges,
     and only falls if it lands in a pit. Throwing someone up a cliff isn't
     possible: in this game a cliff face is a wall.
@@ -94,7 +95,9 @@ Players can drop in and drop out at any time.
   block and pulls you over to them, over pits too, ending beside them (or
   where they stand, if the spot beside them is a pit or deep water). One
   Link gets thrown across a gap, the others hookshot over to it. It never
-  hurts, even with friendly fire on.
+  hurts, even with friendly fire on. It only latches onto a teammate
+  standing on the ground ahead of you with solid ground to land on;
+  otherwise it flies on as if they weren't there.
 - **Floor switches count every Link.** Any standing Link holds a pressure
   plate down, not only the leader: one can stand on it while the others go
   through the door it opens.
@@ -112,7 +115,8 @@ Players can drop in and drop out at any time.
   stand. A downed player's ping is always HELP. Everybody in the same
   overworld, dungeon or house sees it for three seconds: on screen, as an
   arrow at the edge when it's off screen, and on the mini map. The game
-  itself never sees the button.
+  itself never sees the button. A ghost alone in its frozen world can still
+  call for help.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
   *Multiplayer > Player colors > color-blind* switches to colors told apart
