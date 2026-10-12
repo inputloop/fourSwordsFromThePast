@@ -504,6 +504,9 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     } else if (StringEqualsNoCase(key, "LastJoinAddress")) {
       g_config.mp_last_join = value;
       return true;
+    } else if (StringEqualsNoCase(key, "StunServer")) {
+      g_config.mp_stun_server = value;
+      return true;
     }
   } else if (section == 4) {
     if (StringEqualsNoCase(key, "ItemSwitchLR")) {
@@ -599,6 +602,7 @@ void ParseConfigFile(const char *filename) {
   Bindings_SetDefaults();
   g_config.mp_use_upnp = true;
   g_config.mp_port = 47474;
+  g_config.mp_stun_server = "stun.l.google.com:19302";
   g_config.mp_input_delay = 2;
   g_config.four_swords_story = true;
   g_config.four_swords_title = true;

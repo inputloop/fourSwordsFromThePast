@@ -24,8 +24,9 @@ if wait $host; then echo "PASS net_lag_host"; else echo "FAIL net_lag_host"; sta
 unset ZELDA3_NETSIM
 # Fights over a lagging link (150 ms and 300 ms each way, set by the scripts'
 # netsim command): the worlds stay in sync, nobody's own buttons are guessed,
-# and killed enemies stay dead (at most a few undone by rollbacks).
-for pair in net_combat net_combat_slow; do
+# and killed enemies stay dead (at most a few undone by rollbacks). Then a
+# client that loses its connection, restarts and is removed (net_reconnect).
+for pair in net_combat net_combat_slow net_reconnect; do
   ./zelda3 --mptest tests/coop/${pair}_host.txt > tests/out/${pair}_host.log 2>&1 &
   host=$!
   sleep 1

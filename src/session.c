@@ -11,9 +11,10 @@
 #include "instance.h"
 #include "randomizer.h"
 #include "story.h"
+#include "variables.h"
 
 enum {
-  kProtoVersion = 18,
+  kProtoVersion = 19,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -29,6 +30,8 @@ enum {
   kMarginWindow = 20,    // host: report the worst margin of this many packets
   kMaxWait = 30,         // host: frames to wait for a client's input before using a guess
   kStallMs = 500,        // host: a client this quiet isn't waited for
+  kKeepSeatMs = kSessionKeepSeatSeconds * 1000,  // a dropped player's seat waits this long
+  kRosterMs = 500,       // host: how often the clients get the list of players
 };
 
 enum {
@@ -42,6 +45,7 @@ enum {
   kPkt_Bye,
   kPkt_Discover,
   kPkt_Info,
+  kPkt_Roster,
 };
 
 typedef struct Writer {
@@ -74,6 +78,10 @@ typedef struct HostClient {
   NetAddr addr;
   uint8 id;
   char name[24];
+  uint32 token;       // lets it back into its seat after losing the connection
+  bool parked;        // connection lost: its players stand still, the seat waits
+  uint32 parked_at;
+  uint16 ping_ms;     // as the client measures it
   uint32 last_recv;
   // Inputs the client sent ahead of time, for the frame they are meant for.
   uint16 sched[kSchedSize][kSessionMaxLocal];
@@ -142,6 +150,14 @@ static struct {
   uint32 host_rollback;             // earliest frame whose input changed
   SessionLanGame lan[8];
   int nlan;
+  // reconnecting (clients)
+  uint32 token;                     // from the host's welcome
+  uint32 reconnect_since;
+  uint8 rejoin_locals;              // our extra local players to join again once back
+  SessionPlayer roster[kMpMaxPlayers];  // the host's list of players
+  bool roster_known;
+  uint32 last_roster;               // host: when the clients last got the list
+  bool in_host_world;               // clients: the game here is the host's
 } g_s;
 
 // --- snapshot compression (byte run length encoding) ---
@@ -337,7 +353,11 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
       // holding what it held (corrected by a rollback when they arrive).
       uint32 f = g_s.frame + 1;
       HostClient *hc = FindClientById(owner);
-      if (hc && hc->sched_frame[f % kSchedSize] == f) {
+      if (hc && hc->parked) {
+        // Lost the connection: its Link stands still until it is back.
+        fi->inputs[p] = 0;
+        *known |= 1 << p;
+      } else if (hc && hc->sched_frame[f % kSchedSize] == f) {
         fi->inputs[p] = hc->sched[f % kSchedSize][local];
         *known |= 1 << p;
       } else {
@@ -468,11 +488,18 @@ static void SetMessage(const char *msg) {
 
 // --- host ---
 
+// (On the UPnP thread.) The public address: from the router, or from a
+// STUN server when the router won't open the port (forward it by hand).
 static void UpnpDone(bool ok, const char *external_ip, uint16 port) {
-  if (ok)
-    snprintf(g_s.st.public_addr, sizeof(g_s.st.public_addr), "%s:%u", external_ip, port);
+  char buf[48];
+  if (external_ip[0])
+    snprintf(buf, sizeof(buf), "%s:%u", external_ip, port);
+  else if (ok)
+    snprintf(buf, sizeof(buf), "your public IP:%u", port);
   else
-    snprintf(g_s.st.public_addr, sizeof(g_s.st.public_addr), "UPnP unavailable - forward UDP %u", port);
+    snprintf(buf, sizeof(buf), "unknown - forward UDP %u", port);
+  g_s.st.upnp_failed = !ok;
+  memcpy(g_s.st.public_addr, buf, sizeof(buf));
 }
 
 static void SaveRollbackState(uint32 f);
@@ -514,6 +541,7 @@ bool Session_Host(uint16 port, bool use_upnp) {
   NetAddr a = { ip, Net_LocalPort(g_s.sock) };
   Net_AddrToString(&a, g_s.st.host_addr, sizeof(g_s.st.host_addr));
   g_s.st.public_addr[0] = 0;
+  g_s.st.upnp_failed = false;
   if (use_upnp) {
     snprintf(g_s.st.public_addr, sizeof(g_s.st.public_addr), "Opening router port...");
     Upnp_MapPortAsync(a.port, &UpnpDone);
@@ -580,6 +608,52 @@ static HostClient *HostFindClient(const NetAddr *a) {
   return NULL;
 }
 
+// A player coming back (maybe from another address or port): by the token
+// we gave it, or, after its game was restarted (the token is gone), by name
+// while its seat is waiting or it has gone quiet (we may not have noticed
+// yet that it was gone).
+static HostClient *HostFindReturning(uint32 token, const char *name) {
+  for (int c = 0; c < kSessionMaxClients; c++)
+    if (g_s.clients[c].used && token && g_s.clients[c].token == token)
+      return &g_s.clients[c];
+  uint32 now = SDL_GetTicks();
+  for (int c = 0; c < kSessionMaxClients; c++) {
+    HostClient *hc = &g_s.clients[c];
+    if (hc->used && (hc->parked || now - hc->last_recv > 1000) && !strcmp(hc->name, name))
+      return hc;
+  }
+  return NULL;
+}
+
+static bool HostClientHasSeat(const HostClient *hc) {
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    if (g_s.slot_owner[p] == hc->id)
+      return true;
+  return false;
+}
+
+static uint32 NewToken() {
+  static uint32 x;
+  x = (x ^ SDL_GetTicks() ^ (uint32)SDL_GetPerformanceCounter()) * 2654435761u + 0x9e3779b9;
+  return x ? x : 1;
+}
+
+// The connection to a playing client is lost: its players stand still and
+// its seat waits kKeepSeatMs for it to come back.
+static void HostParkClient(HostClient *hc) {
+  char msg[96];
+  snprintf(msg, sizeof(msg), "%s lost the connection: keeping the seat %d min", hc->name, kSessionKeepSeatSeconds / 60);
+  SetMessage(msg);
+  hc->parked = true;
+  hc->parked_at = SDL_GetTicks();
+  free(hc->snap);
+  hc->snap = NULL;
+  hc->loading = false;
+  hc->need_frame = 0;
+  hc->join_mask = hc->leave_mask = 0;
+  memset(hc->sched_frame, 0, sizeof(hc->sched_frame));
+}
+
 // A client's buttons for a frame the host already ran with a guess. If the
 // guess was wrong, the host rolls back to that frame.
 static void HostLateInput(HostClient *hc, uint32 f, const uint16 *in) {
@@ -612,13 +686,30 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     char name[24];
     RData(r, name, 24);
     name[23] = 0;
-    if (r->err)
-      return;
+    uint32 token = Rd32(r);
+    uint8 rejoin = Rd8(r);
     if (ver != kProtoVersion) {
       WBegin(&w, kPkt_Reject);
       WData(&w, "Different game version", 23);
       Net_Send(g_s.sock, from, w.buf, w.pos);
       return;
+    }
+    if (r->err)
+      return;
+    bool moved = false;
+    if (!hc)
+      moved = (hc = HostFindReturning(token, name)) != NULL;
+    if (hc && (hc->parked || moved || (rejoin && !hc->loading))) {
+      // Back after losing the connection: the same seat, and a fresh copy
+      // of the game (it missed what happened meanwhile).
+      char msg[96];
+      snprintf(msg, sizeof(msg), "%s is back", hc->name);
+      SetMessage(msg);
+      hc->addr = *from;
+      hc->parked = false;
+      hc->margin_count = 0;
+      hc->margin_report = -128;
+      HostStartSnapshot(hc);
     }
     if (!hc) {
       // Room for one more? Players whose join is still queued count too.
@@ -640,6 +731,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
           hc->addr = *from;
           hc->id = c + 1;
           memcpy(hc->name, name, 24);
+          hc->token = NewToken();
           hc->join_mask = 1;
           hc->margin_report = -128;  // nothing to report yet
           HostStartSnapshot(hc);
@@ -659,8 +751,9 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     WBegin(&w, kPkt_Welcome);
     Wr8(&w, hc->id);
     WData(&w, g_s.name, 24);
+    Wr32(&w, hc->token);
     Net_Send(g_s.sock, from, w.buf, w.pos);
-  } else if (type == kPkt_Input && hc) {
+  } else if (type == kPkt_Input && hc && !hc->parked) {
     hc->last_recv = SDL_GetTicks();
     Rd8(r);  // id
     uint32 need = Rd32(r);
@@ -677,8 +770,10 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     uint32 snap_have = Rd32(r);
     uint8 resync = Rd8(r);
     uint32 ping = Rd32(r);
+    uint16 ping_ms = Rd16(r);
     if (r->err)
       return;
+    hc->ping_ms = ping_ms;
     for (int k = 0; k < count; k++) {
       uint32 f = first + k;
       if ((int32)(f - g_s.frame) > 0 && (int32)(f - g_s.frame) < kSchedSize) {
@@ -727,16 +822,47 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
   }
 }
 
+static void HostRoster(SessionPlayer *out);
+
 static void HostSend() {
   Writer w;
   uint32 now = SDL_GetTicks();
+  // Every so often: who is playing, for the clients' player lists.
+  bool roster = now - g_s.last_roster >= kRosterMs;
+  SessionPlayer seats[kMpMaxPlayers];
+  if (roster) {
+    g_s.last_roster = now;
+    HostRoster(seats);
+  }
   for (int c = 0; c < kSessionMaxClients; c++) {
     HostClient *hc = &g_s.clients[c];
     if (!hc->used)
       continue;
-    if (now - hc->last_recv > kTimeoutMs) {
-      HostDropClient(hc, "timed out");
+    if (hc->parked) {
+      if (now - hc->parked_at > kKeepSeatMs)
+        HostDropClient(hc, "didn't come back");
       continue;
+    }
+    if (now - hc->last_recv > kTimeoutMs) {
+      // A player in the game keeps the seat for a while; one that never got
+      // in (still downloading its first copy) is just dropped.
+      if (HostClientHasSeat(hc))
+        HostParkClient(hc);
+      else
+        HostDropClient(hc, "timed out");
+      continue;
+    }
+    if (roster) {
+      WBegin(&w, kPkt_Roster);
+      for (int p = 0; p < kMpMaxPlayers; p++) {
+        Wr8(&w, seats[p].state);
+        Wr8(&w, seats[p].owner);
+        Wr8(&w, seats[p].local);
+        Wr8(&w, seats[p].seconds_left);
+        Wr16(&w, seats[p].ping_ms);
+        WData(&w, seats[p].name, 16);
+      }
+      Net_Send(g_s.sock, &hc->addr, w.buf, w.pos);
     }
     if (hc->loading) {
       WBegin(&w, kPkt_SnapInfo);
@@ -804,8 +930,8 @@ bool Session_Join(const char *address) {
   if (g_s.st.mode != kSessionOffline)
     Session_Disconnect();
   NetAddr a;
-  if (!Net_ParseAddr(address, kSessionPort, &a)) {
-    SetMessage("Unknown address");
+  if (!Session_DecodeRoomCode(address, &a.ip, &a.port) && !Net_ParseAddr(address, kSessionPort, &a)) {
+    SetMessage("Unknown room code or address");
     return false;
   }
   g_s.sock = Net_Open(0, false);
@@ -817,6 +943,10 @@ bool Session_Join(const char *address) {
   g_s.st.mode = kSessionClient;
   g_s.st.client_state = 1;
   g_s.st.my_id = 0xfd;  // not assigned yet
+  g_s.token = 0;
+  g_s.rejoin_locals = 0;
+  g_s.roster_known = false;
+  g_s.in_host_world = false;
   g_s.last_recv = SDL_GetTicks();
   g_s.last_hello = 0;
   g_s.snap_known = false;
@@ -1166,6 +1296,13 @@ static void ClientFinishSnapshot() {
   UpdateLocalSlots();
   g_s.st.client_state = 3;
   g_s.want_resync = false;
+  g_s.in_host_world = true;
+  // Back after a lost connection with a new host (our seats are gone): our
+  // other local players join again too.
+  for (int i = 1; i < kSessionMaxLocal; i++)
+    if ((g_s.rejoin_locals >> i & 1) && g_s.st.local_slot[i] < 0)
+      g_s.pending_join_mask |= 1 << i;
+  g_s.rejoin_locals = 0;
   char msg[64];
   snprintf(msg, sizeof(msg), "Connected to %s", g_s.host_name[0] ? g_s.host_name : "the host");
   SetMessage(msg);
@@ -1204,17 +1341,36 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     uint8 id = Rd8(r);
     RData(r, g_s.host_name, 24);
     g_s.host_name[23] = 0;
-    if (g_s.st.client_state == 1) {
+    uint32 token = Rd32(r);
+    if (!r->err && (g_s.st.client_state == 1 || g_s.st.client_state == 4)) {
+      SetMessage(g_s.st.client_state == 4 ? "Back in: downloading the game again..." : "Downloading the host's game...");
       g_s.st.my_id = id;
+      g_s.token = token;
       g_s.st.client_state = 2;
-      SetMessage("Downloading the host's game...");
+      g_s.snap_known = false;
+      g_s.want_resync = false;
+    }
+  } else if (type == kPkt_Roster) {
+    SessionPlayer seats[kMpMaxPlayers];
+    for (int p = 0; p < kMpMaxPlayers; p++) {
+      seats[p].state = Rd8(r);
+      seats[p].owner = Rd8(r);
+      seats[p].local = Rd8(r);
+      seats[p].seconds_left = Rd8(r);
+      seats[p].ping_ms = Rd16(r);
+      RData(r, seats[p].name, 16);
+      seats[p].name[15] = 0;
+    }
+    if (!r->err) {
+      memcpy(g_s.roster, seats, sizeof(seats));
+      g_s.roster_known = true;
     }
   } else if (type == kPkt_Reject) {
     char why[64] = { 0 };
     RData(r, why, (int)(r->end - r->p) < 63 ? (int)(r->end - r->p) : 63);
     Session_Disconnect();
     SetMessage(why);
-  } else if (type == kPkt_SnapInfo && g_s.st.client_state >= 2) {
+  } else if (type == kPkt_SnapInfo && (g_s.st.client_state == 2 || g_s.st.client_state == 3)) {
     uint8 id = Rd8(r);
     uint32 size = Rd32(r);
     if (r->err || size > 4 << 20)
@@ -1282,12 +1438,16 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
 static void ClientSendInput(const uint16 *local_inputs) {
   Writer w;
   uint32 now = SDL_GetTicks();
-  if (g_s.st.client_state == 1) {
-    if (now - g_s.last_hello > 250) {
+  if (g_s.st.client_state == 1 || g_s.st.client_state == 4) {
+    // Knock until the host answers (reconnecting: with the token it gave
+    // us, so we get our seat back).
+    if (now - g_s.last_hello > (g_s.st.client_state == 1 ? 250u : 500u)) {
       g_s.last_hello = now;
       WBegin(&w, kPkt_Hello);
       Wr16(&w, kProtoVersion);
       WData(&w, g_s.name, 24);
+      Wr32(&w, g_s.token);
+      Wr8(&w, g_s.st.client_state == 4);
       Net_Send(g_s.sock, &g_s.host, w.buf, w.pos);
     }
     return;
@@ -1330,6 +1490,7 @@ static void ClientSendInput(const uint16 *local_inputs) {
   Wr32(&w, g_s.snap_have);
   Wr8(&w, g_s.want_resync);
   Wr32(&w, now | 1);
+  Wr16(&w, (uint16)IntMin(g_s.st.ping_ms, 65535));
   Net_Send(g_s.sock, &g_s.host, w.buf, w.pos);
 }
 
@@ -1357,8 +1518,9 @@ void Session_Disconnect() {
     Upnp_UnmapPort();
   // Keep playing locally: remote players drop out.
   int me = g_s.st.mode == kSessionClient ? g_s.st.my_id : 0;
-  bool was_playing = g_s.st.mode == kSessionHost || g_s.st.client_state == 3;
-  bool was_client = was_playing && g_s.st.mode == kSessionClient;
+  // (A client reconnecting or downloading again still has the host's world.)
+  bool was_client = g_s.st.mode == kSessionClient && g_s.in_host_world;
+  bool was_playing = g_s.st.mode == kSessionHost || was_client;
   for (int c = 0; c < kSessionMaxClients; c++) {
     free(g_s.clients[c].snap);
     memset(&g_s.clients[c], 0, sizeof(g_s.clients[c]));
@@ -1383,6 +1545,10 @@ void Session_Disconnect() {
   g_s.st.client_state = 0;
   g_s.st.my_id = 0;
   g_s.st.ping_ms = 0;
+  g_s.st.reconnect_seconds_left = 0;
+  g_s.token = 0;
+  g_s.roster_known = false;
+  g_s.in_host_world = false;
   g_s.st.host_addr[0] = 0;
   g_s.st.public_addr[0] = 0;
   // The world we played in as a client is the host's, saves included: it
@@ -1466,12 +1632,32 @@ int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
   }
 
   // Client
-  if (SDL_GetTicks() - g_s.last_recv > kTimeoutMs) {
-    int state = g_s.st.client_state;
-    Session_Disconnect();
-    SetMessage(state == 1 ? "No answer: check the address and port" :
-               state == 2 ? "Lost the host while downloading" : "Lost connection to the host");
-    return 0;
+  uint32 now = SDL_GetTicks();
+  if (g_s.st.client_state == 4) {
+    // Reconnecting: the game waits; the host keeps our seat this long.
+    uint32 gone = now - g_s.reconnect_since;
+    g_s.st.reconnect_seconds_left = gone < kKeepSeatMs ? (kKeepSeatMs - gone + 999) / 1000 : 0;
+    if (gone > kKeepSeatMs) {
+      Session_Disconnect();
+      SetMessage("Couldn't get back into the game");
+      return 0;
+    }
+  } else if (now - g_s.last_recv > kTimeoutMs) {
+    if (g_s.st.client_state == 1) {
+      Session_Disconnect();
+      SetMessage("No answer: check the room code or address");
+      return 0;
+    }
+    // Lost the host: keep trying to get back in, with our seat kept.
+    g_s.st.client_state = 4;
+    g_s.reconnect_since = now;
+    g_s.last_hello = 0;
+    g_s.snap_known = false;
+    g_s.rejoin_locals = 0;
+    for (int i = 1; i < kSessionMaxLocal; i++)
+      if (g_s.st.local_slot[i] >= 0)
+        g_s.rejoin_locals |= 1 << i;
+    SetMessage("Lost the connection: reconnecting...");
   }
   int run = g_s.st.client_state == 3 ? ClientTick(local_inputs) : 0;
   ClientSendInput(local_inputs);
@@ -1480,4 +1666,204 @@ int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
 
 bool Session_LastFrameWasReplay() {
   return g_last_was_replay;
+}
+
+// --- players, kicking, names ---
+
+void Session_SetName(const char *player_name) {
+  snprintf(g_s.name, sizeof(g_s.name), "%s", player_name && player_name[0] ? player_name : "Link");
+}
+
+static void SeatName(SessionPlayer *sp, const char *name) {
+  if (sp->local == 0)
+    snprintf(sp->name, sizeof(sp->name), "%s", name);
+  else if (sp->owner == 0)
+    snprintf(sp->name, sizeof(sp->name), "Player %d", sp->local + 1);
+  else
+    snprintf(sp->name, sizeof(sp->name), "%.11s (%c)", name, (char)('1' + (sp->local & 3)));
+}
+
+// The seats as this computer knows them (the host knows everything).
+static void HostRoster(SessionPlayer *out) {
+  uint32 now = SDL_GetTicks();
+  memset(out, 0, sizeof(SessionPlayer) * kMpMaxPlayers);
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    SessionPlayer *sp = &out[p];
+    uint8 owner = g_s.slot_owner[p];
+    if (!Inst_IsJoined(p) || owner >= 0xfe)
+      continue;
+    sp->state = kSeat_Playing;
+    sp->owner = owner;
+    sp->local = g_s.slot_local[p] < kSessionMaxLocal ? g_s.slot_local[p] : 0;
+    HostClient *hc = owner ? FindClientById(owner) : NULL;
+    if (!hc) {
+      // (A client before the host's first list: the host, us, or someone else.)
+      bool client = g_s.st.mode == kSessionClient;
+      if (client && owner != 0 && owner != g_s.st.my_id)
+        snprintf(sp->name, sizeof(sp->name), "Player %d", p + 1);
+      else
+        SeatName(sp, client && owner == 0 ? g_s.host_name : g_s.name);
+      continue;
+    }
+    SeatName(sp, hc->name);
+    sp->ping_ms = hc->ping_ms;
+    if (hc->parked) {
+      uint32 gone = now - hc->parked_at;
+      sp->state = kSeat_Reconnecting;
+      sp->seconds_left = gone < kKeepSeatMs ? (kKeepSeatMs - gone + 999) / 1000 : 0;
+    }
+  }
+}
+
+void Session_GetPlayers(SessionPlayer out[kMpMaxPlayers]) {
+  if (g_s.st.mode == kSessionClient && g_s.roster_known) {
+    memcpy(out, g_s.roster, sizeof(g_s.roster));
+    // (Seats can change between two lists.)
+    for (int p = 0; p < kMpMaxPlayers; p++)
+      if (!Inst_IsJoined(p))
+        memset(&out[p], 0, sizeof(out[p]));
+    return;
+  }
+  HostRoster(out);
+}
+
+bool Session_Kick(int slot) {
+  if (g_s.st.mode != kSessionHost || slot < 0 || slot >= kMpMaxPlayers)
+    return false;
+  uint8 owner = g_s.slot_owner[slot];
+  HostClient *hc = owner && owner < 0xfe ? FindClientById(owner) : NULL;
+  if (!hc)
+    return false;
+  Writer w;
+  static const char kWhy[] = "The host removed you from the game";
+  WBegin(&w, kPkt_Reject);
+  WData(&w, kWhy, sizeof(kWhy));
+  for (int i = 0; i < 3 && !hc->parked; i++)
+    Net_Send(g_s.sock, &hc->addr, w.buf, w.pos);
+  HostDropClient(hc, "was removed from the game");
+  return true;
+}
+
+// --- room codes ---
+// 32 bits of address, 16 of port and a 12 bit check, in 12 characters of
+// Crockford's base 32 (no I, L, O or U, so nothing looks alike).
+
+static const char kCodeAlphabet[] = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+static uint32 CodeCheck(uint64 v) {
+  uint32 h = 2166136261u;
+  for (int i = 0; i < 6; i++)
+    h = (h ^ (uint8)(v >> (i * 8))) * 16777619u;
+  return (h ^ h >> 12 ^ h >> 24) & 0xfff;
+}
+
+void Session_EncodeRoomCode(uint32 ip, uint16 port, char *out, size_t size) {
+  uint64 v = (uint64)ip << 16 | port;
+  v = v << 12 | CodeCheck(v);
+  char buf[16];
+  int n = 0;
+  for (int i = 11; i >= 0; i--) {
+    buf[n++] = kCodeAlphabet[(v >> (i * 5)) & 31];
+    if (i == 8 || i == 4)
+      buf[n++] = '-';
+  }
+  buf[n] = 0;
+  snprintf(out, size, "%s", buf);
+}
+
+bool Session_DecodeRoomCode(const char *code, uint32 *ip, uint16 *port) {
+  uint64 v = 0;
+  int n = 0;
+  for (const char *s = code; *s; s++) {
+    char c = *s;
+    if (c == '-' || c == ' ')
+      continue;
+    if (c >= 'a' && c <= 'z')
+      c -= 32;
+    if (c == 'O') c = '0';
+    if (c == 'I' || c == 'L') c = '1';
+    const char *t = c ? strchr(kCodeAlphabet, c) : NULL;
+    if (!t || ++n > 12)
+      return false;
+    v = v << 5 | (uint64)(t - kCodeAlphabet);
+  }
+  if (n != 12 || CodeCheck(v >> 12) != (v & 0xfff))
+    return false;
+  *ip = (uint32)(v >> 28);
+  *port = (uint16)(v >> 12);
+  return *ip != 0 && *port != 0;
+}
+
+static bool ParseIpPort(const char *s, uint32 *ip, uint16 *port) {
+  unsigned a, b, c, d, p;
+  char tail;
+  if (sscanf(s, "%u.%u.%u.%u:%u%c", &a, &b, &c, &d, &p, &tail) != 5 || (a | b | c | d) > 255 || !p || p > 65535)
+    return false;
+  *ip = a << 24 | b << 16 | c << 8 | d;
+  *port = (uint16)p;
+  return true;
+}
+
+bool Session_GetRoomCode(char *out, size_t size, bool *internet) {
+  uint32 ip;
+  uint16 port;
+  if (g_s.st.mode != kSessionHost)
+    return false;
+  *internet = ParseIpPort(g_s.st.public_addr, &ip, &port);
+  if (!*internet && !ParseIpPort(g_s.st.host_addr, &ip, &port))
+    return false;
+  Session_EncodeRoomCode(ip, port, out, size);
+  return true;
+}
+
+// --- keeping a copy of the host's game ---
+
+bool Session_CanKeepCopy() {
+  return g_s.st.mode == kSessionClient ? g_s.in_host_world : g_sram_foreign;
+}
+
+bool Session_KeepCopy(int file, const char *path, char *msg, size_t msg_size) {
+  if (!Session_CanKeepCopy() || file < 1 || file > 3) {
+    snprintf(msg, msg_size, "Nothing to keep a copy of");
+    return false;
+  }
+  // Our own save file as it is on disk (the one in memory is the host's).
+  uint8 sram[8192] = { 0 };
+  FILE *f = fopen(path, "rb");
+  if (f) {
+    if (fread(sram, 1, sizeof(sram), f) != sizeof(sram))
+      memset(sram, 0, sizeof(sram));
+    fclose(f);
+  }
+  // The game's progress as it is right now (what saving would write), in
+  // the world of our own Link.
+  int me = g_s.st.local_slot[0];
+  const uint8 *ram = me >= 0 ? Inst_PlayerWorldRam(me) : NULL;
+  if (!ram)
+    ram = g_ram;
+  uint8 *slot = sram + (file - 1) * 0x500;
+  memcpy(slot, ram + 0xF000, 0x500);
+  if (WORD(slot[0x3e5]) != 0x55aa)
+    WORD(slot[0x3e5]) = 0x55aa;  // (a file in use)
+  uint16 t = 0x5a5a;
+  for (int i = 0; i < 0x4fe; i += 2)
+    t -= WORD(slot[i]);
+  WORD(slot[0x4fe]) = t;
+  memcpy(slot + 0xf00, slot, 0x500);  // the backup copy
+  char bak[512];
+  snprintf(bak, sizeof(bak), "%.500s.bak", path);
+  remove(bak);
+  rename(path, bak);
+  f = fopen(path, "wb");
+  bool ok = f && fwrite(sram, 1, sizeof(sram), f) == sizeof(sram);
+  if (f)
+    fclose(f);
+  if (!ok)
+    rename(bak, path);
+  if (ok)
+    snprintf(msg, msg_size, "Kept a copy of %s's game in file %d", g_s.host_name[0] ? g_s.host_name : "the host", file);
+  else
+    snprintf(msg, msg_size, "Couldn't write the copy to file %d", file);
+  SetMessage(msg);
+  return ok;
 }

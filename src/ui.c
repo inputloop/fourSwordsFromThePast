@@ -202,6 +202,7 @@ enum {
   kScreen_Gameplay,
   kScreen_Controls,
   kScreen_Bindings,
+  kScreen_Players,
 };
 
 enum {
@@ -251,6 +252,14 @@ static struct {
   int capture_button;  // SNES button waiting for a key/controller button, -1 = none
   uint32 capture_start;
   uint16 raw_inputs[4];
+  // Multiplayer and Players screens
+  char toast[96];
+  uint32 toast_time;
+  int copy_file;          // keep a copy: which of our files (0-2)
+  bool copy_confirm;      // that file is in use: press again
+  bool own_file_used[3];
+  bool own_files_read;
+  int kick_confirm;       // seat + 1 waiting for a second press
 } g_ui;
 
 static bool Item(const char *label, const char *value) {
@@ -287,6 +296,9 @@ static void Goto(int screen) {
   g_ui.cursor = 0;
   g_ui.seed_note[0] = 0;
   g_ui.want_quit_confirm = false;
+  g_ui.copy_confirm = false;
+  g_ui.own_files_read = false;
+  g_ui.kick_confirm = 0;
   if (screen == kScreen_JoinAddress || screen == kScreen_Seed)
     SDL_StartTextInput();
   else
@@ -370,6 +382,61 @@ static void JoinGame(const char *addr) {
     Ui_SaveSettings();
 }
 
+// Where player p is, in words: a dungeon, a part of the overworld, indoors.
+static void LocationName(int p, char *buf, size_t size) {
+  InstPlace pl;
+  const uint8 *ram = Inst_PlayerWorldRam(p);
+  if (!ram || !Inst_PlayerPlace(p, &pl)) {
+    snprintf(buf, size, "-");
+    return;
+  }
+  static const char *const kDungeons[14] = {
+    "Hyrule Castle", "Hyrule Castle", "Eastern Palace", "Desert Palace", "Castle Tower", "Swamp Palace",
+    "Palace of Darkness", "Misery Mire", "Skull Woods", "Ice Palace", "Tower of Hera", "Thieves' Town",
+    "Turtle Rock", "Ganon's Tower",
+  };
+  // The overworld areas everybody knows (the big ones, by their first screen).
+  static const struct { uint8 area; const char *name; } kAreas[] = {
+    {0x00, "Lost Woods"}, {0x03, "Death Mountain"}, {0x05, "Death Mountain"}, {0x07, "Death Mountain"},
+    {0x13, "Sanctuary"}, {0x14, "Graveyard"}, {0x18, "Kakariko Village"}, {0x1b, "Hyrule Castle"},
+    {0x1e, "Eastern Palace"}, {0x2c, "Link's House"}, {0x30, "Desert of Mystery"}, {0x35, "Lake Hylia"},
+    {0x40, "Skull Woods"}, {0x43, "Dark Death Mountain"}, {0x45, "Dark Death Mountain"}, {0x47, "Turtle Rock"},
+    {0x58, "Village of Outcasts"}, {0x5b, "Pyramid"}, {0x5e, "Palace of Darkness"}, {0x6c, "Bomb Shop"},
+    {0x70, "Misery Mire"}, {0x75, "Ice Lake"},
+  };
+  if (pl.space >= 0x20000) {
+    snprintf(buf, size, "indoors");
+  } else if (pl.space >= 0x10000) {
+    int d = (pl.space & 0xff) >> 1;
+    snprintf(buf, size, "%s", d < 14 ? kDungeons[d] : "a dungeon");
+  } else {
+    uint8 area = ram[0x40A];  // overworld_area_index
+    snprintf(buf, size, "%s", area & 0x40 ? "Dark World" : "Light World");
+    for (size_t i = 0; i < countof(kAreas); i++)
+      if (kAreas[i].area == area)
+        snprintf(buf, size, "%s", kAreas[i].name);
+  }
+}
+
+// A short message at the bottom of the screen from the menu itself.
+static void Toast(const char *msg) {
+  snprintf(g_ui.toast, sizeof(g_ui.toast), "%s", msg);
+  g_ui.toast_time = SDL_GetTicks();
+}
+
+// Our own save file: is file 1-3 in use? (Read when the menu shows it.)
+static void ReadOwnFiles() {
+  memset(g_ui.own_file_used, 0, sizeof(g_ui.own_file_used));
+  FILE *f = fopen("saves/sram.dat", "rb");
+  uint8 sram[0x500 * 3];
+  if (f && fread(sram, 1, sizeof(sram), f) == sizeof(sram))
+    for (int i = 0; i < 3; i++)
+      g_ui.own_file_used[i] = WORD(sram[i * 0x500 + 0x3e5]) == 0x55aa;
+  if (f)
+    fclose(f);
+  g_ui.own_files_read = true;
+}
+
 static void ScreenMultiplayer() {
   const SessionStatus *st = Session_GetStatus();
   char buf[64];
@@ -383,30 +450,34 @@ static void ScreenMultiplayer() {
       snprintf(buf, sizeof(buf), "Internet: %s", st->public_addr);
       Label(buf);
     }
-  } else {
-    static const char *const kStates[] = { "idle", "connecting", "downloading", "connected" };
-    snprintf(buf, sizeof(buf), "Client: %s %s", kStates[st->client_state & 3], st->host_addr);
-    Label(buf);
-    snprintf(buf, sizeof(buf), "Ping %d ms, buffer %d", st->ping_ms, st->frames_buffered);
-    Label(buf);
-  }
-  // Players
-  for (int p = 0; p < kMpMaxPlayers; p++) {
-    char label[48], value[48];
-    snprintf(label, sizeof(label), "P%d", p + 1);
-    if (!Inst_IsJoined(p)) {
-      snprintf(value, sizeof(value), "- open -");
-    } else {
-      bool mine = false;
-      for (int i = 0; i < kSessionMaxLocal; i++)
-        if (st->local_slot[i] == p)
-          mine = true, snprintf(value, sizeof(value), "you (controller %d)%s", i + 1, Inst_PlayerDowned(p) ? " DOWN" : "");
-      if (!mine)
-        snprintf(value, sizeof(value), "%s%s", st->slot_owner[p] == 0 ? "host" : "remote", Inst_PlayerDowned(p) ? " DOWN" : "");
+    if (st->upnp_failed) {
+      snprintf(buf, sizeof(buf), "Router: forward UDP port %u", g_config.mp_port ? g_config.mp_port : kSessionPort);
+      Label(buf);
     }
-    Label(label);
-    snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s", value);
+    // The room code: what to send the others (select to copy it).
+    char code[24];
+    bool internet;
+    if (Session_GetRoomCode(code, sizeof(code), &internet)) {
+      Item(internet ? "Room code" : "Room code (LAN)", code);
+      if (Act() == kAct_Select) {
+        SDL_SetClipboardText(code);
+        Toast("Room code copied: paste it to your friends");
+      }
+    }
+  } else {
+    static const char *const kStates[] = { "idle", "connecting", "downloading", "connected", "reconnecting" };
+    snprintf(buf, sizeof(buf), "Client: %s %s", kStates[st->client_state < 5 ? st->client_state : 0], st->host_addr);
+    Label(buf);
+    if (st->client_state == 4)
+      snprintf(buf, sizeof(buf), "Seat kept %d:%02d more", st->reconnect_seconds_left / 60, st->reconnect_seconds_left % 60);
+    else
+      snprintf(buf, sizeof(buf), "Ping %d ms, buffer %d", st->ping_ms, st->frames_buffered);
+    Label(buf);
   }
+  snprintf(buf, sizeof(buf), "%d of %d", Inst_NumJoined(), kMpMaxPlayers);
+  Item("Players", buf);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Players);
   if (st->mode == kSessionOffline) {
     Item("Host a game", g_ui.use_upnp ? "with UPnP" : "LAN only");
     int a = Act();
@@ -416,7 +487,7 @@ static void ScreenMultiplayer() {
     }
     else if (a == kAct_Select && Session_Host(g_config.mp_port, g_ui.use_upnp))
       Ui_SaveSettings();
-    Item("Join by address", g_ui.join_addr);
+    Item("Join by code or address", g_ui.join_addr);
     if (Act() == kAct_Select)
       Goto(kScreen_JoinAddress);
     Item("Find LAN games", ">");
@@ -425,9 +496,33 @@ static void ScreenMultiplayer() {
       Goto(kScreen_Lan);
     }
   } else {
-    Item(st->mode == kSessionHost ? "Stop hosting" : "Leave game", NULL);
+    Item(st->mode == kSessionHost ? "Stop hosting" : st->client_state == 4 ? "Stop reconnecting" : "Leave game", NULL);
     if (Act() == kAct_Select)
       Session_Disconnect();
+  }
+  // Someone else's game: keep a copy of it in one of our own files.
+  if (Session_CanKeepCopy()) {
+    if (!g_ui.own_files_read)
+      ReadOwnFiles();
+    int fi = g_ui.copy_file;
+    snprintf(buf, sizeof(buf), "< file %d, %s >", fi + 1,
+             g_ui.copy_confirm ? "replace? again" : g_ui.own_file_used[fi] ? "in use" : "empty");
+    Item("Keep a copy in", buf);
+    int a = Act();
+    if (a == kAct_Left || a == kAct_Right) {
+      g_ui.copy_file = (fi + (a == kAct_Left ? 2 : 1)) % 3;
+      g_ui.copy_confirm = false;
+    } else if (a == kAct_Select) {
+      if (g_ui.own_file_used[fi] && !g_ui.copy_confirm) {
+        g_ui.copy_confirm = true;
+      } else {
+        char msg[96];
+        Session_KeepCopy(fi + 1, "saves/sram.dat", msg, sizeof(msg));
+        Toast(msg);
+        g_ui.copy_confirm = false;
+        ReadOwnFiles();
+      }
+    }
   }
   // Input delay (only changed while not online: the frame timing depends on it)
   snprintf(buf, sizeof(buf), "%d frame%s", g_config.mp_input_delay, g_config.mp_input_delay == 1 ? "" : "s");
@@ -488,6 +583,60 @@ static void ScreenMultiplayer() {
   snprintf(g_ui.footer, sizeof(g_ui.footer), "New controllers: press START to join");
 }
 
+// Who plays: names, where they are, how far away, and (hosting) removing one.
+static void ScreenPlayers() {
+  const SessionStatus *st = Session_GetStatus();
+  snprintf(g_ui.title, sizeof(g_ui.title), "PLAYERS");
+  SessionPlayer seats[kMpMaxPlayers];
+  Session_GetPlayers(seats);
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    const SessionPlayer *sp = &seats[p];
+    char label[48], value[48], where[32];
+    if (sp->state == kSeat_Open) {
+      snprintf(label, sizeof(label), "P%d", p + 1);
+      Label(label);
+      snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "- open -");
+      continue;
+    }
+    snprintf(label, sizeof(label), "P%d %s", p + 1, sp->name);
+    if (sp->state == kSeat_Reconnecting) {
+      snprintf(value, sizeof(value), "reconnecting %d:%02d", sp->seconds_left / 60, sp->seconds_left % 60);
+    } else {
+      LocationName(p, where, sizeof(where));
+      char ping[16] = "";
+      bool mine = false;
+      for (int i = 0; i < kSessionMaxLocal; i++)
+        mine |= st->local_slot[i] == p;
+      if (sp->owner != 0 && !mine)
+        snprintf(ping, sizeof(ping), "%dms ", sp->ping_ms);
+      else if (sp->owner == 0 && st->mode == kSessionClient)
+        snprintf(ping, sizeof(ping), "host ");
+      snprintf(value, sizeof(value), "%s%s%s", ping, Inst_PlayerDowned(p) ? "DOWN " : "", where);
+    }
+    // Hosting: a remote player's line removes them (press twice).
+    bool kickable = st->mode == kSessionHost && sp->owner != 0;
+    if (kickable) {
+      Item(label, g_ui.kick_confirm == p + 1 ? "remove? press again" : value);
+      if (Act() == kAct_Select) {
+        if (g_ui.kick_confirm == p + 1) {
+          Session_Kick(p);
+          g_ui.kick_confirm = 0;
+        } else {
+          g_ui.kick_confirm = p + 1;
+        }
+      }
+    } else {
+      Label(label);
+      snprintf(g_ui.lines[g_ui.nlines - 1].value, sizeof(g_ui.lines[0].value), "%s", value);
+    }
+  }
+  Item("Back", NULL);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Multiplayer);
+  if (st->mode == kSessionHost)
+    snprintf(g_ui.footer, sizeof(g_ui.footer), "Select a player twice to remove them");
+}
+
 // Typing in a seed: hex digits from the keyboard, or Left/Right on a digit.
 static void ScreenSeed() {
   snprintf(g_ui.title, sizeof(g_ui.title), "ENTER A SEED");
@@ -524,8 +673,9 @@ static void ScreenSeed() {
 }
 
 static void ScreenJoinAddress() {
-  snprintf(g_ui.title, sizeof(g_ui.title), "JOIN BY ADDRESS");
-  Label("Type the host's address, then ENTER");
+  snprintf(g_ui.title, sizeof(g_ui.title), "JOIN A GAME");
+  Label("Type or paste (Ctrl+V) the room code");
+  Label("or the host's address, then ENTER");
   char buf[72];
   // (A long name: its end, where the typing happens.)
   const char *addr = g_ui.join_addr;
@@ -542,7 +692,7 @@ static void ScreenJoinAddress() {
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Multiplayer);
-  snprintf(g_ui.footer, sizeof(g_ui.footer), "Example: 192.168.1.20 or host.net:47474");
+  snprintf(g_ui.footer, sizeof(g_ui.footer), "Like FW00-00DS-EB52, 192.168.1.20 or host.net:47474");
 }
 
 static void ScreenLan() {
@@ -887,6 +1037,7 @@ static void BuildScreen() {
   case kScreen_Gameplay: ScreenGameplay(); break;
   case kScreen_Controls: ScreenControls(); break;
   case kScreen_Bindings: ScreenBindings(); break;
+  case kScreen_Players: ScreenPlayers(); break;
   }
 }
 
@@ -1597,12 +1748,29 @@ static void DrawNotifications() {
   } else if (st->mode == kSessionClient && st->client_state == 2) {
     snprintf(buf, sizeof(buf), "Downloading the host's game %d%%", st->snapshot_progress);
     msg = buf;
+  } else if (st->mode == kSessionClient && st->client_state == 4) {
+    snprintf(buf, sizeof(buf), "Connection lost: reconnecting... %d:%02d", st->reconnect_seconds_left / 60,
+             st->reconnect_seconds_left % 60);
+    msg = buf;
+  } else if (g_ui.toast[0] && now - g_ui.toast_time < 3000) {
+    msg = g_ui.toast;
   } else if (g_mp.exit_blocked_timer && Mp_Active()) {
     msg = "Everyone has to head that way!";
   } else if (SpectateMessage(buf, sizeof(buf))) {
     msg = buf;
   } else if (g_ui.last_message[0] && now - g_ui.message_time < 4000) {
     msg = g_ui.last_message;
+  } else if (st->mode == kSessionHost) {
+    // A seat waiting for its player to reconnect.
+    SessionPlayer seats[kMpMaxPlayers];
+    Session_GetPlayers(seats);
+    for (int p = 0; p < kMpMaxPlayers && !msg; p++) {
+      if (seats[p].state == kSeat_Reconnecting) {
+        snprintf(buf, sizeof(buf), "P%d %s is reconnecting... %d:%02d", p + 1, seats[p].name, seats[p].seconds_left / 60,
+                 seats[p].seconds_left % 60);
+        msg = buf;
+      }
+    }
   }
   if (msg) {
     int w = TextWidth(msg) + 8;

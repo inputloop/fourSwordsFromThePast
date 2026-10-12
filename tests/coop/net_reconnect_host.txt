@@ -1,0 +1,30 @@
+# Netplay host for net_reconnect_client.txt. The client loses its
+# connection and gets its seat back, restarts its game and gets the seat
+# back again, then the host removes it.
+name Hostie
+load 2
+host 47474
+waitplayers 2
+tick 60
+expect_seat 1 playing Hostie
+expect_seat 2 playing Guest
+# 1. The client's cable is pulled: after 6 s its seat waits for it, its
+#    Link standing still, and it comes back into the same seat.
+waitseat 2 reconnecting
+expect_players 2
+tick 60
+waitseat 2 playing
+expect_players 2
+expect_seat 2 playing Guest
+# 2. The client's game is restarted (gone without a word, back with no
+#    token): it is known by its name and gets its seat back.
+waitseat 2 reconnecting
+waitseat 2 playing
+expect_players 2
+tick 120
+# 3. Removed by the host: the seat is free again.
+kick 2
+tick 60
+expect_players 1
+expect_seat 2 open
+tick 600

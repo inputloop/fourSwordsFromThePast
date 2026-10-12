@@ -16,6 +16,8 @@ typedef struct NetSocket NetSocket;
 bool Net_Init();
 // Simulated network conditions (tests), like ZELDA3_NETSIM.
 void Net_SetSim(int delay_ms, int jitter_ms, int loss_percent);
+// Tests: drop everything sent and received (a pulled cable) while on.
+void Net_SetBlackout(bool on);
 // Binds a non-blocking UDP socket. port 0 picks any free port.
 NetSocket *Net_Open(uint16_t port, bool broadcast);
 void Net_Close(NetSocket *s);

@@ -227,6 +227,63 @@ bool Upnp_MapPort(uint16 port, char *external_ip, size_t ip_size) {
   return MapPort(port, external_ip, ip_size, SDL_AtomicGet(&g_upnp.generation));
 }
 
+static char g_stun_server[128];
+
+void Upnp_SetStunServer(const char *server) {
+  snprintf(g_stun_server, sizeof(g_stun_server), "%s", server ? server : "");
+}
+
+// A STUN binding request (RFC 5389): the server answers with the address
+// our packet came from, which is our public address.
+bool Upnp_StunPublicIp(const char *server, char *ip_out, size_t ip_size) {
+  NetAddr a;
+  if (!server || !server[0] || !Net_ParseAddr(server, 3478, &a))
+    return false;
+  NetSocket *s = Net_Open(0, false);
+  if (!s)
+    return false;
+  uint8 req[20] = { 0x00, 0x01, 0x00, 0x00, 0x21, 0x12, 0xa4, 0x42 };
+  uint32 r = SDL_GetTicks() * 2654435761u ^ (uint32)SDL_GetPerformanceCounter();
+  for (int i = 8; i < 20; i++, r = r * 1103515245 + 12345)
+    req[i] = (uint8)(r >> 16);  // transaction id
+  bool ok = false;
+  for (int tries = 0; tries < 3 && !ok; tries++) {
+    Net_Send(s, &a, req, sizeof(req));
+    for (int t = 0; t < 40 && !ok; t++) {  // a second per try
+      uint8 buf[576];
+      int n = Net_Recv(s, NULL, buf, sizeof(buf));
+      if (n < 0) {
+        SDL_Delay(25);
+        continue;
+      }
+      // A binding success response to our request.
+      if (n < 20 || buf[0] != 0x01 || buf[1] != 0x01 || memcmp(buf + 4, req + 4, 16) != 0)
+        continue;
+      int end = 20 + (buf[2] << 8 | buf[3]);
+      end = end < n ? end : n;
+      for (int i = 20; i + 4 <= end;) {
+        int type = buf[i] << 8 | buf[i + 1], len = buf[i + 2] << 8 | buf[i + 3];
+        const uint8 *v = buf + i + 4;
+        if (i + 4 + len > end)
+          break;
+        // XOR-MAPPED-ADDRESS (or the old MAPPED-ADDRESS), IPv4
+        if ((type == 0x0020 || type == 0x0001) && len >= 8 && v[1] == 0x01) {
+          uint32 ip = (uint32)v[4] << 24 | v[5] << 16 | v[6] << 8 | v[7];
+          if (type == 0x0020)
+            ip ^= 0x2112a442;
+          snprintf(ip_out, ip_size, "%u.%u.%u.%u", ip >> 24, ip >> 16 & 255, ip >> 8 & 255, ip & 255);
+          ok = true;
+          if (type == 0x0020)
+            break;
+        }
+        i += 4 + ((len + 3) & ~3);
+      }
+    }
+  }
+  Net_Close(s);
+  return ok;
+}
+
 // Maps the port, keeps the lease alive until hosting stops, then removes the
 // mapping: all on this thread, so the game never waits for the router.
 static int SDLCALL UpnpThread(void *arg) {
@@ -238,12 +295,16 @@ static int SDLCALL UpnpThread(void *arg) {
     SDL_Delay(25);
   char ip[64] = { 0 };
   bool ok = MapPort(port, ip, sizeof(ip), gen);
+  // No UPnP: at least learn the public address (for the room code), if the
+  // port is forwarded by hand it works.
+  if (!ok && SDL_AtomicGet(&g_upnp.generation) == gen && !Upnp_StunPublicIp(g_stun_server, ip, sizeof(ip)))
+    ip[0] = 0;
   if (SDL_AtomicGet(&g_upnp.generation) != gen) {
     if (ok)
       DeleteMapping(port);
   } else {
     if (g_upnp.cb)
-      g_upnp.cb(ok, ip[0] ? ip : "your public IP", port);
+      g_upnp.cb(ok, ip, port);
     while (ok) {
       // Look now and then whether hosting stopped; renew well before the lease runs out.
       for (int i = 0; i < kRenewSeconds * 4 && SDL_AtomicGet(&g_upnp.generation) == gen; i++)

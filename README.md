@@ -10,7 +10,9 @@ don't pause co-op, a mini map,
 lifting and throwing teammates (over pits),
 lifting heavy rocks together, hookshotting to a teammate, floor switches
 any Link can hold down, arrows pointing to teammates off screen, ping
-markers ("look here" and "help"),
+markers ("look here" and "help"), room codes instead of IP addresses, a seat
+that waits two minutes for a player whose connection dropped, a player list
+with ping and location, keeping a copy of the host's game,
 private item menus and maps, rollback netcode, spectating while you're down
 (and sending teammates hearts), name tags, color-blind friendly colors,
 rumble, toggleable friendly fire, native widescreen, an optional 2D-HD look

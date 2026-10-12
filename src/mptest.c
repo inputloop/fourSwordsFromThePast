@@ -10,7 +10,7 @@
 //   spoke <hexoff> <hexval>  change a byte of save slot 1 (fixing its checksum)
 //   rando <off|random|hexseed>  randomizer setting for new save files
 //   join <p> / leave <p>
-//   hold <p> <keys>     keys held by player p (B Y s=select S=start U D L R A X l r, "-" for none)
+//   hold <p> <keys>     keys held by player p (B Y s=select S=start U D L R A X l r, P=ping, "-" for none)
 //   run <frames>
 //   pos <p> <x> <y>     put player p there (no collision check)
 //   hp <p> <health>     set a player's health (1/8 hearts)
@@ -46,6 +46,8 @@
 //   expect_leader <p>   player p leads its world (the camera follows it)
 //   expect_alive <p> / expect_downed <p>
 //   expect_hp <p> <n>   player p has n health (1/8 hearts)
+//   expect_carried <p> <q|0>  player p is held over player q's head (0: by nobody)
+//   expect_ping <p> <none|here|help> [x y]  player p's ping marker (where it is, within 2 pixels)
 //   expect_near <p> <x> <y>  player p is within 4 pixels of x,y
 //   expect_camx <p> <x> / expect_camy <p> <y>  the camera of player p's world
 //   expect_ram <hexaddr> <hexval> / expect_pram <p> <hexaddr> <hexval>  a RAM byte / a byte of p's own state
@@ -64,11 +66,25 @@
 //   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
 //   expect_shot <name> [max % of pixels that may differ] [channel tolerance]  compare with tests/baseline/<name>.ppm
 //   benchdraw <n>       times n frames drawn (with the current 2D-HD setting)
+//   drawrun <n>         run n frames, drawing each into a buffer exactly the size the renderer asks for (fails on an overrun)
+//   runcheckdraw <p> <n>  run n frames; player p (not its world's leader) must never be drawn with shrunken body pieces
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart)
 //   waitplay            tick until connected and playing (max 15s)
 //   waitplayers <n>     tick until n players are in the game (max 15s)
+//   waitseat <p> <open|playing|reconnecting>  tick until seat p is so (max 25s)
+//   waitoffline / waitclientstate <n>  tick until offline / the client state is n (4 = reconnecting) (max 25s)
+//   name <name>         this computer's player name online
+//   netblackout <0|1>   pull the network cable out / put it back (nothing sent or received)
+//   kick <p>            the host removes the remote player in seat p
+//   expect_seat <p> <open|playing|reconnecting> [name] / expect_myseat <p> / expect_client_state <n>
+//   expect_message <word>  the latest netplay message says it
+//   roomcode <a.b.c.d:port>  the room code decodes back (also loosely typed); connectcode <a.b.c.d:port> joins by it
+//   expect_badcode <code>  a mistyped room code is refused
+//   keepcopy <file 1-3> <path>  keep a copy of the game we play in (a client's) in that file of the save at path
+//   expect_save_file <path> <file> <empty|valid|copy>  that file is empty / in use and intact / this game as it is now
+//   removefile <path>
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
 //   inputdelay <frames> online input delay
 //   netsim <delay ms> <jitter ms> <loss %>  simulate a bad link (before host/connect), like ZELDA3_NETSIM
@@ -85,7 +101,8 @@
 //   menu                toggle the overlay menu (navigate with hold + tick)
 //   key <up|down|left|right|enter|back> [times]  a button press in the menu
 // Debug only (not for tests): trace <0|1>, chestdump, dumprender <p>, dumpworldmap <file> <dark>,
-//   findtile <p> <hexattr>, findroomtag <hextag>, spoiler <hexseed> <file>, upnp (asks the router for a port mapping).
+//   findtile <p> <hexattr>, findroomtag <hextag>, spoiler <hexseed> <file>, upnp (asks the router for a port mapping),
+//   stun <server:port> (asks a STUN server for our public address).
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -241,6 +258,15 @@ static void WritePpm(const char *file, int width, int height, uint32 *pixels, in
     }
   }
   fclose(f);
+}
+
+static int SeatStateArg(const char *s) {
+  if (!strcmp(s, "open")) return kSeat_Open;
+  if (!strcmp(s, "playing")) return kSeat_Playing;
+  if (!strcmp(s, "reconnecting")) return kSeat_Reconnecting;
+  printf("FAIL: unknown seat state '%s'\n", s);
+  g_failures++;
+  return -1;
 }
 
 static void SwitchToPlayer(int p) {
@@ -933,11 +959,23 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Session_LocalJoin(PlayerArg(arg1));
     } else if (!strcmp(cmd, "localleave")) {
       Session_LocalLeave(PlayerArg(arg1));
-    } else if (!strcmp(cmd, "tick") || !strcmp(cmd, "waitplay") || !strcmp(cmd, "waitplayers")) {
+    } else if (!strcmp(cmd, "tick") || !strcmp(cmd, "waitplay") || !strcmp(cmd, "waitplayers") ||
+               !strcmp(cmd, "waitseat") || !strcmp(cmd, "waitoffline") || !strcmp(cmd, "waitclientstate")) {
+      // tick <n>: n display frames of the real game loop (netplay included)
+      // waitplay: tick until connected and playing (max 15 s)
       // waitplayers <n>: tick until n players are in the game (max 15 s)
-      bool wait = !strcmp(cmd, "waitplay"), waitn = !strcmp(cmd, "waitplayers");
-      int n = wait || waitn ? 15 * 60 : atoi(arg1);
-      for (int i = 0; i < n; i++) {
+      // waitseat <p> <open|playing|reconnecting>: tick until seat p is so (max 25 s)
+      // waitoffline: tick until not hosting or connected any more (max 25 s)
+      // waitclientstate <n>: tick until the client state is n (max 25 s)
+      enum { kTick, kPlay, kPlayers, kSeat, kOffline, kClientState } what =
+          !strcmp(cmd, "waitplay") ? kPlay : !strcmp(cmd, "waitplayers") ? kPlayers : !strcmp(cmd, "waitseat") ? kSeat :
+          !strcmp(cmd, "waitoffline") ? kOffline : !strcmp(cmd, "waitclientstate") ? kClientState : kTick;
+      int seat = what == kSeat ? PlayerArg(arg1) : 0, want = 0;
+      if (what == kSeat)
+        want = SeatStateArg(arg2);
+      int n = what == kTick ? atoi(arg1) : what == kPlay || what == kPlayers ? 15 * 60 : 25 * 60;
+      bool done = false;
+      for (int i = 0; i < n && !done; i++) {
         uint16 in[kMpMaxPlayers];
         memcpy(in, held, sizeof(in));
         Ui_Update(in, 0);
@@ -945,17 +983,129 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           frame += Session_Tick(in, g_wanted_zelda_features);
         TrackSprites(frame, view);
         SDL_Delay(16);
-        if (wait && Session_GetStatus()->client_state == 3)
-          break;
-        if (waitn && Inst_NumJoined() >= atoi(arg1))
-          break;
+        SessionPlayer seats[kMpMaxPlayers];
+        Session_GetPlayers(seats);
+        const SessionStatus *st = Session_GetStatus();
+        done = what == kPlay ? st->client_state == 3 : what == kPlayers ? Inst_NumJoined() >= atoi(arg1) :
+               what == kSeat ? seats[seat].state == want : what == kOffline ? st->mode == kSessionOffline :
+               what == kClientState ? st->client_state == atoi(arg1) : false;
       }
-      if (waitn && Inst_NumJoined() < atoi(arg1)) {
-        printf("FAIL: %d players, expected %s after 15 s at frame %d\n", Inst_NumJoined(), arg1, frame);
+      if (what != kTick && !done) {
+        printf("FAIL: %s %s %s didn't happen by frame %d (%d players, client state %d: %s)\n", cmd, arg1, arg2, frame,
+               Inst_NumJoined(), Session_GetStatus()->client_state, Session_GetStatus()->message);
         g_failures++;
       }
-      if (wait && Session_GetStatus()->client_state != 3) {
-        printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
+    } else if (!strcmp(cmd, "name")) {
+      // name <player name>: what this computer is called online
+      Session_SetName(arg1);
+    } else if (!strcmp(cmd, "netblackout")) {
+      // netblackout <0|1>: pull the network cable out (1) or put it back (0)
+      Net_SetBlackout(atoi(arg1));
+    } else if (!strcmp(cmd, "kick")) {
+      // kick <p>: the host removes the remote player in seat p
+      if (!Session_Kick(PlayerArg(arg1))) {
+        printf("FAIL: couldn't remove P%s at frame %d\n", arg1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_seat")) {
+      // expect_seat <p> <open|playing|reconnecting> [name]
+      SessionPlayer seats[kMpMaxPlayers];
+      Session_GetPlayers(seats);
+      int p = PlayerArg(arg1);
+      if (seats[p].state != SeatStateArg(arg2) || (arg3[0] && strcmp(seats[p].name, arg3))) {
+        printf("FAIL: seat %d is %d '%s', expected %s %s at frame %d\n", p + 1, seats[p].state, seats[p].name, arg2, arg3, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_myseat")) {
+      // expect_myseat <p>: this computer's first player plays in seat p
+      int p = PlayerArg(arg1);
+      if (Session_GetStatus()->local_slot[0] != p) {
+        printf("FAIL: our first player is in seat %d, expected %d at frame %d\n", Session_GetStatus()->local_slot[0] + 1, p + 1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_client_state")) {
+      if (Session_GetStatus()->client_state != atoi(arg1)) {
+        printf("FAIL: client state %d, expected %s at frame %d\n", Session_GetStatus()->client_state, arg1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_message")) {
+      // expect_message <word>: the latest netplay message has this word in it
+      if (!strstr(Session_GetStatus()->message, arg1)) {
+        printf("FAIL: message '%s' doesn't say '%s' at frame %d\n", Session_GetStatus()->message, arg1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "roomcode") || !strcmp(cmd, "connectcode")) {
+      // roomcode <a.b.c.d:port>: the room code for it decodes back to it (also
+      // typed in lower case, with O for 0 and without dashes)
+      // connectcode <a.b.c.d:port>: join the game by its room code
+      NetAddr a;
+      char code[32], loose[32];
+      uint32 ip = 0;
+      uint16 port = 0;
+      if (!Net_ParseAddr(arg1, kSessionPort, &a)) {
+        printf("FAIL: bad address %s\n", arg1);
+        g_failures++;
+        continue;
+      }
+      Session_EncodeRoomCode(a.ip, a.port, code, sizeof(code));
+      int k = 0;
+      for (const char *c = code; *c; c++)
+        if (*c != '-')
+          loose[k++] = *c == '0' ? 'o' : (*c >= 'A' && *c <= 'Z') ? *c + 32 : *c;
+      loose[k] = 0;
+      printf("room code for %s: %s\n", arg1, code);
+      if (!Session_DecodeRoomCode(code, &ip, &port) || ip != a.ip || port != a.port ||
+          !Session_DecodeRoomCode(loose, &ip, &port) || ip != a.ip || port != a.port) {
+        printf("FAIL: room code %s (%s) doesn't decode back to %s\n", code, loose, arg1);
+        g_failures++;
+      }
+      if (!strcmp(cmd, "connectcode"))
+        Session_Join(code);
+    } else if (!strcmp(cmd, "expect_badcode")) {
+      // expect_badcode <code>: a mistyped room code isn't taken for a game
+      uint32 ip;
+      uint16 port;
+      if (Session_DecodeRoomCode(arg1, &ip, &port)) {
+        printf("FAIL: room code %s was accepted\n", arg1);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "stun")) {
+      // stun <server:port>: ask a STUN server for our public address (needs the internet)
+      char ip[64];
+      bool ok = Upnp_StunPublicIp(arg1, ip, sizeof(ip));
+      printf("stun %s: %s\n", arg1, ok ? ip : "no answer");
+    } else if (!strcmp(cmd, "removefile")) {
+      remove(arg1);
+    } else if (!strcmp(cmd, "keepcopy")) {
+      // keepcopy <file 1-3> <path>: keep a copy of the game we play in, in that save file
+      char msg[96];
+      if (!Session_KeepCopy(atoi(arg1), arg2, msg, sizeof(msg))) {
+        printf("FAIL: %s\n", msg);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_save_file")) {
+      // expect_save_file <path> <file 1-3> <empty|valid|copy>: valid: a file
+      // in use with a right checksum and backup; copy: one holding this
+      // game's progress as it is right now
+      FILE *sf = fopen(arg1, "rb");
+      uint8 sram[8192] = { 0 };
+      bool ok = sf && fread(sram, 1, sizeof(sram), sf) == sizeof(sram);
+      if (sf)
+        fclose(sf);
+      const uint8 *slot = sram + (atoi(arg2) - 1) * 0x500;
+      if (!strcmp(arg3, "empty")) {
+        for (int i = 0; i < 0x500; i++)
+          ok &= slot[i] == 0;
+      } else {
+        uint16 t = 0x5a5a;
+        for (int i = 0; i < 0x4fe; i += 2)
+          t -= WORD(slot[i]);
+        const uint8 *ram = Session_GetStatus()->local_slot[0] >= 0 ? Inst_PlayerWorldRam(Session_GetStatus()->local_slot[0]) : g_ram;
+        ok &= WORD(slot[0x4fe]) == t && !memcmp(slot, slot + 0xf00, 0x500) && WORD(slot[0x3e5]) == 0x55aa &&
+              (strcmp(arg3, "copy") || !memcmp(slot, ram + 0xF000, 0x3e0));
+      }
+      if (!ok) {
+        printf("FAIL: file %s of %s isn't %s at frame %d\n", arg2, arg1, arg3, frame);
         g_failures++;
       }
     } else if (!strcmp(cmd, "storycheck")) {

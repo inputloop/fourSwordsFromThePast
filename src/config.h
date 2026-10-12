@@ -84,6 +84,7 @@ typedef struct Config {
   uint16 mp_port;
   const char *mp_player_name;
   const char *mp_last_join;
+  const char *mp_stun_server;  // asked for our public address when UPnP fails ("" = never)
 
   const char *link_graphics;
   char *memory_buffer;

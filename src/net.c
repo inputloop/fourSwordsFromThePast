@@ -144,7 +144,16 @@ uint16_t Net_LocalPort(NetSocket *s) {
   return ntohs(sa.sin_port);
 }
 
+// Tests: a cable pulled out. Nothing goes out and everything coming in is lost.
+static bool g_blackout;
+
+void Net_SetBlackout(bool on) {
+  g_blackout = on;
+}
+
 bool Net_Send(NetSocket *s, const NetAddr *to, const void *data, int len) {
+  if (g_blackout)
+    return true;
   struct sockaddr_in sa = { 0 };
   sa.sin_family = AF_INET;
   sa.sin_addr.s_addr = htonl(to->ip);
@@ -155,6 +164,10 @@ bool Net_Send(NetSocket *s, const NetAddr *to, const void *data, int len) {
 static int RealRecv(NetSocket *s, NetAddr *from, void *data, int maxlen);
 
 int Net_Recv(NetSocket *s, NetAddr *from, void *data, int maxlen) {
+  if (g_blackout) {
+    while (RealRecv(s, NULL, data, maxlen) >= 0) {}
+    return -1;
+  }
   if (!s->sim)
     return RealRecv(s, from, data, maxlen);
   uint32_t now = NowMs();

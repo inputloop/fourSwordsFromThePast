@@ -1,0 +1,45 @@
+# Netplay client for net_reconnect_host.txt, joining by room code.
+name Guest
+connectcode 127.0.0.1:47474
+waitplay
+expect_players 2
+expect_myseat 2
+expect_seat 1 playing Hostie
+expect_seat 2 playing Guest
+hold 1 R
+tick 60
+hold 1 -
+tick 60
+# A copy of the host's game in file 2 of our own (here a scratch) save file.
+removefile tests/out/keepcopy_sram.dat
+keepcopy 2 tests/out/keepcopy_sram.dat
+expect_save_file tests/out/keepcopy_sram.dat 2 copy
+expect_save_file tests/out/keepcopy_sram.dat 1 empty
+# 1. The cable is pulled: after 6 s we reconnect and the game waits.
+netblackout 1
+waitclientstate 4
+expect_message reconnecting
+tick 120
+expect_client_state 4
+netblackout 0
+waitplay
+expect_players 2
+expect_myseat 2
+tick 120
+# 2. The game is restarted: gone without a word (the goodbye is lost), and
+#    after the host noticed, joining again with nothing but our name.
+netblackout 1
+disconnect
+netblackout 0
+tick 480
+connect 127.0.0.1:47474
+waitplay
+expect_players 2
+expect_myseat 2
+# 3. The host removes us: we keep playing alone in its world, and can
+#    still keep a copy of it.
+waitoffline
+expect_message removed
+keepcopy 3 tests/out/keepcopy_sram.dat
+expect_save_file tests/out/keepcopy_sram.dat 3 copy
+expect_save_file tests/out/keepcopy_sram.dat 2 valid

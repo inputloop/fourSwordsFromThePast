@@ -14,4 +14,13 @@ void Upnp_UnmapPort();
 // Exposed for testing: synchronous version. Returns true on success.
 bool Upnp_MapPort(uint16 port, char *external_ip, size_t ip_size);
 
+// When the router won't open the port, the public address can still be
+// learned from a STUN server ("host:port"; NULL or "" never asks). The
+// callback then gets ok = false with that address (the port has to be
+// forwarded by hand).
+void Upnp_SetStunServer(const char *server);
+// Asks a STUN server for this computer's public IPv4 address (blocking, a
+// few seconds at most).
+bool Upnp_StunPublicIp(const char *server, char *ip_out, size_t ip_size);
+
 #endif  // ZELDA3_UPNP_H_

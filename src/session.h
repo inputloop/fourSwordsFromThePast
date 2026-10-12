@@ -16,6 +16,7 @@ enum {
   kSessionMaxLocal = 4,
   kSessionMaxClients = 3,
   kSessionMaxEvents = 4,
+  kSessionKeepSeatSeconds = 120,  // how long a dropped player's seat waits for them
 };
 
 enum SessionMode {
@@ -47,9 +48,25 @@ typedef struct SessionLanGame {
   uint32 last_seen;
 } SessionLanGame;
 
+// One player seat, as the host sees it (clients get the host's list).
+enum {
+  kSeat_Open = 0,
+  kSeat_Playing = 1,
+  kSeat_Reconnecting = 2,  // lost the connection; the seat is kept for a while
+};
+typedef struct SessionPlayer {
+  uint8 state;      // kSeat_*
+  uint8 owner;      // computer: 0 the host, else a client id
+  uint8 local;      // which of that computer's players
+  uint8 seconds_left;  // reconnecting: until the seat is given up
+  uint16 ping_ms;   // remote players: round trip to the host
+  char name[16];
+} SessionPlayer;
+
 typedef struct SessionStatus {
   int mode;
-  int client_state;  // for clients: 0 idle, 1 connecting, 2 loading, 3 playing
+  int client_state;  // for clients: 0 idle, 1 connecting, 2 loading, 3 playing, 4 reconnecting
+  int reconnect_seconds_left;  // clients, while reconnecting
   int my_id;
   int ping_ms;
   int frames_buffered;
@@ -66,6 +83,7 @@ typedef struct SessionStatus {
   int margin, lead_debt;  // clients: the host's latest report of how early our inputs arrive
   char host_addr[48];
   char public_addr[48];
+  bool upnp_failed;  // hosting: the router didn't open the port (forward it by hand)
   char message[96];
   int8 local_slot[kSessionMaxLocal];  // which player slot each local player controls (-1 = none)
   uint8 slot_owner[kMpMaxPlayers];    // client id owning each slot (0 = host), 0xff if free
@@ -92,7 +110,27 @@ void Session_SetRandomizer(uint32 setting);
 uint32 Session_GetRandomizer();
 
 bool Session_Host(uint16 port, bool use_upnp);
+// address: a room code, "host", "host:port" or "a.b.c.d:port".
 bool Session_Join(const char *address);
+void Session_SetName(const char *player_name);
+// The four seats: who is in them, how far away and whether they are back.
+void Session_GetPlayers(SessionPlayer out[kMpMaxPlayers]);
+// Host: removes the remote player in this seat (and that computer's other
+// players) from the game. They can't come back on their own.
+bool Session_Kick(int slot);
+
+// Room codes: a host's address and port as 12 letters and digits with a
+// check, "ABCD-EFGH-JKMN" (no server involved: the code is the address).
+void Session_EncodeRoomCode(uint32 ip, uint16 port, char *out, size_t size);
+bool Session_DecodeRoomCode(const char *code, uint32 *ip, uint16 *port);
+// The code to give to other players while hosting: for the internet when
+// the public address is known, else for the LAN. False when not hosting.
+bool Session_GetRoomCode(char *out, size_t size, bool *internet);
+
+// Playing in someone else's game (as a client, or after leaving it): save a
+// copy of that game's progress into file 1-3 of our own save file at path.
+bool Session_CanKeepCopy();
+bool Session_KeepCopy(int file, const char *path, char *msg, size_t msg_size);
 void Session_Disconnect();
 // Forces every connected client to reload the host's state (after the host loads a save state).
 void Session_ResyncAll();

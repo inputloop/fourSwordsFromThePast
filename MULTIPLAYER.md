@@ -23,11 +23,29 @@ Players can drop in and drop out at any time.
   gets the hearts they left with, not a refill.
 - **Host**: choose *Multiplayer > Host a game*. LAN players see the game under
   *Find LAN games*. For internet play the game asks your router to open UDP
-  port 47474 (UPnP); the menu shows the public address to give your friends.
-  If UPnP is unavailable, forward UDP 47474 to your PC manually.
-- **Join**: *Find LAN games*, or *Join by address* and type `ip` or `ip:port`
-  (Ctrl+V pastes). Joining downloads the host's game and you appear next to
-  the group.
+  port 47474 (UPnP). The menu then shows a **room code** like
+  `FW00-00DS-EB52`: select it to copy it and send it to your friends. (The
+  code is just your public address and port written short, with a check
+  against typos; no server is involved.) If UPnP is unavailable, the game
+  still learns your public address from a STUN server (`StunServer` in
+  `zelda3.ini`), and the menu tells you to forward UDP 47474 to your PC.
+- **Join**: *Find LAN games*, or *Join by code or address* and type or paste
+  (Ctrl+V) the room code, or `ip` / `ip:port`. Lower case, missing dashes and
+  the letter O for zero are fine. Joining downloads the host's game and you
+  appear next to the group.
+- **Players**: *Multiplayer > Players* lists everyone: name, where they are
+  (a dungeon, part of the overworld, indoors), their ping, and whether they
+  are down or reconnecting. The host can remove a player there (select them
+  twice); a removed player can't come back on their own.
+- **Lost connection? Your seat waits.** If a player's connection drops, their
+  Link stands still and their seat is kept for two minutes. Their game says
+  "reconnecting" and keeps knocking; once through, it downloads the game again
+  and they carry on as the same player. Restarting the game and joining again
+  with the same name works too. After two minutes the seat is given up.
+- **Keep a copy of the host's game**: when you play in someone else's game
+  (also after leaving it), *Multiplayer > Keep a copy in* saves its progress
+  into one of your own three files (left/right picks the file; a file in use
+  asks for a second press). Your own files are never touched otherwise.
 - **Friendly fire**: toggle it in the Multiplayer screen (the host decides).
   When on, swords, arrows, rods, boomerangs and bombs hurt
   teammates.
@@ -272,9 +290,28 @@ frames gives the same game everywhere.
 - Clients never write the host's world to their own save files, not even
   after leaving the game (they keep playing it locally; a reset brings
   their own files back).
-- Leaving or quitting tells the others at once; a dropped host leaves its
-  clients with "Lost connection to the host", a wrong address with "No
-  answer: check the address and port".
+- Leaving or quitting tells the others at once; a wrong address ends with
+  "No answer: check the room code or address".
+- **Reconnecting.** The host gives each client a token in its welcome. A
+  client that hears nothing for 6 seconds goes to "reconnecting": its game
+  stops and it sends hellos with that token every half second. The host,
+  after 6 seconds without packets, parks the client: its players keep their
+  seats but their buttons are zero (decided by the host, so every computer
+  runs the same), and nobody waits for them. A hello with the token (or,
+  from a restarted game without one, the same name while the seat waits or
+  the old connection has gone quiet) puts the client back into its seat,
+  from whatever address it now has, with a fresh snapshot. After two minutes
+  the host drops the client and its players leave. A kick sends the client a
+  rejection and drops it at once.
+- **Player list.** Twice a second the host sends every client the seats:
+  name, state, seconds left for a reconnecting player, and each client's own
+  measured ping. It is shown in *Players*; nothing in it affects the game.
+- **Room codes** (`Session_EncodeRoomCode`): 32 bits of IPv4 address, 16 of
+  port and a 12-bit check, as 12 characters of Crockford's base 32. A code
+  is tried before an address, so a typo in a code is "Unknown room code or
+  address", not a connection to somewhere else. The public address comes
+  from UPnP, or from a STUN binding request (`Upnp_StunPublicIp`) when the
+  router won't map the port.
 - UDP only, port 47474 by default. LAN games are found with a broadcast (a
   host on another port still answers it on 47474); UPnP mapping, with a
   renewed two-hour lease, is in `src/upnp.c`.

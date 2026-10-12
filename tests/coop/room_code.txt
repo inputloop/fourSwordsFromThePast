@@ -1,0 +1,13 @@
+# Room codes: an address and port as 12 letters and digits with a check.
+# They decode back exactly, also typed in lower case, without dashes or with
+# the letter O for zero, and a mistyped code is not taken for a game.
+roomcode 127.0.0.1:47474
+roomcode 203.0.113.250:47474
+roomcode 198.51.100.7:1
+roomcode 255.255.255.254:65535
+roomcode 10.0.0.2:51234
+expect_badcode FW00-00DS-EB53
+expect_badcode FW00-00DS-EB5
+expect_badcode FW00-00DS-EB522
+expect_badcode FW00-00DS-EB5U
+expect_badcode hello-world

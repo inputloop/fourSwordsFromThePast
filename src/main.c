@@ -27,6 +27,7 @@
 #include "util.h"
 #include "audio.h"
 #include "session.h"
+#include "upnp.h"
 #include "ui.h"
 #include "hd2d.h"
 #include "bindings.h"
@@ -555,6 +556,7 @@ int main(int argc, char** argv) {
     HandleCommand(kKeys_Load + 0, true);
 
   Session_Init(g_config.mp_player_name);
+  Upnp_SetStunServer(g_config.mp_stun_server);
   Session_SetFriendlyFire(g_config.mp_friendly_fire);
   Session_SetInputDelay(g_config.mp_input_delay);
   Session_SetStory(g_config.four_swords_story);
