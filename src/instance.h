@@ -105,6 +105,15 @@ typedef struct InstPlace {
   bool downed;
 } InstPlace;
 bool Inst_PlayerPlace(int p, InstPlace *out);
+// Player p's ping marker, while it shows and its world is still in the area
+// it was placed in. space is as for Inst_PlayerPlace.
+typedef struct InstPing {
+  int world;
+  uint16 x, y;
+  uint32 space;
+  uint8 ttl, kind;
+} InstPing;
+bool Inst_PlayerPing(int p, InstPing *out);
 bool Inst_PlayerDowned(int p);
 bool Inst_PlayerCanSendHeart(int p);  // downed, and A would send a teammate a heart
 uint8 Inst_PlayerReviveCtr(int p);

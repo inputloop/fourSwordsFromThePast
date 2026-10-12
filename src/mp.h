@@ -37,6 +37,19 @@ typedef struct MpPlayer {
   uint8 ctx[kMpCtxMaxBytes];
 } MpPlayer;
 
+enum {
+  kMpPingBit = 0x1000,     // the Ping button in a joypad word (the game never sees it)
+  kMpPingFrames = 180,     // how long a ping marker shows
+};
+
+// A ping marker: "look here", or "help".
+typedef struct MpPing {
+  uint16 x, y;             // where (the middle of the ring), in the world's coordinates
+  uint32 key;              // the area or room it was placed in (Mp_AreaKeyPublic)
+  uint8 ttl;               // frames left to show, 0 = none
+  uint8 kind;              // 0 look here, 1 help
+} MpPing;
+
 typedef struct MpState {
   uint8 leader;
   uint8 resident;
@@ -71,6 +84,9 @@ typedef struct MpState {
   uint8 split_travel;        // 1: it went through an exit, 2: it opened a menu or map
                              // (the others replay the frame without it)
   uint16 inputs[kMpMaxPlayers];
+  MpPing ping[kMpMaxPlayers];
+  uint8 ping_hold[kMpMaxPlayers];      // frames the Ping button has been held
+  uint8 ping_cooldown[kMpMaxPlayers];  // frames before the next ping
   MpPlayer p[kMpMaxPlayers];
 } MpState;
 

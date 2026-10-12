@@ -351,7 +351,8 @@ void Mp_ReadJoypads() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
       continue;
-    Mp_ReadJoypadInto(g_mp.p[p].downed || g_mp.away[p] ? 0 : g_mp.inputs[p],
+    // (The Ping button is the mod's: the game never sees it.)
+    Mp_ReadJoypadInto(g_mp.p[p].downed || g_mp.away[p] ? 0 : g_mp.inputs[p] & 0x0fff,
                       Mp_PlayerRam(p, 0xF0), Mp_PlayerRam(p, 0xF2), Mp_PlayerRam(p, 0xF4),
                       Mp_PlayerRam(p, 0xF6), Mp_PlayerRam(p, 0xF8), Mp_PlayerRam(p, 0xFA));
   }
@@ -615,7 +616,51 @@ static void Mp_SyncQuadrantToLeader() {
 
 static void Mp_RestoreMenuLeader();
 
+// The Ping button: a tap marks "look here" a little ahead of the Link, held
+// for a third of a second it marks "help" where the Link is (a ghost always
+// calls for help). The marker is part of the world's state, so it shows the
+// same on every computer; everybody in the same area or room sees it.
+static void Mp_HandlePings() {
+  enum { kHelpHold = 20, kCooldown = 30 };
+  bool playing = main_module_index == 7 || main_module_index == 9;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    MpPing *pg = &g_mp.ping[p];
+    if (pg->ttl)
+      pg->ttl--;
+    if (g_mp.ping_cooldown[p])
+      g_mp.ping_cooldown[p]--;
+    bool can = g_mp.p[p].joined && !g_mp.away[p] && playing;
+    bool held = can && (g_mp.inputs[p] & kMpPingBit);
+    uint8 hold = g_mp.ping_hold[p];
+    g_mp.ping_hold[p] = held ? (hold < 255 ? hold + 1 : 255) : 0;
+    int kind = -1;
+    if (held && g_mp.ping_hold[p] == kHelpHold)
+      kind = 1;
+    else if (!held && hold && hold < kHelpHold && can)
+      kind = g_mp.p[p].downed;
+    if (kind < 0 || g_mp.ping_cooldown[p])
+      continue;
+    uint16 x = Mp_PlayerX(p) + 8, y = Mp_PlayerY(p) + 12;
+    if (kind == 0) {
+      static const int8 kAheadX[4] = { 0, 0, -24, 24 }, kAheadY[4] = { -24, 24, 0, 0 };
+      int dir = (*Mp_PlayerRam(p, 0x2F) >> 1) & 3;  // link_direction_facing
+      x += kAheadX[dir], y += kAheadY[dir];
+    }
+    pg->x = x, pg->y = y;
+    pg->key = Mp_AreaKeyPublic();
+    pg->ttl = kMpPingFrames;
+    pg->kind = kind;
+    g_mp.ping_cooldown[p] = kCooldown;
+    if (kind)
+      sound_effect_1 = 43;  // (the low-health beep)
+    else
+      sound_effect_2 = 32;  // (a menu tick)
+  }
+}
+
 void Mp_EndFrame() {
+  if (g_mp_coop)
+    Mp_HandlePings();
   if (g_mp.merge_grace)
     g_mp.merge_grace--;
   if (main_module_index <= 5)

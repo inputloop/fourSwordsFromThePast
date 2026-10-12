@@ -158,7 +158,7 @@ void NMI_ReadJoypads(uint16 joypad_input) {  // 8083d1
     Mp_ReadJoypads();
     return;
   }
-  uint16 both = joypad_input;
+  uint16 both = joypad_input & 0x0fff;  // (bit 12 is the co-op Ping button)
   uint16 reversed = 0;
   for (int i = 0; i < 16; i++, both >>= 1)
     reversed = reversed * 2 + (both & 1);

@@ -1196,6 +1196,29 @@ static void DrawArrow(int px, int py, float ux, float uy, int size, uint32 color
   }
 }
 
+// An arrow at the edge of a pane pointing at (sx, sy) (pane pixels, out of
+// view), with a label behind it.
+static void DrawEdgeArrow(const UiView *view, int sx, int sy, uint32 color, const char *label) {
+  float cx = view->w * 0.5f, cy = view->h * 0.5f, dx = sx - cx, dy = sy - cy;
+  float len = sqrtf(dx * dx + dy * dy);
+  if (len < 1)
+    return;
+  float ux = dx / len, uy = dy / len;
+  // Where the line from the middle of the screen leaves it (a margin in).
+  float t = 1e9f;
+  if (fabsf(dx) > 0.01f) t = fminf(t, (cx - 10) / fabsf(dx));
+  if (fabsf(dy) > 0.01f) t = fminf(t, (cy - 10) / fabsf(dy));
+  int px = view->x + (int)(cx + dx * t), py = view->y + (int)(cy + dy * t);
+  DrawArrow(px, py, ux, uy, 8, 0x000000);
+  DrawArrow(px - (int)(ux * 1.5f), py - (int)(uy * 1.5f), ux, uy, 6, color);
+  int tw = TextWidth(label);
+  int lx = px - (int)(ux * 16) - tw / 2, ly = py - (int)(uy * 16) - 3;
+  lx = IntMax(view->x + 1, IntMin(lx, view->x + view->w - tw - 1));
+  ly = IntMax(view->y + 1, IntMin(ly, view->y + view->h - 8));
+  ShadeRect(lx - 1, ly - 1, tw + 2, 9);
+  DrawText(lx, ly, label, color);
+}
+
 // Arrows at the edge of each screen pointing at teammates who are out of
 // view (in this world or another one), as long as they are somewhere the
 // direction means something: the same overworld, dungeon or room.
@@ -1217,25 +1240,71 @@ static void DrawTeammateArrows() {
       int sx = (int16)(them.x - me.cam_x) + extra, sy = (int16)(them.y - me.cam_y);
       if (sx >= -4 && sx < view->w + 4 && sy >= -4 && sy < view->h + 4)
         continue;  // on screen
-      float cx = view->w * 0.5f, cy = view->h * 0.5f, dx = sx - cx, dy = sy - cy;
-      float len = sqrtf(dx * dx + dy * dy);
-      if (len < 1)
-        continue;
-      float ux = dx / len, uy = dy / len;
-      // Where the line from the middle of the screen leaves it (a margin in).
-      float t = 1e9f;
-      if (fabsf(dx) > 0.01f) t = fminf(t, (cx - 10) / fabsf(dx));
-      if (fabsf(dy) > 0.01f) t = fminf(t, (cy - 10) / fabsf(dy));
-      int px = view->x + (int)(cx + dx * t), py = view->y + (int)(cy + dy * t);
-      uint32 color = them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(q);
-      DrawArrow(px, py, ux, uy, 8, 0x000000);
-      DrawArrow(px - (int)(ux * 1.5f), py - (int)(uy * 1.5f), ux, uy, 6, color);
       char label[4];
       snprintf(label, sizeof(label), "P%d", q + 1);
-      int lx = px - (int)(ux * 16) - TextWidth(label) / 2, ly = py - (int)(uy * 16) - 3;
-      lx = IntMax(view->x + 1, IntMin(lx, view->x + view->w - TextWidth(label) - 1));
-      ly = IntMax(view->y + 1, IntMin(ly, view->y + view->h - 8));
-      ShadeRect(lx - 1, ly - 1, TextWidth(label) + 2, 9);
+      DrawEdgeArrow(view, sx, sy, them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(q), label);
+    }
+  }
+}
+
+// A ring of 2x2 dots, clipped to the pane.
+static void DrawRing(const UiView *view, int cx, int cy, int r, uint32 color) {
+  int n = 8 + r * 4;
+  for (int i = 0; i < n; i++) {
+    float a = i * 6.2831853f / n;
+    int x = cx + (int)lroundf(cosf(a) * r), y = cy + (int)lroundf(sinf(a) * r);
+    if (x >= view->x && x + 2 <= view->x + view->w && y >= view->y && y + 2 <= view->y + view->h)
+      FillRect(x, y, 2, 2, color);
+  }
+}
+
+static void PingLabel(char *buf, size_t n, int q, int kind) {
+  snprintf(buf, n, kind ? "P%d HELP" : "P%d!", q + 1);
+}
+
+// Ping markers: a pulsing ring where a player pinged (a blinking one for
+// "help"), or an arrow at the edge of the screen pointing at it, for
+// everybody in the same overworld, dungeon or house.
+static void DrawPings() {
+  if (Inst_NumJoined() < 2)
+    return;
+  for (int v = 0; v < g_nviews; v++) {
+    const UiView *view = &g_views[v];
+    InstPlace me;
+    if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
+      continue;
+    uint8 m = Inst_PlayerViewModule(view->player);
+    if (m != 7 && m != 9)
+      continue;
+    int extra = (view->w - 256) / 2;
+    for (int q = 0; q < kMpMaxPlayers; q++) {
+      InstPing pg;
+      if (!Inst_PlayerPing(q, &pg) || pg.space != me.space)
+        continue;
+      if (pg.ttl < 30 && (pg.ttl & 4))
+        continue;  // fading out
+      int age = kMpPingFrames - pg.ttl;
+      uint32 color = pg.kind && (pg.ttl & 8) ? 0xffffff : Mp_PlayerColorRgb(q);
+      char label[12];
+      PingLabel(label, sizeof(label), q, pg.kind);
+      int sx = (int16)(pg.x - me.cam_x) + extra, sy = (int16)(pg.y - me.cam_y);
+      if (sx < 0 || sx >= view->w || sy < 0 || sy >= view->h) {
+        DrawEdgeArrow(view, sx, sy, color, label);
+        continue;
+      }
+      int px = view->x + sx, py = view->y + sy;
+      // Two rings that keep growing out from the spot, and the spot itself.
+      for (int k = 0; k < 2; k++) {
+        int r = 3 + ((age + k * 15) % 30) / 2;
+        DrawRing(view, px - 1, py, r + 1, 0x000000);
+        DrawRing(view, px - 1, py - 1, r, color);
+      }
+      FillRect(px - 2, py - 2, 4, 4, 0x000000);
+      FillRect(px - 1, py - 1, 2, 2, color);
+      int tw = TextWidth(label);
+      int lx = IntMax(view->x + 1, IntMin(px - tw / 2, view->x + view->w - tw - 1));
+      int ly = py - 28 >= view->y + 1 ? py - 28 : py + 20;
+      ShadeRect(lx - 1, ly - 1, tw + 2, 9);
       DrawText(lx, ly, label, color);
     }
   }
@@ -1301,6 +1370,13 @@ static void DrawDot(int x, int y, uint32 color, bool me) {
   FillRect(x - 1, y - 1, 3, 3, color);
 }
 
+// A ping on the mini map: a small hollow square (it blinks).
+static void DrawPingMark(int x, int y, uint32 color) {
+  FillRect(x - 3, y - 3, 7, 7, 0x000000);
+  FillRect(x - 2, y - 2, 5, 5, color);
+  FillRect(x - 1, y - 1, 3, 3, 0x000000);
+}
+
 enum { kMiniW = 72, kMiniH = 60 };
 
 static void DrawMiniMap(const UiView *view) {
@@ -1341,6 +1417,14 @@ static void DrawMiniMap(const UiView *view) {
       if (dx >= 2 && dx < kMiniW - 2 && dy >= 2 && dy < kMiniH - 2)
         DrawDot(x0 + dx, y0 + dy, them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(who), who == p);
     }
+    for (int q = 0; q < kMpMaxPlayers; q++) {
+      InstPing pg;
+      if (!Inst_PlayerPing(q, &pg) || pg.space != me.space || (pg.ttl & 8))
+        continue;
+      int dx = 128 + pg.x / 16 - left, dy = 128 + pg.y / 16 - top;
+      if (dx >= 3 && dx < kMiniW - 3 && dy >= 3 && dy < kMiniH - 3)
+        DrawPingMark(x0 + dx, y0 + dy, Mp_PlayerColorRgb(q));
+    }
   } else {
     // In a dungeon: this floor's rooms as the dungeon map lays them out
     // (5x5), the ones seen filled in (all of them with the map).
@@ -1369,6 +1453,18 @@ static void DrawMiniMap(const UiView *view) {
         continue;
       DrawDot(x0 + (k % 5) * cw + 2 + (them.x & 511) * (cw - 4) / 512, y0 + (k / 5) * ch + 2 + (them.y & 511) * (ch - 4) / 512,
               them.downed ? 0xa0a0a0 : Mp_PlayerColorRgb(who), who == p);
+    }
+    for (int q = 0; q < kMpMaxPlayers; q++) {
+      InstPing pg;
+      const uint8 *qr = Inst_PlayerWorldRam(q);
+      if (!Inst_PlayerPing(q, &pg) || pg.space != me.space || (pg.ttl & 8) || !qr || qr[0xA4] != ram[0xA4])
+        continue;
+      int k = 0;
+      while (k < 25 && rooms[k] != qr[0xA0])
+        k++;
+      if (k < 25)
+        DrawPingMark(x0 + (k % 5) * cw + 2 + (pg.x & 511) * (cw - 4) / 512, y0 + (k / 5) * ch + 2 + (pg.y & 511) * (ch - 4) / 512,
+                     Mp_PlayerColorRgb(q));
     }
   }
 }
@@ -1610,8 +1706,9 @@ static void DrawMenu() {
   const UiView *mv = OwnerView();
   int w = 236, line_h = 10;
   int h = 24 + g_ui.nlines * line_h + (g_ui.footer[0] ? 12 : 0);
-  if (h > mv->h) {  // (20 lines on a 224-line screen: a little tighter)
-    line_h = 9;
+  // (20 or more lines on a 224-line screen: a little tighter)
+  while (h > mv->h && line_h > 8) {
+    line_h--;
     h = 24 + g_ui.nlines * line_h + (g_ui.footer[0] ? 12 : 0);
   }
   int x = mv->x + (mv->w - w) / 2, y = mv->y + IntMax((mv->h - h) / 2, 2);
@@ -1649,6 +1746,7 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   DrawTitleBanner();
   DrawSeedNotice();
   DrawTeammateArrows();
+  DrawPings();
   DrawNameTags();
   DrawMiniMaps();
   DrawCornerHud();

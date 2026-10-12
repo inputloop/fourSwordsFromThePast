@@ -1,0 +1,61 @@
+# Ping markers. A tap of the Ping button marks "look here" 24 pixels ahead
+# of the Link, holding it a third of a second marks "help" where the Link
+# stands, and a downed player's ping is always "help". A marker lasts three
+# seconds, is part of the world (so every computer shows the same), and the
+# game itself never sees the button.
+load 2
+run 30
+join 2
+run 60
+# 1. A tap, facing right: 24 pixels right of P1's middle. P1 stays put.
+pram 1 2f 06
+hold 1 P
+run 3
+hold 1 -
+run 1
+expect_ping 1 here 3952 1591
+expect_ping 2 none
+expect_near 1 3920 1579
+# 2. Gone after three seconds.
+run 180
+expect_ping 1 none
+# 3. Held: "help" at P1's middle as soon as it has been held long enough,
+#    and letting go doesn't add a second marker.
+hold 1 P
+run 21
+expect_ping 1 help 3928 1591
+hold 1 -
+run 1
+expect_ping 1 help 3928 1591
+# 4. Another tap right away does nothing; a moment later it replaces the
+#    marker (facing left now).
+pram 1 2f 04
+hold 1 P
+run 2
+hold 1 -
+run 1
+expect_ping 1 help 3928 1591
+run 30
+hold 1 P
+run 2
+hold 1 -
+run 1
+expect_ping 1 here 3904 1591
+# 5. P2 pings too (facing up), and both markers show.
+pram 2 2f 00
+hold 2 P
+run 2
+hold 2 -
+run 1
+expect_ping 2 here 3928 1567
+expect_ping 1 here 3904 1591
+# 6. A downed player's tap calls for help.
+run 200
+down 2
+run 30
+expect_downed 2
+hold 2 P
+run 2
+hold 2 -
+run 1
+expect_ping 2 help

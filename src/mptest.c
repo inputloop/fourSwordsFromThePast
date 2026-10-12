@@ -197,7 +197,7 @@ static int PlayerArg(const char *s) {
 }
 
 static uint16 ParseKeys(const char *s) {
-  static const char kKeys[] = "BYsSUDLRAXlr";
+  static const char kKeys[] = "BYsSUDLRAXlrP";  // (P: the co-op Ping button)
   uint16 v = 0;
   for (; *s; s++) {
     const char *t = strchr(kKeys, *s);
@@ -1141,6 +1141,27 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       SwitchToPlayer(p);
       if (abs(Mp_PlayerX(p) - atoi(arg2)) > 4 || abs(Mp_PlayerY(p) - atoi(arg3)) > 4) {
         printf("FAIL: P%d is at %d,%d, expected %s,%s at frame %d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p), arg2, arg3, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_ping")) {
+      // expect_ping <player> none|here|help [x y]: the player's ping marker
+      // (where it is, within 2 pixels)
+      int p = PlayerArg(arg1);
+      InstPing pg;
+      bool has = Inst_PlayerPing(p, &pg), ok;
+      if (!strcmp(arg2, "none"))
+        ok = !has;
+      else if (!strcmp(arg2, "here") || !strcmp(arg2, "help"))
+        ok = has && pg.kind == (arg2[2] == 'l') &&
+             (!arg3[0] || (abs(pg.x - atoi(arg3)) <= 2 && abs(pg.y - atoi(arg4)) <= 2));
+      else
+        ok = false, printf("FAIL: expect_ping wants none, here or help, not '%s'\n", arg2);
+      if (!ok) {
+        if (has)
+          printf("FAIL: P%d's ping is %s at %d,%d (%d frames left), expected %s %s %s at frame %d\n", p + 1,
+                 pg.kind ? "help" : "here", pg.x, pg.y, pg.ttl, arg2, arg3, arg4, frame);
+        else
+          printf("FAIL: P%d has no ping, expected %s %s %s at frame %d\n", p + 1, arg2, arg3, arg4, frame);
         g_failures++;
       }
     } else if (!strcmp(cmd, "peek")) {

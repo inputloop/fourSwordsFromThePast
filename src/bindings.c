@@ -8,10 +8,10 @@
 BindProfile g_bind[kBindPlayers];
 
 static const char *const kButtonNames[kBindButtons] = {
-  "Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L", "R", "Start", "Select",
+  "Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L", "R", "Start", "Select", "Ping",
 };
-// Bit of each button in the joypad word: B Y Select Start Up Down Left Right A X L R
-static const uint8 kButtonBits[kBindButtons] = { 4, 5, 6, 7, 8, 0, 9, 1, 10, 11, 3, 2 };
+// Bit of each button in the joypad word: B Y Select Start Up Down Left Right A X L R, Ping
+static const uint8 kButtonBits[kBindButtons] = { 4, 5, 6, 7, 8, 0, 9, 1, 10, 11, 3, 2, 12 };
 // Legacy [KeyMap] Controls order: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R
 static const uint8 kLegacyOrder[12] = {
   kBind_Up, kBind_Down, kBind_Left, kBind_Right, kBind_Select, kBind_Start,
@@ -46,7 +46,7 @@ void Bindings_ResetPlayer(int p) {
   static const int8 kPad[kBindButtons] = {
     kGamepadBtn_DpadUp, kGamepadBtn_DpadDown, kGamepadBtn_DpadLeft, kGamepadBtn_DpadRight,
     kGamepadBtn_B, kGamepadBtn_A, kGamepadBtn_Y, kGamepadBtn_X, kGamepadBtn_L1, kGamepadBtn_R1,
-    kGamepadBtn_Start, kGamepadBtn_Back,
+    kGamepadBtn_Start, kGamepadBtn_Back, kGamepadBtn_R3,
   };
   for (int b = 0; b < kBindButtons; b++)
     bp->pad[b][0] = kPad[b];
@@ -55,7 +55,7 @@ void Bindings_ResetPlayer(int p) {
   if (p == 0) {
     static const int32 kKeys[kBindButtons] = {
       SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT, SDLK_x, SDLK_z, SDLK_s, SDLK_a, SDLK_c, SDLK_v,
-      SDLK_RETURN, SDLK_RSHIFT,
+      SDLK_RETURN, SDLK_RSHIFT, SDLK_q,
     };
     for (int b = 0; b < kBindButtons; b++)
       bp->keys[b][0] = kKeys[b];
@@ -306,7 +306,8 @@ static char *Trim(char *s) {
   return s;
 }
 
-// value: comma separated list of the 12 buttons in menu order, slots separated by '|'
+// value: comma separated list of the buttons in menu order (12 in configs
+// from before the Ping button, which then keeps its default), slots separated by '|'
 static void ParseButtonList(char *value, int p, bool keys) {
   char *save_b = NULL;
   int b = 0;
@@ -331,6 +332,18 @@ static void ParseButtonList(char *value, int p, bool keys) {
       }
     }
   }
+  // A line from before the Ping button leaves it at its default: unless
+  // that key or button is taken by one of the others.
+  BindProfile *bp = &g_bind[p];
+  for (int rest = b; rest < kBindButtons; rest++)
+    for (int i = 0; i < b; i++)
+      for (int s = 0; s < kBindSlots; s++)
+        for (int t = 0; t < kBindSlots; t++) {
+          if (keys && bp->keys[rest][s] && bp->keys[rest][s] == bp->keys[i][t])
+            bp->keys[rest][s] = 0;
+          if (!keys && bp->pad[rest][s] >= 0 && bp->pad[rest][s] == bp->pad[i][t])
+            bp->pad[rest][s] = -1;
+        }
 }
 
 bool Bindings_ParseConfig(const char *key, char *value) {

@@ -9,7 +9,8 @@ Players can drop in and drop out at any time.
 - **Menu**: press `Esc`, the controller's Guide button, or Back+Start.
   The menu has the Multiplayer, Video/HD and Gameplay screens.
 - **Controls**: *Pause menu > Controls* sets up each player (P1-P4): two
-  keyboard keys and two controller buttons per SNES button (press to assign),
+  keyboard keys and two controller buttons per SNES button and for Ping
+  (press to assign),
   which controller the player uses (or keyboard only, so two players can
   share a keyboard), left stick deadzone, and an Xbox/Nintendo face button
   swap. A live "Pressed" line shows what the game sees. Arrows, Enter and
@@ -79,6 +80,14 @@ Players can drop in and drop out at any time.
 - **Arrows to teammates.** A teammate off your screen gets an arrow in their
   color at the screen's edge pointing their way (grey while down), when you
   are both on the same overworld, in the same dungeon or in the same room.
+- **Ping markers.** Point at something without a microphone: tap *Ping*
+  (keyboard `Q` for player 1, the right stick click on a controller) to put
+  a pulsing ring in your color 1.5 tiles in front of you ("look here"), or
+  hold it for a third of a second for a blinking HELP marker where you
+  stand. A downed player's ping is always HELP. Everybody in the same
+  overworld, dungeon or house sees it for three seconds: on screen, as an
+  arrow at the edge when it's off screen, and on the mini map. The game
+  itself never sees the button.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
   *Multiplayer > Player colors > color-blind* switches to colors told apart

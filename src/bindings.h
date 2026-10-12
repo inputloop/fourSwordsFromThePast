@@ -7,16 +7,17 @@
 
 enum {
   kBindPlayers = 4,
-  kBindButtons = 12,
+  kBindButtons = 13,
   kBindSlots = 2,       // alternatives per button and device
   kBindNoController = 0xff,
 };
 
-// The SNES buttons in the order shown in the menu.
+// The SNES buttons in the order shown in the menu, then the co-op Ping
+// button (joypad bit 12, which the game never sees).
 enum {
   kBind_Up, kBind_Down, kBind_Left, kBind_Right,
   kBind_A, kBind_B, kBind_X, kBind_Y, kBind_L, kBind_R,
-  kBind_Start, kBind_Select,
+  kBind_Start, kBind_Select, kBind_Ping,
 };
 
 typedef struct BindProfile {

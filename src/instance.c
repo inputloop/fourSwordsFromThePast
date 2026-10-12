@@ -1164,6 +1164,31 @@ int Inst_PlayerPos(int p, uint16 *x, uint16 *y) {
   return i;
 }
 
+// Which coordinates the current world's positions are in: the light or
+// dark world, a dungeon (its rooms share coordinates) or one house or cave.
+static uint32 CurrentSpace() {
+  uint8 palace = BYTE(cur_palace_index_x2);
+  return !player_is_indoors ? (overworld_area_index & 0x40) :
+         palace == 0xff ? 0x20000 | dungeon_room_index : 0x10000 | palace;
+}
+
+bool Inst_PlayerPing(int p, InstPing *out) {
+  int i = Inst_OfPlayer(p), r = g_cur;
+  if (i < 0 || !MpOf(i)->ping[p].ttl)
+    return false;
+  Inst_Switch(i);
+  const MpPing *pg = &g_mp.ping[p];
+  bool ok = Mp_AreaKeyPublic() == pg->key;
+  if (ok) {
+    out->world = i;
+    out->x = pg->x, out->y = pg->y;
+    out->space = CurrentSpace();
+    out->ttl = pg->ttl, out->kind = pg->kind;
+  }
+  Inst_Switch(r);
+  return ok;
+}
+
 bool Inst_PlayerPlace(int p, InstPlace *out) {
   int i = Inst_OfPlayer(p), r = g_cur;
   if (i < 0)
@@ -1175,9 +1200,7 @@ bool Inst_PlayerPlace(int p, InstPlace *out) {
     out->world = i;
     out->x = Mp_PlayerX(p) + 8, out->y = Mp_PlayerY(p) + 12;  // the middle of the Link
     out->cam_x = BG2HOFS_copy2, out->cam_y = BG2VOFS_copy2;
-    uint8 palace = BYTE(cur_palace_index_x2);
-    out->space = !player_is_indoors ? (overworld_area_index & 0x40) :
-                 palace == 0xff ? 0x20000 | dungeon_room_index : 0x10000 | palace;
+    out->space = CurrentSpace();
     out->downed = g_mp.p[p].downed;
   }
   Inst_Switch(r);
