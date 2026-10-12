@@ -700,6 +700,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
         failures++;
       }
+    } else if (!strcmp(cmd, "storycheck")) {
+      // storycheck: every rewritten message fits the text box (measured with the font)
+      int bad = Story_CheckText(true);
+      Story_MeasureOriginals(true);
+      if (bad) {
+        printf("FAIL: %d story text lines don't fit\n", bad);
+        failures++;
+      }
     } else if (!strcmp(cmd, "story")) {
       Story_SetEnabled(atoi(arg1));
       Session_SetStory(atoi(arg1));

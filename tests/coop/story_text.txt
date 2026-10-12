@@ -1,0 +1,16 @@
+# Four Swords dialogue: every override fits the text box, and the
+# pedestal message (0xb7) reads "The heroes'..." with the story on and
+# "The Hero's..." with it off.
+load 1
+run 5
+storycheck
+story 1
+message b7
+run 10
+expect_ram 11204 21
+load 1
+run 5
+story 0
+message b7
+run 10
+expect_ram 11204 07
