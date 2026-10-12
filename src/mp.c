@@ -640,8 +640,9 @@ void Mp_EndFrame() {
     }
   }
   // The HUD's item box shows the leader's item: the other Links' control code
-  // may have drawn theirs there this frame, or the leader may have changed.
-  if (m == 7 || m == 9)
+  // may have drawn theirs there this frame, or the leader may have changed
+  // (also into a text box or a map; only the item menu owns the box itself).
+  if (m == 7 || m == 9 || (m == 14 && submodule_index != 1))
     Hud_SyncItemBox();
 }
 
