@@ -128,6 +128,10 @@ uint32 Mp_PlayerColorRgb(int p);  // 0xRRGGBB, for the overlay
 void Mp_Reset();
 // True when more than one player is in the game.
 bool Mp_Active();
+// A standing Link other than the one in RAM has less health than this.
+bool Mp_OtherLinkBelow(uint8 limit);
+// The HUD item box tiles for player p's selected item (false: no item).
+bool Mp_ItemIconTiles(int p, uint16 out[4]);
 int Mp_NumJoined();
 void Mp_Join(int p);
 void Mp_Leave(int p);

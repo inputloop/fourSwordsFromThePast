@@ -421,8 +421,11 @@ void Hud_RefillLogic() {  // 8ddb92
     }
   }
 
+  // (In co-op: any standing Link of this world low on hearts; the corner
+  // HUD shows whose hearts flash.)
+  uint8 low_limit = kMaxHealthForLevel[link_health_capacity >> 3];
   if (!flag_is_link_immobilized && !link_hearts_filler &&
-      link_health_current < kMaxHealthForLevel[link_health_capacity >> 3]) {
+      (link_health_current < low_limit || Mp_OtherLinkBelow(low_limit))) {
     if (link_lowlife_countdown_timer_beep) {
       link_lowlife_countdown_timer_beep--;
     } else if (!sound_effect_1) {

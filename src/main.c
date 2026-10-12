@@ -71,7 +71,7 @@ static bool g_pad_used[kMaxPads];
 static uint32 g_pad_modifiers[kMaxPads];
 static uint16 g_pad_last_cmd[kMaxPads][kGamepadBtn_Count];
 static int PadIndexFromId(SDL_JoystickID id);
-static void RumbleOnDamage();
+static void RumbleForEvents();
 static bool g_display_perf;
 static int g_curr_fps;
 static int g_ppu_render_flags = 0;
@@ -669,7 +669,7 @@ int main(int argc, char** argv) {
       SDL_LockMutex(g_audio_mutex);
       Session_Tick(local_inputs, g_config.features0);
       is_replay = Session_LastFrameWasReplay();
-      RumbleOnDamage();
+      RumbleForEvents();
       SDL_UnlockMutex(g_audio_mutex);
     }
 
@@ -905,24 +905,64 @@ static void OpenOneGamepad(int i) {
   }
 }
 
-// Rumbles a local player's controller when their Link loses health (more
-// for a bigger hit). Only this computer's players, and only on their pads.
-static void RumbleOnDamage() {
-  static uint8 prev_hp[kSessionMaxLocal];
+static void Rumble(int i, uint16 low, uint16 high, uint32 ms) {
+  int c = g_bind[i].controller;
+  SDL_GameController *ctl = c < kMaxPads && g_pad_used[c] ? SDL_GameControllerFromInstanceID(g_pad_ids[c]) : NULL;
+  if (ctl)
+    SDL_GameControllerRumble(ctl, low, high, ms);
+}
+
+// A local player's controller tells them what happens to their own Link: a
+// hit (harder for a bigger one), going down, getting up again, being lifted,
+// thrown and landing, lifting someone, and a slow heartbeat while low on
+// hearts. Only this computer's players, only on their own pads, and nothing
+// here touches the game.
+static void RumbleForEvents() {
+  static struct {
+    bool known, downed, carried, thrown, carrying;
+    uint8 hp;
+    uint32 beat;
+  } prev[kSessionMaxLocal];
   const SessionStatus *st = Session_GetStatus();
+  uint32 now = SDL_GetTicks();
   for (int i = 0; i < kSessionMaxLocal; i++) {
     int p = st->local_slot[i];
-    uint8 hp = p >= 0 && Inst_IsJoined(p) ? Inst_PlayerHealth(p) : 0;
-    int lost = prev_hp[i] - hp;
-    prev_hp[i] = hp;
-    if (lost <= 0 || lost > 0x40 || p < 0 || !g_bind[i].rumble)
+    if (p < 0 || !Inst_IsJoined(p)) {
+      prev[i].known = false;
       continue;
-    int c = g_bind[i].controller;
-    SDL_GameController *ctl = c < kMaxPads && g_pad_used[c] ? SDL_GameControllerFromInstanceID(g_pad_ids[c]) : NULL;
-    if (ctl) {
-      uint16 strength = (uint16)IntMin(0x5000 + lost * 0x1800, 0xffff);
-      SDL_GameControllerRumble(ctl, strength, strength / 2, 120 + lost * 20);
     }
+    bool thrown, carrying;
+    bool carried = Inst_PlayerCarry(p, &thrown, &carrying) >= 0;
+    bool downed = Inst_PlayerDowned(p);
+    uint8 hp = Inst_PlayerHealth(p);
+    if (prev[i].known && g_bind[i].rumble) {
+      int lost = prev[i].hp - hp;
+      if (downed && !prev[i].downed)
+        Rumble(i, 0xffff, 0xc000, 600);              // down
+      else if (!downed && prev[i].downed)
+        Rumble(i, 0x2000, 0x7000, 250);              // up again
+      else if (!downed && lost > 0 && lost <= 0x40)
+        Rumble(i, (uint16)IntMin(0x5000 + lost * 0x1800, 0xffff), (uint16)IntMin(0x2800 + lost * 0xc00, 0xffff),
+               120 + lost * 20);                     // hurt
+      else if (thrown && !prev[i].thrown)
+        Rumble(i, 0x5000, 0x3000, 120);              // thrown
+      else if (!thrown && prev[i].thrown)
+        Rumble(i, 0x7000, 0x1000, 90);               // landed
+      else if (carried && !prev[i].carried)
+        Rumble(i, 0x1800, 0x2800, 80);               // lifted
+      else if (carrying && !prev[i].carrying)
+        Rumble(i, 0x3000, 0x1000, 80);               // lifting someone
+      // Low on hearts (as the game beeps for it): a heartbeat.
+      int c = IntMin(link_health_capacity >> 3, 20);
+      int limit = c < 8 ? 9 : c < 15 ? 17 : 25;
+      if (!downed && hp < limit && hp < link_health_capacity && now - prev[i].beat > 1400) {
+        Rumble(i, 0x2400, 0, 70);
+        prev[i].beat = now;
+      }
+    }
+    prev[i].known = true;
+    prev[i].downed = downed, prev[i].carried = carried, prev[i].thrown = thrown, prev[i].carrying = carrying;
+    prev[i].hp = hp;
   }
 }
 

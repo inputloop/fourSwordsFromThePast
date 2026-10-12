@@ -8,6 +8,7 @@
 #include "features.h"
 #include "mp.h"
 #include "instance.h"
+#include "snes/ppu.h"
 #include "randomizer.h"
 #include "hd2d.h"
 #include "session.h"
@@ -988,7 +989,7 @@ static void ScreenBindings() {
     bp->deadzone = (uint8)IntMin(IntMax(bp->deadzone + (a == kAct_Left ? -5 : 5), 5), 90);
     g_ui.dirty_settings = true;
   }
-  Item("Rumble when hurt", OnOff(bp->rumble));
+  Item("Rumble", OnOff(bp->rumble));
   if (Act() != kAct_None) {
     bp->rumble = !bp->rumble;
     g_ui.dirty_settings = true;
@@ -1620,6 +1621,66 @@ static void DrawMiniMap(const UiView *view) {
   }
 }
 
+static bool LowHealth(int hp, int cap);
+static void DrawTextFit(int x, int y, const char *s, uint32 col, int max_w);
+
+// Three players on this computer in three worlds: the fourth quarter of the
+// window shows the whole team. Both overworld maps with everybody's dot, and
+// for each player their hearts, where they are and whether they are down.
+static void DrawTeamPanel(int qx, int qy, int qw, int qh) {
+  enum { kMap = 96 };
+  ShadeRect(qx, qy, qw, qh);
+  DrawText(qx + (qw - TextWidth("TEAM")) / 2, qy + 4, "TEAM", 0xf8d878);
+  int gap = (qw - 2 * kMap) / 3;
+  for (int dark = 0; dark < 2; dark++) {
+    const uint32 *img = WorldMapImage(dark);
+    int mx = qx + gap + dark * (kMap + gap), my = qy + 16;
+    if (!img)
+      continue;
+    // (The overworld is the middle 256x256 of the 512x512 map picture.)
+    for (int y = 0; y < kMap; y++)
+      for (int x = 0; x < kMap; x++)
+        FillRect(mx + x, my + y, 1, 1, img[(128 + y * 256 / kMap) * 512 + 128 + x * 256 / kMap]);
+    DrawText(mx + 2, my + kMap + 2, dark ? "DARK WORLD" : "LIGHT WORLD", 0xb8c8f8);
+    for (int p = kMpMaxPlayers - 1; p >= 0; p--) {
+      InstPlace pl;
+      if (!Inst_PlayerPlace(p, &pl) || pl.space >= 0x10000 || ((pl.space & 0x40) != 0) != dark)
+        continue;
+      int dx = (pl.x / 16) * kMap / 256, dy = (pl.y / 16) * kMap / 256;
+      if (dx >= 2 && dx < kMap - 2 && dy >= 2 && dy < kMap - 2)
+        DrawDot(mx + dx, my + dy, Inst_PlayerDowned(p) ? 0xa0a0a0 : Mp_PlayerColorRgb(p), false);
+    }
+  }
+  SessionPlayer seats[kMpMaxPlayers];
+  Session_GetPlayers(seats);
+  int y = qy + 16 + kMap + 14;
+  int cap = link_health_capacity;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!Inst_IsJoined(p))
+      continue;
+    char name[24], where[32], buf[64];
+    if (Session_IsNetplay() && seats[p].name[0])
+      snprintf(name, sizeof(name), "P%d %.8s", p + 1, seats[p].name);
+    else
+      snprintf(name, sizeof(name), "P%d", p + 1);
+    DrawText(qx + 6, y, name, Mp_PlayerColorRgb(p));
+    int hp = Inst_PlayerHealth(p);
+    if (Inst_PlayerDowned(p)) {
+      DrawText(qx + 70, y, "DOWN", 0xffffff);
+    } else {
+      DrawHeart(qx + 70, y - 1, 2, LowHealth(hp, cap) && (SDL_GetTicks() / 300 & 1) ? 0xffffff : 0xf04060);
+      snprintf(buf, sizeof(buf), (hp & 7) >= 4 ? "%d.5/%d" : "%d/%d", hp / 8, cap / 8);
+      DrawText(qx + 80, y, buf, 0xffffff);
+    }
+    if (seats[p].state == kSeat_Reconnecting)
+      snprintf(where, sizeof(where), "reconnecting");
+    else
+      LocationName(p, where, sizeof(where));
+    DrawTextFit(qx + 112, y, where, 0xb8c8f8, qw - 118);
+    y += 12;
+  }
+}
+
 static void DrawMiniMaps() {
   if (main_module_index == 0x14 || main_module_index == 0x1a)
     return;
@@ -1674,6 +1735,47 @@ static void DrawSeedNotice() {
   DrawText(x + 4, y + 3, buf, 0xffe080);
 }
 
+// An 8x8 tile of the HUD layer (2 bits per pixel) as the game would draw it,
+// from video memory and the palette: word is a tilemap entry.
+static void DrawHudTile(int x, int y, uint16 word) {
+  const Ppu *ppu = g_zenv.ppu;
+  const uint16 *t = &g_zenv.vram[(ppu->bgLayer[2].tileAdr + (word & 0x3ff) * 8) & 0x7fff];
+  int pal = (word >> 10) & 7;
+  for (int r = 0; r < 8; r++) {
+    uint16 row = t[word & 0x8000 ? 7 - r : r];
+    for (int c = 0; c < 8; c++) {
+      int b = word & 0x4000 ? c : 7 - c;
+      int v = (row >> b & 1) | (row >> (b + 8) & 1) << 1;
+      if (v)
+        FillRect(x + c, y + r, 1, 1, SnesColor(ppu->cgram[pal * 4 + v]));
+    }
+  }
+}
+
+// Each player's selected item, as the HUD's item box would show it for them
+// (worked out again when it changes, and twice a second for counts).
+static struct { uint8 item; bool ok; uint32 when; uint16 tiles[4]; } g_icons[kMpMaxPlayers];
+
+static bool PlayerIcon(int p, uint16 tiles[4]) {
+  uint8 item = Inst_PlayerItem(p);
+  uint32 now = SDL_GetTicks();
+  if (item != g_icons[p].item || now - g_icons[p].when > 500) {
+    g_icons[p].item = item;
+    g_icons[p].when = now;
+    g_icons[p].ok = item && Inst_PlayerItemIcon(p, g_icons[p].tiles);
+  }
+  memcpy(tiles, g_icons[p].tiles, sizeof(g_icons[p].tiles));
+  return g_icons[p].ok;
+}
+
+// Low on hearts, the way the game beeps for it (fewer than 1, 2 or 3 hearts
+// with more containers).
+static bool LowHealth(int hp, int cap) {
+  int c = IntMin(cap >> 3, 20);
+  int limit = c < 8 ? 9 : c < 15 ? 17 : 25;
+  return hp < limit && hp < cap;
+}
+
 static void DrawCornerHud() {
   if (Inst_NumJoined() < 2 || main_module_index < 6 || main_module_index == 0x14 || main_module_index == 0x1a)
     return;
@@ -1681,38 +1783,56 @@ static void DrawCornerHud() {
   int hearts = IntMin(IntMax(cap / 8, 1), 20);
   int per_row = 10;
   int rows = (hearts + per_row - 1) / per_row;
-  int panel_w = IntMax(18 + IntMin(hearts, per_row) * 8, 72);  // (room for "DOWN" and its bar)
-  int panel_h = 5 + rows * 8;  // hearts, then the magic meter
+  // Online, each corner shows the player's name instead of P1-P4 (the
+  // color says which player it is).
+  SessionPlayer seats[kMpMaxPlayers];
+  Session_GetPlayers(seats);
+  bool names = Session_IsNetplay();
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!Inst_IsJoined(p))
       continue;
+    char label[12];
+    if (names && seats[p].name[0])
+      snprintf(label, sizeof(label), "%.6s", seats[p].name);
+    else
+      snprintf(label, sizeof(label), "P%d", p + 1);
+    int lw = TextWidth(label) + 5;
+    uint16 icon[4];
+    bool has_icon = !Inst_PlayerDowned(p) && PlayerIcon(p, icon);
+    int panel_w = IntMax(lw + 2 + IntMin(hearts, per_row) * 8, lw + 56);  // (room for "DOWN" and its bar)
+    panel_w += 18;  // the item
+    int panel_h = IntMax(5 + rows * 8, 17);  // hearts, then the magic meter; the item is 16 high
     bool right = p & 1, bottom = p >= 2;
     int x = right ? g_cv.width - panel_w - 1 : 1;
     int y = bottom ? g_cv.height - panel_h - 1 : 1;
     ShadeRect(x, y, panel_w, panel_h);
-    char label[4];
-    snprintf(label, sizeof(label), "P%d", p + 1);
     DrawText(x + 2, y + 2 + (rows - 1) * 4, label, Mp_PlayerColorRgb(p));
+    int hx = x + lw;
+    if (has_icon)
+      for (int i = 0; i < 4; i++)
+        DrawHudTile(x + panel_w - 17 + (i & 1) * 8, y + 1 + (i >> 1) * 8, icon[i]);
     if (Inst_PlayerDowned(p)) {
-      DrawText(x + 18, y + 2, "DOWN", 0xffffff);
+      DrawText(hx, y + 2, "DOWN", 0xffffff);
       // A heart at the end: A would send a teammate a heart now.
       bool heart = Inst_PlayerCanSendHeart(p);
-      int bar = panel_w - 46 - (heart ? 10 : 0);
+      int bar = panel_w - 18 - (hx + 28 - x) - (heart ? 10 : 0);
       int w = bar * Inst_PlayerReviveCtr(p) / kMpReviveFrames;
-      FillRect(x + 44, y + 4, bar, 3, 0x303030);
-      FillRect(x + 44, y + 4, w, 3, Mp_PlayerColorRgb(p));
+      FillRect(hx + 26, y + 4, bar, 3, 0x303030);
+      FillRect(hx + 26, y + 4, w, 3, Mp_PlayerColorRgb(p));
       if (heart)
-        DrawHeart(x + panel_w - 9, y + 1, 2, 0xf04060);
+        DrawHeart(x + panel_w - 27, y + 1, 2, 0xf04060);
       continue;
     }
     int hp = Inst_PlayerHealth(p);
+    // Low on hearts: they flash, for this player only.
+    uint32 color = LowHealth(hp, cap) && (SDL_GetTicks() / 300 & 1) ? 0xffffff : Mp_PlayerColorRgb(p);
     for (int i = 0; i < hearts; i++) {
       int fill = hp >= (i + 1) * 8 ? 2 : hp >= i * 8 + 4 ? 1 : 0;
-      DrawHeart(x + 16 + (i % per_row) * 8, y + 1 + (i / per_row) * 8, fill, Mp_PlayerColorRgb(p));
+      DrawHeart(hx + (i % per_row) * 8, y + 1 + (i / per_row) * 8, fill, color);
     }
-    int bar_w = panel_w - 18, magic = IntMin(Inst_PlayerMagic(p), 128);
-    FillRect(x + 16, y + panel_h - 4, bar_w, 2, 0x303030);
-    FillRect(x + 16, y + panel_h - 4, bar_w * magic / 128, 2, 0x40c840);
+    int bar_w = panel_w - (hx - x) - 20, magic = IntMin(Inst_PlayerMagic(p), 128);
+    FillRect(hx, y + panel_h - 4, bar_w, 2, 0x303030);
+    FillRect(hx, y + panel_h - 4, bar_w * magic / 128, 2, 0x40c840);
   }
 }
 
@@ -1917,6 +2037,8 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   DrawPings();
   DrawNameTags();
   DrawMiniMaps();
+  if (g_nviews == 3)
+    DrawTeamPanel(g_views[0].w, g_views[0].h, g_views[0].w, g_views[0].h);
   DrawCornerHud();
   DrawNotifications();
   DrawMenu();

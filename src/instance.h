@@ -115,6 +115,13 @@ typedef struct InstPing {
 } InstPing;
 bool Inst_PlayerPing(int p, InstPing *out);
 bool Inst_PlayerDowned(int p);
+// The HUD item box tiles for player p's selected item (false: none), and
+// which item that is (hud_cur_item).
+bool Inst_PlayerItemIcon(int p, uint16 tiles[4]);
+uint8 Inst_PlayerItem(int p);
+// Who holds player p over their head (-1: nobody); whether p flies from a
+// throw, and whether p holds someone.
+int Inst_PlayerCarry(int p, bool *thrown, bool *carrying);
 bool Inst_PlayerCanSendHeart(int p);  // downed, and A would send a teammate a heart
 uint8 Inst_PlayerReviveCtr(int p);
 // The player whose world p's screen shows: p, or while p is a ghost in a

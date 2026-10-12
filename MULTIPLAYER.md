@@ -73,8 +73,13 @@ Players can drop in and drop out at any time.
   of them once you have the map), then the full screen map, then no map.
 - **Hearts and magic are personal.** The four corners show P1 (top left), P2
   (top right), P3 (bottom left) and P4 (bottom right), each with a small magic
-  bar under the hearts. Heart containers raise everyone's maximum. The HUD's
-  magic meter shows the magic of the player whose screen it is.
+  bar under the hearts, and the item that player has on Y (as their item box
+  would show it). Online the corners show the players' names. When a player
+  is low on hearts, their hearts flash, the game's low-health beep sounds
+  (for any standing Link of the world, not only the one the camera follows),
+  and their own controller beats like a heart. Heart containers raise
+  everyone's maximum. The HUD's magic meter shows the magic of the player
+  whose screen it is.
 - **Lift and throw.** Face a teammate right next to you and press A to lift
   them over your head; press A again to throw them about four tiles the way
   you face, in an arc like a knockback (walls still stop them). The one being carried
@@ -113,8 +118,10 @@ Players can drop in and drop out at any time.
   with any kind of color blindness (bluish green, orange, blue, reddish
   purple), everywhere: tunics, corner HUD, arrows and tags.
 - **Name tags**: *Multiplayer > Name tags* shows a small P1-P4 over each Link.
-- **Rumble**: a player's controller rumbles when their Link is hurt (harder
-  for bigger hits). Turn it off per player in *Controls* (*Rumble when hurt*).
+- **Rumble**: each player's own controller tells them what happens to their
+  Link: hurt (harder for bigger hits), down, up again, lifted, thrown and
+  landing, lifting someone, and a heartbeat while low on hearts. Turn it off
+  per player in *Controls* (*Rumble*).
 - **Free roaming (default).** Everybody goes wherever they want. Players who
   are close together share a screen. A player who walks (mostly) out of view or
   through a door, stairs or a pit on their own continues in a world of their
@@ -123,7 +130,10 @@ Players can drop in and drop out at any time.
   then, players in the same room or screen still see each other walking
   around. Players on the same
   computer in different places get a split screen (side by side for two,
-  2x2 for three or four). Netplay players always see their own Link.
+  2x2 for three or four). With three, the fourth quarter shows the team:
+  both overworld maps with everybody's dot, and each player's hearts,
+  whether they are down, and where they are. Netplay players always see
+  their own Link.
   - Progress is shared between the worlds right away: items, rupees, bombs,
     arrows, keys, opened chests and doors, defeated bosses, pendants and
     crystals. Room contents (enemies, pots, switches) are per world until the

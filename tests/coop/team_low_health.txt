@@ -1,0 +1,24 @@
+# The low-health beep is for the whole team: it sounds when any standing
+# Link of a world is low on hearts, not only the one the camera follows.
+# (Whose hearts are low flashes in the corners, and each player's own
+# controller beats like a heart.) A downed teammate doesn't beep. The beep
+# timer (4ca) only counts while someone is low.
+load 2
+run 30
+join 2
+run 60
+clearsprites
+# Everybody full: quiet.
+expect_ram_counts 4ca 40 0
+# P2 (not the leader) low on hearts: beeping.
+hp 2 6
+expect_ram_counts 4ca 40 1
+# Back up: quiet again.
+hp 2 40
+run 2
+expect_ram_counts 4ca 40 0
+# A ghost has no hearts but doesn't beep.
+down 2
+run 5
+expect_downed 2
+expect_ram_counts 4ca 40 0

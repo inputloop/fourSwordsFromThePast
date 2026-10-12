@@ -139,13 +139,17 @@ A carried teammate stays on top through the trips its carrier makes: doors, stai
 
 **Ping markers.** The Ping button is bit 12 of a player's input word, a bit the SNES pad doesn't have; the mod's input reading strips it before the game's own joypad code runs, so Link never reacts to it. Because it is part of the inputs that netplay already sends and checks, a ping costs nothing extra online. At the end of every frame (`Mp_HandlePings`) each world looks at the players whose Link is in it: a release after a short tap places a "look here" marker 24 pixels in front of the Link, holding for 20 frames places a "help" marker at the Link (a downed player's tap does too), with a half-second wait before the next one. The marker (where, which area or room, kind, frames left) is stored in the world's multiplayer state, so it is rolled back, saved and compared like the rest of the game, and every computer draws the same thing. The overlay (`DrawPings`) shows each marker to every pane in the same overworld, dungeon or house: rings that grow out from the spot while it's on screen, the arrow from the teammate arrows when it isn't, and a small square on the mini map. A marker stops showing once its world has left the area or room it was placed in.
 
-**Split screen.** If two or more players on the same computer are in different worlds, the window shows each world side by side (2 players) or in a 2×2 grid (3 or 4). Online players always see their own world. The sound comes from the world of the first player on that computer.
+**Split screen.** If two or more players on the same computer are in different worlds, the window shows each world side by side (2 players) or in a 2×2 grid (3 or 4). Online players always see their own world. The sound comes from the world of the first player on that computer. With three players the fourth quarter would be empty, so it shows the team instead (`DrawTeamPanel`): the light and dark world maps, shrunk from the game's own map, with a dot for every player on the overworld, and a line per player with their hearts, whether they are down or reconnecting, and where they are (a dungeon by its name, a big area of the overworld such as Kakariko Village, or "indoors").
 
 ## Health, ghosts, reviving and game over
 
 Each player has their own hearts, but nobody dies alone. A player who runs out of hearts becomes a ghost until a teammate revives them.
 
 **Hearts.** Current health is part of each player's Link context, so it is personal. Heart containers raise everyone's maximum, because the maximum lives in the shared inventory. The game's own heart meter is hidden in co-op; instead each player's hearts are drawn in a corner: P1 top left, P2 top right, P3 bottom left, P4 bottom right.
+
+**What's in a corner.** Besides the hearts and magic, each corner shows the item that player has on Y. It is the real item box picture: for a moment that player's state is swapped in and the game's own HUD code (`Hud_RefreshIcon`) works out the 2x2 tiles it would draw, everything is put back, and the overlay draws those tiles from video memory with the game's palette (`Mp_ItemIconTiles`, worked out again when the item changes and twice a second for counts). Online the corners show the players' names. A player low on hearts (below the same line at which the game beeps) gets flashing hearts. The game's low-health beep runs inside the simulation, so it can't be per player; it now sounds when any standing Link of the world is low, not only the one in RAM (`Mp_OtherLinkBelow`), and the flashing corner says whose hearts it is.
+
+**Rumble.** Each player's own controller tells them what happens to their own Link: a hit (harder for a bigger one), going down, getting up again, being lifted, being thrown and landing, lifting someone, and a slow heartbeat while low on hearts. After every frame the game's state is compared with the frame before for each player on this computer (`RumbleForEvents`); nothing about it is part of the game, so online it is only ever felt on the computer of the player it is about.
 
 **Going down.** Normally, losing your last heart starts the death scene. In co-op the mod catches that moment (`Mp_OnFatalDamage`). If any other player is still standing, in any world, the player becomes a **ghost** instead:
 
@@ -338,7 +342,7 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 
 ## How it is tested and built
 
-The mod has 102 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 103 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -355,6 +359,7 @@ The mod has 102 automatic tests that play the game with no window, by following 
 - the randomizer: 5,000 seeds are checked to be beatable and to contain exactly the original items, and real chests and the uncle are opened in the game,
 - teamwork: throwing a teammate over a pit and a ledge (the test paints pit and ledge tiles into a room), lifting a heavy rock together, a ghost sending a heart, a floor switch held by a teammate, hookshotting to a teammate over pits, ping markers, and a teammate carried in and out of a dungeon entrance, a house door and down a ledge (still held each time, and drawn whole while it blinks),
 - room codes decode back exactly (also typed loosely) and mistyped ones are refused,
+- the low-health beep sounding for a teammate who isn't the leader, and not for a ghost,
 - the world map opened and closed with 2D-HD on and off, drawn every frame into a buffer exactly as big as the window's (this caught a crash with the OpenGL output),
 - the polish pass: a Link frozen by a sprite walks again, carrying a teammate through exits and merges, leaving and rejoining (hearts kept, nothing stale), five open menus at once, room flags kept across an exit, the dam staying per world, the item box always showing the leader's item, enemies a teammate killed staying dead across a merge, the group camera (walking together, walking away, dungeon bounds, tethers, text boxes, area edges, menus handing the lead back, rejoining on the way in), and every rewritten story line fitting the text box,
 - the 2D-HD look: a dark room is lit by the filter, and a Link in a doorway stays hidden unless see-through is on,

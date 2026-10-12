@@ -51,6 +51,8 @@
 //   expect_near <p> <x> <y>  player p is within 4 pixels of x,y
 //   expect_camx <p> <x> / expect_camy <p> <y>  the camera of player p's world
 //   expect_ram <hexaddr> <hexval> / expect_pram <p> <hexaddr> <hexval>  a RAM byte / a byte of p's own state
+//   expect_ram_not <hexaddr> <hexval>  a RAM byte isn't that
+//   expect_ram_counts <hexaddr> <frames> <0|1>  run that many frames: the byte changes (1) or stays (0)
 //   expect_sees <a> <b> / expect_not_sees <a> <b>  player a's screen shows player b, who is in another world
 //   expect_drawn_right <a> <b>  player b (from another world) is drawn on a's screen where b really is
 //   expect_bg3hofs <x>  the HUD layer's horizontal scroll (after drawing)
@@ -64,6 +66,7 @@
 // Pictures:
 //   shot <file.ppm>     render the current frame
 //   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
+//   splitshot3 <file.ppm> <p> <q> <r>  three players' worlds in a 2x2 window, the team panel in the fourth quarter
 //   expect_shot <name> [max % of pixels that may differ] [channel tolerance]  compare with tests/baseline/<name>.ppm
 //   benchdraw <n>       times n frames drawn (with the current 2D-HD setting)
 //   drawrun <n>         run n frames, drawing each into a buffer exactly the size the renderer asks for (fails on an overrun)
@@ -813,6 +816,26 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       WritePpm(arg1, width * 2, height, wide, width * 2);
       free(wide);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "splitshot3")) {
+      // splitshot3 <file.ppm> <p> <q> <r>: three players' worlds in a 2x2
+      // window as on one computer (the fourth quarter shows the team)
+      int r0 = Inst_Current(), ps[3] = { PlayerArg(arg2), PlayerArg(arg3), PlayerArg(arg4) };
+      uint32 *quad = calloc(width * 2 * height * 2 * 4, 1);
+      UiView uv[3];
+      g_mp_local_mask = 0;
+      for (int v = 0; v < 3; v++) {
+        Inst_Switch(Inst_ViewOfPlayer(ps[v]));
+        uint32 *dst = quad + (v & 1) * width + (v >> 1) * height * width * 2;
+        Hd2d_DrawFrame((uint8 *)dst, width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7, v);
+        uv[v] = (UiView){ (v & 1) * width, (v >> 1) * height, width, height, ps[v] };
+        g_mp_local_mask |= 1 << ps[v];
+      }
+      Inst_Switch(r0);
+      Ui_SetViews(uv, 3);
+      Ui_Draw((uint8 *)quad, width * 2 * 4, width * 2, height * 2, 1);
+      WritePpm(arg1, width * 2, height * 2, quad, width * 2);
+      free(quad);
+      printf("wrote %s\n", arg1);
     } else if (!strcmp(cmd, "groupcam")) {
       // groupcam <0|1>: the camera of a shared world follows the players' middle (1) or the leader (0)
       g_mp_group_camera = atoi(arg1);
@@ -1310,10 +1333,26 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: P%s's camera x is %d, expected %s at frame %d\n", arg1, BG2HOFS_copy2, arg2, frame);
         g_failures++;
       }
-    } else if (!strcmp(cmd, "expect_ram")) {
+    } else if (!strcmp(cmd, "expect_ram_counts")) {
+      // expect_ram_counts <hexaddr> <frames> <0|1>: the byte changes (1) or
+      // stays (0) over that many frames
+      int a = strtol(arg1, NULL, 16);
+      int before = g_ram[a];
+      bool changed = false;
+      for (int n = atoi(arg2); n > 0; n--, frame++) {
+        Inst_RunFrame(held);
+        changed |= g_ram[a] != before;
+      }
+      if (changed != (atoi(arg3) != 0)) {
+        printf("FAIL: ram %s %s over %s frames at frame %d\n", arg1, changed ? "changed" : "stayed", arg2, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_ram") || !strcmp(cmd, "expect_ram_not")) {
+      // expect_ram <hexaddr> <hexval> / expect_ram_not <hexaddr> <hexval>
       int v = g_ram[strtol(arg1, NULL, 16)];
-      if (v != strtol(arg2, NULL, 16)) {
-        printf("FAIL: ram %s is %02x, expected %s at frame %d\n", arg1, v, arg2, frame);
+      bool is = v == strtol(arg2, NULL, 16);
+      if (is != !strcmp(cmd, "expect_ram")) {
+        printf("FAIL: ram %s is %02x, expected %s%s at frame %d\n", arg1, v, is ? "not " : "", arg2, frame);
         g_failures++;
       }
     } else if (!strcmp(cmd, "expect_near")) {

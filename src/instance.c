@@ -1315,6 +1315,38 @@ bool Inst_PlayerDowned(int p) {
   return i >= 0 && MpOf(i)->p[p].downed;
 }
 
+bool Inst_PlayerItemIcon(int p, uint16 tiles[4]) {
+  int i = Inst_OfPlayer(p), r = g_cur;
+  if (i < 0)
+    return false;
+  Inst_Switch(i);
+  bool ok = Mp_ItemIconTiles(p, tiles);
+  Inst_Switch(r);
+  return ok;
+}
+
+uint8 Inst_PlayerItem(int p) {
+  int i = Inst_OfPlayer(p), r = g_cur;
+  if (i < 0)
+    return 0;
+  Inst_Switch(i);
+  uint8 v = *Mp_PlayerRam(p, 0x202);  // hud_cur_item
+  Inst_Switch(r);
+  return v;
+}
+
+int Inst_PlayerCarry(int p, bool *thrown, bool *carrying) {
+  int i = Inst_OfPlayer(p);
+  *thrown = *carrying = false;
+  if (i < 0)
+    return -1;
+  const MpState *m = MpOf(i);
+  *thrown = m->thrown[p] != 0;
+  for (int q = 0; q < kMpMaxPlayers; q++)
+    *carrying |= q != p && m->carried_by[q] == p + 1;
+  return m->carried_by[p] - 1;
+}
+
 bool Inst_PlayerCanSendHeart(int p) {
   int i = Inst_OfPlayer(p);
   return i >= 0 && MpOf(i)->p[p].downed && MpOf(i)->ghost_cooldown[p] == 0;

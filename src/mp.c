@@ -1640,6 +1640,34 @@ static bool g_mp_hud_swapped;
 // The HUD's item box shows the leader's Y item. On a screen that belongs to
 // another player, show that player's own item instead (drawing only: the
 // game's memory is put back right after).
+// Is a standing Link other than the one in RAM below this health? (The
+// low-health beep is for everybody in the world.)
+bool Mp_OtherLinkBelow(uint8 limit) {
+  if (!Mp_Active())
+    return false;
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    if (p != g_mp.resident && Mp_IsAlive(p) && Mp_PlayerHealth(p) < limit && Mp_PlayerHealth(p) < link_health_capacity)
+      return true;
+  return false;
+}
+
+// The HUD's item box (2x2 tilemap words) as the HUD would draw it for
+// player p's selected item. Display only: everything is put back.
+bool Mp_ItemIconTiles(int p, uint16 out[4]) {
+  if (!g_mp.p[p].joined || !*Mp_PlayerRam(p, 0x202))  // hud_cur_item: none
+    return false;
+  static uint8 saved[0x20000];
+  memcpy(saved, g_ram, sizeof(saved));
+  MpState mp = g_mp;
+  Mp_SwapTo(p);
+  Hud_RefreshIcon();
+  for (int i = 0; i < 4; i++)
+    out[i] = hud_tile_indices_buffer[(1 + (i >> 1)) * 32 + 5 + (i & 1)];
+  memcpy(g_ram, saved, sizeof(saved));
+  g_mp = mp;
+  return true;
+}
+
 static void Mp_ShowViewersItem() {
   g_mp_hud_swapped = false;
   if (!Mp_Active() || (main_module_index != 7 && main_module_index != 9))
