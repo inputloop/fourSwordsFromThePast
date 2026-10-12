@@ -1,0 +1,28 @@
+# Opening and closing the world map, drawn every frame the way the game
+# draws one screen (into a buffer exactly as big as the renderer asks for),
+# with 2D-HD on and off. The HD world map is drawn at 4x, but not on the
+# frames where the screen is still blanked: drawing those at 4x wrote far
+# past the buffer, which crashed the game with the OpenGL output.
+load 2
+run 30
+hd2d 1
+hold 1 X
+drawrun 2
+hold 1 -
+drawrun 90
+expect_module 14
+hold 1 X
+drawrun 2
+hold 1 -
+drawrun 40
+hold 1 X
+drawrun 2
+hold 1 -
+drawrun 90
+expect_module 9
+hd2d 0
+hold 1 X
+drawrun 2
+hold 1 -
+drawrun 90
+expect_module 14

@@ -582,7 +582,10 @@ void Hd2d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int 
   }
   Ppu *ppu = g_zenv.ppu;
   int w = 256 + ppu->extraLeftRight * 2, h = (render_flags & kPpuRenderFlags_Height240) ? 240 : 224;
-  bool mode7 = ppu->mode == 7 && (render_flags & kPpuRenderFlags_4x4Mode7);
+  // The HD world map: drawn at 4x exactly when the PPU says so (the buffer
+  // is only that big then: not while the screen is still blanked, nor with
+  // the old renderer).
+  bool mode7 = PpuGetCurrentRenderScale(ppu, render_flags) == 4;
   if (!mode7)
     GatherScene(&g_scene, ppu, w, h);
   // In a dark room the PPU draws the room fully lit (no darkness layer) and

@@ -449,6 +449,36 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
         Inst_RunFrame(held);
       }
+    } else if (!strcmp(cmd, "drawrun")) {
+      // drawrun <n>: runs n frames and draws each the way the game does on
+      // one screen: into a buffer exactly as big as the PPU asks for (4x for
+      // the HD world map), with a guard after it. Fails if drawing wrote past
+      // the buffer (the OpenGL output's buffer is exactly that big).
+      for (int n = atoi(arg1); n > 0; n--, frame++) {
+        Inst_RunFrame(held);
+        int home = Inst_Current();
+        Inst_Switch(Inst_ViewOfPlayer(view));
+        int scale = PpuGetCurrentRenderScale(g_zenv.ppu, render_flags);
+        size_t px = (size_t)width * scale * height * scale, guard = 4096;
+        uint32 *buf = malloc((px + guard) * 4);
+        for (size_t i = px; i < px + guard; i++)
+          buf[i] = 0xdeadbeef;
+        g_mp_local_mask = 1 << view;
+        Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+        Hd2d_DrawFrame((uint8 *)buf, width * scale * 4, render_flags, 0);
+        Ui_Draw((uint8 *)buf, width * scale * 4, width * scale, height * scale, scale);
+        size_t bad = 0;
+        for (size_t i = px; i < px + guard; i++)
+          bad += buf[i] != 0xdeadbeef;
+        free(buf);
+        Inst_Switch(home);
+        if (bad) {
+          printf("FAIL: drawing frame %d (module %d/%d, scale %d) wrote past the frame buffer\n", frame,
+                 main_module_index, submodule_index, scale);
+          g_failures++;
+          break;
+        }
+      }
     } else if (!strcmp(cmd, "shot")) {
       g_mp_local_mask = 1 << view;
       Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
