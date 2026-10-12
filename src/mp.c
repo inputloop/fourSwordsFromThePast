@@ -809,8 +809,61 @@ void Mp_PreAncilla(int k) {
 // from Link's own graphics, which are only uploaded for the leader. The
 // sprites another player's projectile just added that use those tiles are
 // moved over to that player's own sprite set, which has its own Link tiles.
+// Can a Link stand at x,y (its feet not over a pit or deep water)?
+static bool Mp_SafeGround(uint16 x, uint16 y, uint8 floor) {
+  static const int8 kFeet[4][2] = { {2, 16}, {13, 16}, {2, 23}, {13, 23} };
+  uint8 saved = sprite_tiletype;  // (GetTileAttribute leaves its result there)
+  bool ok = true;
+  for (int i = 0; i < 4 && ok; i++) {
+    uint16 px = x + kFeet[i][0];
+    uint8 t = GetTileAttribute(floor, &px, y + kFeet[i][1]);
+    ok = !(t == 0x08 || t == 0x20 || (t >= 0xb0 && t <= 0xbd));
+  }
+  sprite_tiletype = saved;
+  return ok;
+}
+
+// The hookshot latches onto a teammate the way it does onto a block, and
+// its owner is pulled over to them (over pits too, as always), ending
+// beside them, or where they stand when the spot beside them is a pit or
+// deep water. Runs in the owner's context right after its hookshot moved.
+static void Mp_HookTeammate(int k) {
+  int o = g_mp.resident;
+  if (ancilla_type[k] != 0x1f || related_to_hookshot || ancilla_step[k] || hookshot_effect_index != k ||
+      ancilla_item_to_link[k] < 4 || !Mp_IsAlive(o))
+    return;
+  uint16 ax = Ancilla_GetX(k), ay = Ancilla_GetY(k), ox = link_x_coord, oy = link_y_coord;
+  uint8 floor = link_is_on_lower_level;
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    if (q == o || !Mp_IsAlive(q) || g_mp.carried_by[q] || g_mp.thrown[q] || *Mp_PlayerRam(q, 0xEE) != floor)
+      continue;
+    uint16 tx = Mp_PlayerX(q), ty = Mp_PlayerY(q);
+    if ((uint16)(tx + 12 - ax) >= 24 || (uint16)(ty + 20 - ay) >= 28)
+      continue;
+    int dir = ancilla_dir[k] & 3;  // up, down, left, right
+    static const int8 kBesideX[4] = { 0, 0, 16, -16 }, kBesideY[4] = { 16, -16, 0, 0 };
+    uint16 ex = dir >= 2 ? tx + kBesideX[dir] : ox, ey = dir < 2 ? ty + kBesideY[dir] : oy;
+    if (!Mp_SafeGround(ex, ey, floor))
+      ex = dir >= 2 ? tx : ox, ey = dir < 2 ? ty : oy;
+    // The pull heads for the hook plus an offset (kHookshotArrA/B in
+    // player.c), 4 pixels a frame, for as many frames as the hook flew out:
+    // enough of them to get all the way.
+    static const int8 kPullX[4] = { 0, 0, 4, -12 }, kPullY[4] = { -8, -16, 0, 0 };
+    Ancilla_SetXY(k, ex - kPullX[dir], ey - kPullY[dir]);
+    int frames = abs((int16)(dir >= 2 ? ex - ox : ey - oy)) / 4 + 4;
+    if (ancilla_item_to_link[k] < frames)
+      ancilla_item_to_link[k] = frames < 127 ? frames : 127;
+    ancilla_x_vel[k] = ancilla_y_vel[k] = 0;
+    related_to_hookshot = 1;
+    hookshot_effect_index = k;
+    return;
+  }
+}
+
 void Mp_PostAncilla(int k) {
   int owner = g_mp.resident;
+  if (Mp_Active())
+    Mp_HookTeammate(k);
   if (!Mp_Active() || owner == g_mp.leader)
     return;
   MpRenderPlayer *rp = &g_mp_render.p[owner];
@@ -1307,7 +1360,7 @@ static void Mp_FriendlyFireProjectiles() {
     uint8 dmg;
     switch (t) {
     case 0x01: case 0x02: case 0x09: case 0x0B: case 0x0C: dmg = 4; break;
-    case 0x05: case 0x1F: dmg = 2; break;
+    case 0x05: dmg = 2; break;  // (the hookshot latches onto a teammate instead)
     default: continue;
     }
     int owner = g_mp.ancilla_owner[k];

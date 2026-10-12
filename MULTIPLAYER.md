@@ -28,7 +28,7 @@ Players can drop in and drop out at any time.
   (Ctrl+V pastes). Joining downloads the host's game and you appear next to
   the group.
 - **Friendly fire**: toggle it in the Multiplayer screen (the host decides).
-  When on, swords, arrows, rods, boomerangs, the hookshot and bombs hurt
+  When on, swords, arrows, rods, boomerangs and bombs hurt
   teammates.
 - **Free roaming** is always on: nobody ever has to wait for the others or
   head the same way.
@@ -64,6 +64,14 @@ Players can drop in and drop out at any time.
   - A thrown Link flies over pits (about three tiles wide) and over ledges,
     and only falls if it lands in a pit. Throwing someone up a cliff isn't
     possible: in this game a cliff face is a wall.
+- **Hookshot a teammate.** The hookshot latches onto a teammate like onto a
+  block and pulls you over to them, over pits too, ending beside them (or
+  where they stand, if the spot beside them is a pit or deep water). One
+  Link gets thrown across a gap, the others hookshot over to it. It never
+  hurts, even with friendly fire on.
+- **Floor switches count every Link.** Any standing Link holds a pressure
+  plate down, not only the leader: one can stand on it while the others go
+  through the door it opens.
 - **Heavy rocks: lift together.** Two Links are one glove stronger: with a
   teammate next to you holding A, you can lift a rock that needs the next
   glove (no glove: the Power Glove's gray rocks; Power Glove: the Titan's

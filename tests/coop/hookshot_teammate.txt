@@ -1,0 +1,88 @@
+# The hookshot latches onto a teammate like onto a block and pulls its
+# owner over to them, over pits too, ending beside them (or where they
+# stand, when the spot beside them is a pit). It never hurts a teammate,
+# even with friendly fire on. In the Palace of Darkness room 4a.
+#
+# 1. P1 hooks P2 straight across a band of pit tiles.
+load 2
+run 30
+join 2
+run 10
+enter 4a
+run 200
+clearsprites
+poke f342 01
+pos 1 5370 2490
+pos 2 5370 2410
+hold 1 U
+run 6
+hold 1 -
+pram 1 2f 00
+pram 1 202 03
+pram 1 303 0e
+run 60
+clearsprites
+expect_instances 1
+settiles 5352 2456 5399 2479 20
+hold 1 Y
+run 2
+hold 1 -
+run 40
+expect_near 1 5370 2426
+expect_alive 1
+expect_playing 1
+# 2. The spot beside P2 is a pit too: P1 lands where P2 stands.
+load 2
+run 30
+join 2
+run 10
+enter 4a
+run 200
+clearsprites
+poke f342 01
+pos 1 5370 2490
+pos 2 5370 2410
+hold 1 U
+run 6
+hold 1 -
+pram 1 2f 00
+pram 1 202 03
+pram 1 303 0e
+run 60
+clearsprites
+expect_instances 1
+settiles 5352 2436 5399 2463 20
+hold 1 Y
+run 2
+hold 1 -
+run 40
+expect_near 1 5370 2410
+expect_alive 1
+expect_playing 1
+# 3. Sideways, by P2 (not the leader), with friendly fire on: no damage.
+load 2
+run 30
+join 2
+run 10
+enter 4a
+run 200
+clearsprites
+poke f342 01
+ff 1
+pos 1 5400 2436
+pos 2 5320 2436
+pram 2 2f 06
+pram 2 202 03
+pram 2 303 0e
+# (it came in through the door: no longer in the doorway)
+pram 2 6c 00
+run 60
+clearsprites
+expect_instances 1
+hold 2 Y
+run 2
+hold 2 -
+run 40
+expect_near 2 5384 2436
+expect_hp 1 40
+expect_leader 1
