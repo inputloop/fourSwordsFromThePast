@@ -1,0 +1,82 @@
+# A teammate carried through a door, an entrance or exit, or down a ledge
+# stays on the carrier's head. It used to be set down as the trip started
+# and was then put at the carrier's arrival spot, the doorway itself, right
+# on the way back out. And a blinking teammate (just hurt, or just put next
+# to the leader after a door) is drawn whole on alternate frames, not as
+# broken 8x8 pieces.
+#
+# 1. Into the Eastern Palace (two players: the whole world goes) and back
+#    out again, still carried both ways.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3920 1690
+pos 2 3920 1675
+pram 1 2f 00
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+expect_carried 2 1
+hold 1 U
+run 300
+hold 1 -
+run 30
+expect_module 7
+expect_carried 2 1
+expect_near 2 4856 6505
+hold 1 D
+run 200
+hold 1 -
+run 60
+expect_module 9
+expect_carried 2 1
+# 2. Out of Link's house: carried through the door, drawn whole while it
+#    blinks, and back inside, then down the ledge south of the house.
+load 2
+run 30
+join 2
+run 10
+enter 104
+run 300
+clearsprites
+pos 2 2424 8586
+pram 1 2f 02
+run 5
+hold 1 A
+run 2
+hold 1 -
+run 10
+expect_carried 2 1
+hold 1 D
+runcheckdraw 2 125
+hold 1 -
+runcheckdraw 2 20
+clearsprites
+expect_module 9
+expect_carried 2 1
+hold 1 U
+run 150
+hold 1 -
+run 40
+expect_module 7
+expect_carried 2 1
+hold 1 D
+run 230
+clearsprites
+run 30
+hold 1 -
+run 30
+expect_module 9
+expect_carried 2 1
+expect_near 1 2232 2936
+# 3. Setting the teammate down still works after all that.
+pram 1 2f 06
+hold 1 A
+run 2
+hold 1 -
+run 60
+expect_carried 2 0

@@ -313,10 +313,17 @@ void Mp_OnStateLoaded() {
   memcpy(g_mp.ancilla_seen, ancilla_type, 10);
   memcpy(g_mp.sprite_seen_state, sprite_state, 16);
   for (int p = 0; p < kMpMaxPlayers; p++) {
+    // Nobody is held or in the air any more: everybody starts over at the
+    // leader. (A carry otherwise lasts through module changes.)
+    bool held = g_mp.carried_by[p] || g_mp.thrown[p];
+    g_mp.carried_by[p] = 0;
+    g_mp.thrown[p] = 0;
     if (g_mp.p[p].joined && p != g_mp.leader) {
       if (!*Mp_PlayerRam(p, 0xF36D))
         *Mp_PlayerRam(p, 0xF36D) = link_health_current;
       g_mp.p[p].downed = 0;
+      if (held)
+        WORD(*Mp_PlayerRam(p, 0x24)) = 0;
     }
   }
 }
@@ -495,32 +502,57 @@ bool Mp_ResidentIsThrown() {
   return g_mp_coop && g_mp.thrown[g_mp.resident] && link_auxiliary_state == 1;
 }
 
+static void Mp_PlaceCarried();
+
+// Modules a carried Link stays on its carrier's head through: plain
+// gameplay and the trips it makes (doors, stairs, exits and entrances, edge
+// scrolling, falling through a hole, the mirror) and text boxes and menus.
+static bool Mp_CarryGoesAlong() {
+  uint8 m = main_module_index;
+  return m == 6 || m == 7 || m == 8 || m == 9 || m == 14 || m == 15 || m == 16 || m == 17 || m == 21;
+}
+
 static void Mp_HandleCarry() {
   bool stable = Mp_Active() && submodule_index == 0 && (main_module_index == 7 || main_module_index == 9);
   for (int q = 0; q < kMpMaxPlayers; q++)
     if (g_mp.thrown[q] && (!g_mp.p[q].joined || *Mp_PlayerRam(q, 0x4D) != 1))
       g_mp.thrown[q] = 0;  // landed
+  bool any = false;
   for (int q = 0; q < kMpMaxPlayers; q++) {
     int c = g_mp.carried_by[q] - 1;
     if (c < 0)
       continue;
-    // Let go when either one is gone, down or hurt, or the game isn't in
-    // plain gameplay (a transition, a cutscene).
-    if (!stable || !g_mp.p[q].joined || !Mp_IsAlive(c) || g_mp.p[q].downed ||
-        *Mp_PlayerRam(c, 0x4D) != 0 || *Mp_PlayerRam(c, 0x5D) != 0 || *Mp_PlayerRam(q, 0x4D) != 0) {
+    // Let go when either one is gone, down or hurt, or the game does
+    // something else than gameplay and its trips (dying, the ending...).
+    // Through a door, an exit or stairs the carried Link comes along on its
+    // carrier's head: set down at the start of the trip, it was left in the
+    // doorway, right on the way back out.
+    // (Hopping down a ledge, 11-16, or through the mirror, 20, the carrier
+    // takes the carried Link along too.)
+    uint8 cs = *Mp_PlayerRam(c, 0x5D);  // link_player_handler_state
+    bool hopping = cs >= 11 && cs <= 16;
+    bool carrier_busy = cs != 0 && !hopping && cs != 20;
+    bool carrier_hit = *Mp_PlayerRam(c, 0x4D) != 0 && !hopping;  // link_auxiliary_state (2 while hopping)
+    if (!Mp_Active() || !Mp_CarryGoesAlong() || !g_mp.p[q].joined || !Mp_IsAlive(c) || g_mp.p[q].downed ||
+        (stable && (carrier_hit || carrier_busy || *Mp_PlayerRam(q, 0x4D) != 0))) {
       g_mp.carried_by[q] = 0;
       if (g_mp.p[q].joined && *Mp_PlayerRam(q, 0x4D) == 0)
         WORD(*Mp_PlayerRam(q, 0x24)) = 0;  // set down where it is
       continue;
     }
+    any = true;
     // The carried Link can only wriggle free.
     bool b = *Mp_PlayerRam(q, 0xF4) & 0x80;  // filtered_joypad_H: B
     *Mp_PlayerRam(q, 0xF0) = *Mp_PlayerRam(q, 0xF2) = *Mp_PlayerRam(q, 0xF4) = *Mp_PlayerRam(q, 0xF6) = 0;
-    if (b)
+    if (b && stable)
       Mp_Release(q, false);
   }
-  if (!stable)
+  if (!stable) {
+    // On the way: the carried Link moves with its carrier.
+    if (any)
+      Mp_PlaceCarried();
     return;
+  }
   // A Link with a teammate over its head can walk, open the menu and throw
   // (A); no sword, items or dash. (Bits: B 0x80, Y 0x40, Select 0x20, Start
   // 0x10 and the directions in joypad1H_last/filtered_joypad_H; A 0x80, X
@@ -556,9 +588,10 @@ static void Mp_PlaceCarried() {
       continue;
     uint16 x = Mp_PlayerX(c), y = Mp_PlayerY(c);
     uint8 floor = *Mp_PlayerRam(c, 0xEE), dir = *Mp_PlayerRam(c, 0x2F);
+    int16 cz = WORD(*Mp_PlayerRam(c, 0x24));  // the carrier's height (hopping down a ledge)
     WORD(*Mp_PlayerRam(q, 0x22)) = x;
     WORD(*Mp_PlayerRam(q, 0x20)) = y + 1;  // drawn in front of the carrier
-    WORD(*Mp_PlayerRam(q, 0x24)) = kMpCarryHeight;
+    WORD(*Mp_PlayerRam(q, 0x24)) = kMpCarryHeight + (cz > 0 ? cz : 0);
     *Mp_PlayerRam(q, 0xEE) = floor;
     *Mp_PlayerRam(q, 0x2F) = dir;
   }
@@ -1471,7 +1504,15 @@ void Mp_DrawOtherPlayers() {
     for (int i = 0; i < 128; i++)
       oam_buf[i].y = 0xf0;
     g_mp.in_other_update = 1;
+    // A blinking Link (just hurt, or just put next to the leader) is hidden
+    // every other frame. Without the widescreen fixes the game does that by
+    // moving its sprites past the right edge with the 9th x bit, which the
+    // x recomputed below undoes: the Link showed as broken 8x8 pieces. The
+    // widescreen way hides them below the screen instead.
+    uint16 features = enhanced_features0;
+    enhanced_features0 |= kFeatures0_WidescreenVisualFixes;
     LinkOam_MainOne();
+    enhanced_features0 = features;
     g_mp.in_other_update = 0;
     // The game's Link drawing only handles a Link near the screen; for one
     // off to the side it gets the 9th bit of the sprites' x wrong, and they

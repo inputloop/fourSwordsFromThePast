@@ -61,7 +61,8 @@ Players can drop in and drop out at any time.
   them over your head; press A again to throw them about four tiles the way
   you face, in an arc like a knockback (walls still stop them). The one being carried
   can wriggle free with B. Getting hurt, or either player going down, drops
-  the carried Link.
+  the carried Link. The carried Link comes along through doors, stairs,
+  entrances and exits and down ledges, still over your head.
   - A thrown Link flies over pits (about three tiles wide) and over ledges,
     and only falls if it lands in a pit. Throwing someone up a cliff isn't
     possible: in this game a cliff face is a wall.

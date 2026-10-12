@@ -1294,6 +1294,39 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: P%d has %d health, expected %s\n", p + 1, Mp_PlayerHealth(p), arg2);
         g_failures++;
       }
+    } else if (!strcmp(cmd, "runcheckdraw")) {
+      // runcheckdraw <p> <n>: runs n frames; player p (not its world's leader)
+      // must be drawn whole every frame: its head and body as 16x16 sprites
+      // (a blinking Link is left out on alternate frames, not cut to 8x8).
+      int p = PlayerArg(arg1);
+      for (int n = atoi(arg2); n > 0; n--, frame++) {
+        Inst_RunFrame(held);
+        int home = Inst_Current();
+        SwitchToPlayer(p);
+        const MpRenderPlayer *rp = &g_mp_render.p[p];
+        int bad = 0;
+        for (int i = 0; i < rp->count; i++) {
+          uint8 tile = rp->oam[i * 2 + 1] & 0xff;
+          if ((tile == 0x00 || tile == 0x02) && !(rp->high[i] & 2))
+            bad++;
+        }
+        Inst_Switch(home);
+        if (bad) {
+          printf("FAIL: P%d drawn with %d shrunken body pieces at frame %d\n", p + 1, bad, frame);
+          g_failures++;
+          break;
+        }
+      }
+    } else if (!strcmp(cmd, "expect_carried")) {
+      // expect_carried <p> <carrier|0>: p is held over the carrier's head (0: by nobody)
+      int p = PlayerArg(arg1), c = atoi(arg2) - 1;
+      SwitchToPlayer(p);
+      int by = Inst_OfPlayer(p) >= 0 ? g_mp.carried_by[p] - 1 : -1;
+      if (by != c) {
+        printf("FAIL: P%d is carried by %s%d, expected %s%d at frame %d\n", p + 1, by < 0 ? "nobody " : "P",
+               by + 1, c < 0 ? "nobody " : "P", c + 1, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "expect_downed")) {
       int p = PlayerArg(arg1);
       if (!Inst_IsJoined(p) || !Inst_PlayerDowned(p)) {
