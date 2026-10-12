@@ -1,0 +1,21 @@
+# Group camera: the leader walking away from a standing teammate no longer
+# shoves the teammate off the edge into a world of its own after half a
+# screen; the camera keeps the pair's middle in view and they stay together
+# well past that.
+load 3
+run 30
+join 2
+run 10
+pos 1 300 3800
+pos 2 250 3800
+cam 170 3688
+run 30
+clearsprites
+expect_instances 1
+hold 1 R
+run 115
+hold 1 -
+run 10
+expect_instances 1
+expect_same 1 2
+expect_near 1 472 3800

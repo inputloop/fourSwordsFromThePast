@@ -637,12 +637,15 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
   if ((MpOf(a)->merge_grace && HasAlive(a)) || (MpOf(b)->merge_grace && HasAlive(b)))
     return false;
   // Only once the cameras are nearly in the same place, so nobody's view
-  // jumps. (A lone player's camera closes in on the group's by itself, see
-  // Inst_NeighbourCamera, so for one the jump can be kept really small.)
-  int nb = 0;
-  for (int p = 0; p < kMpMaxPlayers; p++)
+  // jumps. (A lone player's camera closes in on the other world's by itself
+  // while both play on, see Inst_NeighbourCamera, so with one of them alone
+  // the jump can be kept really small, whichever side it is on.)
+  int na = 0, nb = 0;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    na += MpOf(a)->p[p].joined && !MpOf(a)->p[p].downed && !MpOf(a)->away[p];
     nb += MpOf(b)->p[p].joined && !MpOf(b)->p[p].downed && !MpOf(b)->away[p];
-  int tol = nb == 1 && va->playing ? 12 : 48;
+  }
+  int tol = (na == 1 || nb == 1) && va->playing && vb->playing ? 12 : 48;
   if (abs((int16)(va->cam_x - vb->cam_x)) > tol || abs((int16)(va->cam_y - vb->cam_y)) > tol)
     return false;
   Inst_Switch(b);
