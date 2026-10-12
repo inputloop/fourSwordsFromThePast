@@ -82,6 +82,8 @@ InstSnapshot *Inst_SnapshotNew();
 void Inst_SnapshotFree(InstSnapshot *s);
 void Inst_SnapshotSave(InstSnapshot *s);
 void Inst_SnapshotLoad(const InstSnapshot *s);
+// Test instrumentation: prints the sprite tables of every world in s.
+void Inst_SnapshotPrintSprites(const InstSnapshot *s);
 // false: frames don't send their sound to the audio thread (frames that are
 // simulated again after a rollback were already heard).
 void Inst_SetAudioOutput(bool on);

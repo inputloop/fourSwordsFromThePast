@@ -1,0 +1,55 @@
+# Netplay combat over a slow link (300 ms each way, the lead needs to top a round trip plus the host's patience) (run together with net_combat_slow_client.txt):
+# both players fight waves of soldiers that are spawned inside the simulation
+# at fixed session frames on both machines (atframe). The client predicts
+# ahead and rolls back; the worlds must stay in sync (no resync), nobody's own
+# Link may be moved by a guess (the host must always get the client's buttons
+# in time: no own corrections) and no enemy may come back after dying.
+netsim 300 60 5
+inputdelay 2
+load 2
+poke f35c 2
+# waves (session frames; both scripts list the same ones)
+atframe 420 clearsprites
+atframe 421 spawn 41 1 24
+atframe 421 spawn 41 1 -24
+atframe 421 spawn 41 2 24
+atframe 421 spawn 41 2 -24
+atframe 900 spawn 41 1 32
+atframe 900 spawn 41 2 -32
+atframe 900 spawn 41 1 -40
+atframe 1380 spawn 41 2 24
+atframe 1380 spawn 41 1 -24
+atframe 1380 spawn 41 2 40
+atframe 1860 spawn 41 1 24
+atframe 1860 spawn 41 2 -24
+dumpevery 1
+host 47485
+tick 300
+expect_players 2
+trackkills 1
+tick 150
+hold 1 B
+tick 30
+hold 1 LB
+tick 40
+hold 1 -
+tickwander 300 11
+hold 1 B
+tick 40
+tickwander 400 12
+hold 1 RB
+tick 40
+hold 1 B
+tick 30
+tickwander 400 13
+hold 1 B
+tick 60
+tickwander 400 14
+hold 1 -
+tick 200
+trackkills 0
+netstats
+status
+expect_resyncs 0
+expect_own_corrections 0
+expect_resurrections 6

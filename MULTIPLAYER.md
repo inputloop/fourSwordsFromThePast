@@ -222,7 +222,12 @@ frames gives the same game everywhere.
   it is meant for and sends it ahead of time (each one 8 times, against packet
   loss). The host tells each client how early its inputs arrive, and the client
   runs a little faster or slower so they arrive 1-3 frames before the host
-  needs them. So the host almost never has to guess a client's buttons.
+  needs them. So the host almost never has to guess a client's buttons. On a
+  slow link that needs a long lead: a client may run up to 90 frames ahead,
+  and the host sends as many frames per packet as fit (about 95), so the
+  stream keeps up with a round trip of over a second. (Before, 32 frames per
+  packet and 48 of lead let a slow client fall behind; the host then guessed
+  its buttons and its kills were undone.)
 - **Clients predict and roll back.** A client doesn't wait for the host: it
   runs ahead using its own buttons right away and guesses that everyone else
   keeps holding what they held. Each predicted frame's state is kept in memory
@@ -232,8 +237,9 @@ frames gives the same game everywhere.
   that are simulated again aren't played twice.
 - **Corrections are smoothed.** When a rollback moves another player's Link,
   it slides there over a few frames instead of jumping (`g_mp_draw_offset`,
-  drawing only). The Link that leads a world isn't smoothed, since the camera
-  follows it.
+  drawing only). So does your own in the rare case a rollback moves it (a
+  teammate's real action changed what an enemy did to you). The Link that
+  leads a world isn't smoothed, since the camera follows it.
 - **Input delay.** Online, button presses take effect `InputDelay` frames
   later (default 2, about 33 ms; set it in the Multiplayer menu). Every
   computer then learns everyone's buttons 2 frames sooner, so guesses are wrong

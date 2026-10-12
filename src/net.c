@@ -72,6 +72,14 @@ static void SimInit() {
   g_sim_rand ^= NowMs();
 }
 
+// Tests: the same as ZELDA3_NETSIM, from a script (before any socket is opened).
+void Net_SetSim(int delay_ms, int jitter_ms, int loss_percent) {
+  g_sim_delay = delay_ms < 0 ? 0 : delay_ms;
+  g_sim_jitter = jitter_ms;
+  g_sim_loss = loss_percent;
+  g_sim_rand ^= NowMs();
+}
+
 bool Net_Init() {
 #ifdef _WIN32
   static bool inited;

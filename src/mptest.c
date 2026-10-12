@@ -71,9 +71,15 @@
 //   waitplayers <n>     tick until n players are in the game (max 15s)
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
 //   inputdelay <frames> online input delay
+//   netsim <delay ms> <jitter ms> <loss %>  simulate a bad link (before host/connect), like ZELDA3_NETSIM
+//   atframe <f> spawn <hextype> <p> [dx] / atframe <f> clearsprites  done inside the simulation at session frame f (the same on every machine)
+//   dumpevery <n>       print the confirmed state (hash, sprites, players) every n frames: tests/cmpdump.py compares two machines
+//   trackkills <0|1>    count the viewed world's kills, and sprites brought back by rollbacks (1 starts, 0 prints)
+//   netstats            rollback / misprediction counters
 //   localjoin <i> / localleave <i>
 //   resetcounters       zero the netplay statistics (resyncs, rollbacks, own corrections)
 //   expect_players <n> / expect_resyncs <n> / expect_own_corrections <n>
+//   expect_resurrections <n>  at most n sprites of the viewed world came back from the dead in a rollback (trackkills)
 //   corrupt             flip a byte of RAM (to test desync recovery)
 //   lan [n]             search for LAN games (and expect n)
 //   menu                toggle the overlay menu (navigate with hold + tick)
@@ -100,6 +106,7 @@
 #include "select_file.h"
 #include "messaging.h"
 #include "misc.h"
+#include "net.h"
 #include "snes/ppu.h"
 #include "sprite.h"
 #include "overworld.h"
@@ -109,6 +116,72 @@
 #include "upnp.h"
 
 static int g_failures;
+
+// --- test instrumentation ---
+// atframe <f> spawn <hextype> <p> [dx] / atframe <f> clearsprites: done inside
+// the simulation at session frame f, on every machine alike.
+typedef struct Scheduled { uint32 frame; uint8 type, player; int dx; bool clear; } Scheduled;
+static Scheduled g_sched[64];
+static int g_nsched;
+static void SpawnNear(uint8 type, int sp, int dx);
+static void FrameHook(uint32 f) {
+  int r = Inst_Current();
+  for (int i = 0; i < g_nsched; i++) {
+    if (g_sched[i].frame != f)
+      continue;
+    if (g_sched[i].clear) {
+      for (int w = 0; w < kInstMax; w++) {
+        if (!Inst_IsActive(w)) continue;
+        Inst_Switch(w);
+        for (int k = 0; k < 16; k++)
+          sprite_state[k] = 0;
+      }
+    } else if (Inst_OfPlayer(g_sched[i].player) >= 0) {
+      Inst_Switch(Inst_OfPlayer(g_sched[i].player));
+      SpawnNear(g_sched[i].type, g_sched[i].player, g_sched[i].dx);
+    }
+  }
+  Inst_Switch(r);
+}
+// trackkills: per display tick, sprites of the viewed world whose state went
+// 0 -> nonzero (came back) or nonzero -> 0 (died) since the last tick.
+static bool g_track;
+static uint8 g_track_state[16], g_track_type[16];
+static uint16 g_track_x[16], g_track_y[16];
+static int g_track_resurrections, g_track_kills, g_track_rb_resurrections, g_track_rb_unkills, g_track_last_rb;
+static void TrackSprites(int frame, int view) {
+  int r = Inst_Current(), w = Inst_ViewOfPlayer(view);
+  if (!g_track || w < 0)
+    return;
+  const SessionStatus *st = Session_GetStatus();
+  bool rolled = st->rollbacks != g_track_last_rb;
+  g_track_last_rb = st->rollbacks;
+  Inst_Switch(w);
+  for (int k = 0; k < 16; k++) {
+    if (g_track_state[k] && !sprite_state[k])
+      g_track_kills++;
+    // Back from the dead (state 0 -> alive, same type, where it died): only a
+    // rollback does that; the game's own reloads put sprites at their spawn
+    // points with state 8/9 after a screen change.
+    if (!g_track_state[k] && sprite_state[k] && sprite_type[k] == g_track_type[k]) {
+      bool same_spot = abs((int16)(Sprite_GetX(k) - g_track_x[k])) < 24 && abs((int16)(Sprite_GetY(k) - g_track_y[k])) < 24;
+      g_track_resurrections++;
+      if (rolled && same_spot)
+        g_track_rb_resurrections++;
+      printf("[frame %d] %s sprite %d type %02x state %d hp %d at %d,%d (was %d,%d)%s\n", frame, rolled && same_spot ? "RESURRECTED" : "reloaded", k, sprite_type[k],
+             sprite_state[k], sprite_health[k], Sprite_GetX(k), Sprite_GetY(k), g_track_x[k], g_track_y[k], rolled ? " [rollback this tick]" : "");
+    }
+    // Dying (state 1..8, the death animation) and back on its feet (9+): a kill undone.
+    if (g_track_state[k] >= 1 && g_track_state[k] <= 8 && sprite_state[k] >= 9 && sprite_type[k] == g_track_type[k] && rolled) {
+      g_track_rb_unkills++;
+      printf("[frame %d] UNKILLED sprite %d type %02x state %d->%d hp %d at %d,%d [rollback this tick]\n", frame, k, sprite_type[k], g_track_state[k], sprite_state[k], sprite_health[k], Sprite_GetX(k), Sprite_GetY(k));
+    }
+    g_track_state[k] = sprite_state[k];
+    g_track_type[k] = sprite_type[k];
+    g_track_x[k] = Sprite_GetX(k), g_track_y[k] = Sprite_GetY(k);
+  }
+  Inst_Switch(r);
+}
 
 // A player argument "1".."4" as an index; anything else fails the test (and
 // counts as player 1 so the script can go on without touching memory it
@@ -173,6 +246,22 @@ static void SwitchToPlayer(int p) {
   int i = Inst_OfPlayer(p);
   if (i >= 0)
     Inst_Switch(i);
+}
+
+static void SpawnNear(uint8 type, int sp, int dx) {
+  for (int j = 15; j >= 0; j--) {
+    if (sprite_state[j] == 0) {
+      sprite_type[j] = type;
+      sprite_state[j] = 9;
+      SpritePrep_LoadProperties(j);
+      Sprite_SetX(j, Mp_PlayerX(sp) + dx);
+      Sprite_SetY(j, Mp_PlayerY(sp));
+      sprite_floor[j] = *Mp_PlayerRam(sp, 0xEE);  // that player's floor (link_is_on_lower_level)
+      if (player_is_indoors) sprite_N[j] = 0xff; else sprite_N_word[j] = 0xffff;
+      printf("spawned sprite %d type %x\n", j, sprite_type[j]);
+      break;
+    }
+  }
 }
 
 static void PrintStatus(int frame) {
@@ -760,20 +849,46 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
     } else if (!strcmp(cmd, "spawn")) {
       SwitchToPlayer(PlayerArg(arg2));
-      for (int j = 15; j >= 0; j--) {
-        if (sprite_state[j] == 0) {
-          sprite_type[j] = strtol(arg1, NULL, 16);
-          sprite_state[j] = 9;
-          SpritePrep_LoadProperties(j);
-          int sp = PlayerArg(arg2);
-          Sprite_SetX(j, Mp_PlayerX(sp) + (arg3[0] ? atoi(arg3) : 24));
-          Sprite_SetY(j, Mp_PlayerY(sp));
-          sprite_floor[j] = *Mp_PlayerRam(sp, 0xEE);  // that player's floor (link_is_on_lower_level)
-          if (player_is_indoors) sprite_N[j] = 0xff; else sprite_N_word[j] = 0xffff;
-          printf("spawned sprite %d type %x\n", j, sprite_type[j]);
-          break;
+      SpawnNear(strtol(arg1, NULL, 16), PlayerArg(arg2), arg3[0] ? atoi(arg3) : 24);
+    } else if (!strcmp(cmd, "atframe")) {
+      // atframe <f> spawn <hextype> <p> [dx] | atframe <f> clearsprites
+      if (g_nsched < 64) {
+        Scheduled *sc = &g_sched[g_nsched++];
+        memset(sc, 0, sizeof(*sc));
+        sc->frame = strtoul(arg1, NULL, 10);
+        if (!strcmp(arg2, "clearsprites")) {
+          sc->clear = true;
+        } else {
+          sc->type = strtol(arg3, NULL, 16);
+          sc->player = PlayerArg(arg4);
+          sc->dx = arg5[0] ? atoi(arg5) : 24;
         }
+        g_session_frame_hook = &FrameHook;
       }
+    } else if (!strcmp(cmd, "dumpevery")) {
+      g_session_dump_every = atoi(arg1);
+    } else if (!strcmp(cmd, "trackkills")) {
+      g_track = atoi(arg1);
+      if (g_track) {
+        int w = Inst_ViewOfPlayer(view), r = Inst_Current();
+        if (w >= 0) { Inst_Switch(w); memcpy(g_track_state, sprite_state, 16); memcpy(g_track_type, sprite_type, 16); for (int k = 0; k < 16; k++) g_track_x[k] = Sprite_GetX(k), g_track_y[k] = Sprite_GetY(k); Inst_Switch(r); }
+        g_track_last_rb = Session_GetStatus()->rollbacks;
+      } else {
+        printf("trackkills: %d kills, %d sprites back from state 0 (%d of them resurrected where they died in a tick with a rollback), %d kills undone by a rollback\n",
+               g_track_kills, g_track_resurrections, g_track_rb_resurrections, g_track_rb_unkills);
+      }
+    } else if (!strcmp(cmd, "expect_resurrections")) {
+      // expect_resurrections <n>: at most n sprites of the viewed world came back
+      // from the dead (state 0 -> alive at the spot where they died) in a tick
+      // with a rollback since trackkills 1 (see trackkills 0 for the counts)
+      if (g_track_rb_resurrections > atoi(arg1)) {
+        printf("FAIL: %d sprites resurrected by rollbacks, at most %s expected\n", g_track_rb_resurrections, arg1);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "netstats")) {
+      const SessionStatus *st = Session_GetStatus();
+      printf("netstats: rollbacks=%d replayed_frames=%d max_rollback=%d mispredicted=%d b_flips=%d own_corrections=%d resyncs=%d ping=%d predicted=%d margin=%d lead_debt=%d\n",
+             st->rollbacks, st->replayed_frames, st->max_rollback, st->mispredicted, st->b_flips, st->own_corrections, st->resyncs, st->ping_ms, st->predicted, st->margin, st->lead_debt);
     } else if (!strcmp(cmd, "hp")) {
       SwitchToPlayer(PlayerArg(arg1));
       *Mp_PlayerRam(PlayerArg(arg1), 0xF36D) = atoi(arg2);
@@ -797,6 +912,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ui_Update(in, 0);
         if (!Ui_PausesGame())
           frame += Session_Tick(in, g_wanted_zelda_features);
+        TrackSprites(frame, view);
         SDL_Delay(16);
         if (wait && Session_GetStatus()->client_state == 3)
           break;
@@ -895,6 +1011,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
     } else if (!strcmp(cmd, "inputdelay")) {
       Session_SetInputDelay(atoi(arg1));
+    } else if (!strcmp(cmd, "netsim")) {
+      // netsim <delay ms> <jitter ms> <loss %>: simulate a bad link (before host/connect)
+      Net_SetSim(atoi(arg1), atoi(arg2), atoi(arg3));
     } else if (!strcmp(cmd, "tickwander")) {
       // tickwander <n> <seed>: like tick, but local players walk around randomly.
       // Reports Links that jump (move further than they can walk).
@@ -920,6 +1039,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         memcpy(in, held, sizeof(in));
         int ran = Session_Tick(in, g_wanted_zelda_features);
         frame += ran;
+        TrackSprites(frame, view);
         for (int p = 0; p < kMpMaxPlayers && ran > 0 && ran < 4; p++) {
           if (pw[p] < 0 || Inst_OfPlayer(p) != pw[p])
             continue;
@@ -932,8 +1052,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
             local |= Session_GetStatus()->local_slot[i] == p;
           // The leader of a world isn't smoothed (the camera follows it).
           if (d > 12 * ran && stable && main_module_index == pm[p] >> 8 && submodule_index == 0 && *Mp_PlayerRam(p, 0x5D) == 0) {
-            printf("[frame %d] %s P%d by %d (%d,%d)->(%d,%d) in %d frames%s\n", frame, local ? "JUMP" : "remote jump", p + 1, d, px[p], py[p], x, y, ran,
-                   p == g_mp.leader ? " (leader)" : "");
+            printf("[frame %d] %s P%d by %d (%d,%d)->(%d,%d) in %d frames%s [pred=%d margin=%d own=%d rb=%d]\n", frame, local ? "JUMP" : "remote jump", p + 1, d, px[p], py[p], x, y, ran,
+                   p == g_mp.leader ? " (leader)" : "", Session_GetStatus()->predicted, Session_GetStatus()->margin, Session_GetStatus()->own_corrections, Session_GetStatus()->rollbacks);
             if (local)
               jumps++;
             else

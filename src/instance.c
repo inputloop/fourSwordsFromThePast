@@ -1109,6 +1109,24 @@ void Inst_SnapshotLoad(const InstSnapshot *s) {
   UpdateCoopFlag();
 }
 
+void Inst_SnapshotPrintSprites(const InstSnapshot *s) {
+  for (int i = 0; i < kInstMax; i++) {
+    if (!s->active[i])
+      continue;
+    const uint8 *r = s->ram[i];
+    printf(" w%d[m%d/%d L%d]", i, r[0x10], r[0x11], s->mp[i].leader);
+    for (int k = 0; k < 16; k++)
+      if (r[0xDD0 + k])
+        printf(" %d:%02x/%d/%d/%d,%d", k, r[0xE20 + k], r[0xDD0 + k], r[0xE50 + k], r[0xD10 + k] | r[0xD30 + k] << 8, r[0xD00 + k] | r[0xD20 + k] << 8);
+    for (int p = 0; p < kMpMaxPlayers; p++) {
+      if (!s->mp[i].p[p].joined)
+        continue;
+      const uint8 *c = p == s->mp[i].resident ? r + 0x20 : s->mp[i].p[p].ctx;  // the resident's Link is in RAM
+      printf(" P%d:%d,%d%s", p + 1, c[2] | c[3] << 8, c[0] | c[1] << 8, s->mp[i].p[p].downed ? "x" : "");
+    }
+  }
+}
+
 void Inst_SetAudioOutput(bool on) {
   g_audio_output = on;
 }

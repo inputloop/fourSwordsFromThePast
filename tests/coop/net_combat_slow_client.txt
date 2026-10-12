@@ -1,0 +1,54 @@
+# See net_combat_slow_host.txt.
+netsim 300 60 5
+inputdelay 2
+atframe 420 clearsprites
+atframe 421 spawn 41 1 24
+atframe 421 spawn 41 1 -24
+atframe 421 spawn 41 2 24
+atframe 421 spawn 41 2 -24
+atframe 900 spawn 41 1 32
+atframe 900 spawn 41 2 -32
+atframe 900 spawn 41 1 -40
+atframe 1380 spawn 41 2 24
+atframe 1380 spawn 41 1 -24
+atframe 1380 spawn 41 2 40
+atframe 1860 spawn 41 1 24
+atframe 1860 spawn 41 2 -24
+dumpevery 1
+connect 127.0.0.1:47485
+waitplay
+expect_players 2
+# Let the connection settle (the first seconds find the right timing).
+tick 420
+resetcounters
+view 2
+trackkills 1
+hold 2 B
+tick 30
+hold 2 RB
+tick 40
+hold 2 -
+tickwander 300 21
+hold 2 B
+tick 40
+tickwander 400 22
+hold 2 LB
+tick 40
+hold 2 B
+tick 30
+tickwander 400 23
+hold 2 B
+tick 60
+tickwander 300 24
+hold 2 -
+tick 60
+trackkills 0
+netstats
+status
+expect_resyncs 0
+expect_own_corrections 0
+# Deep rollbacks on this link can still undo a kill the host's player decided
+# otherwise (inherent to prediction, a few per fight). Before the frame window
+# fix the host guessed this client's buttons and 28 came back.
+expect_resurrections 6
+disconnect

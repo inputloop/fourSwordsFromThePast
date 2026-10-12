@@ -58,6 +58,12 @@ typedef struct SessionStatus {
   int predicted;  // clients: frames shown ahead of what the host confirmed
   int rollbacks;  // how often a guess about other players was wrong
   int own_corrections;  // clients: frames where the host used other buttons for our own Link
+  // statistics for the tests (netstats)
+  int mispredicted;     // frames whose guessed remote buttons were wrong
+  int b_flips;          // of those, frames where a remote B button was guessed wrong
+  int replayed_frames;  // frames simulated again by rollbacks
+  int max_rollback;     // deepest rollback (frames)
+  int margin, lead_debt;  // clients: the host's latest report of how early our inputs arrive
   char host_addr[48];
   char public_addr[48];
   char message[96];
@@ -100,5 +106,10 @@ bool Session_IsNetplay();
 // Whether local save states / turbo may be used.
 bool Session_AllowsLocalStateChanges();
 bool Session_LastFrameWasReplay();
+// Tests: called inside the simulation before frame f
+// is run (so it is replayed by rollbacks, and runs at the same frame everywhere).
+extern void (*g_session_frame_hook)(uint32 f);
+// Test instrumentation: print the confirmed state every n frames (0: off).
+extern int g_session_dump_every;
 
 #endif  // ZELDA3_SESSION_H_

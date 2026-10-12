@@ -13,17 +13,17 @@
 #include "story.h"
 
 enum {
-  kProtoVersion = 17,
+  kProtoVersion = 18,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
-  kMaxFramesPerPacket = 32,
+  kMaxFramesPerPacket = 200,  // at most; what fits in a packet decides (see HostSend)
   kHashInterval = 60,
   kTimeoutMs = 6000,
   // Client side prediction: the client runs ahead of the frames confirmed by
   // the host, rolling back when a guess about other players' buttons was wrong.
-  kRbSize = 64,          // saved states / inputs of the predicted frames
-  kMaxLead = 48,         // never predict further ahead than this
+  kRbSize = 128,         // saved states / inputs of the predicted frames (> kMaxLead + the input delay)
+  kMaxLead = 90,         // never predict further ahead than this (a round trip plus the host's kMaxWait, or a slow link never settles)
   kInputsPerPacket = 8,  // each input is sent this many times, against packet loss
   kSchedSize = 64,       // host: client inputs stamped for upcoming frames
   kMarginWindow = 20,    // host: report the worst margin of this many packets
@@ -237,9 +237,13 @@ static void ApplyEvents(const MpFrameInput *fi) {
 }
 
 static bool g_last_was_replay;
+void (*g_session_frame_hook)(uint32 f);
+int g_session_dump_every;
 
 static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   ApplyEvents(fi);
+  if (g_session_frame_hook)
+    g_session_frame_hook(g_s.frame + 1);
   Inst_SetFriendlyFire(fi->flags & 1);
   Story_SetEnabled(fi->flags & 4);
   Rando_SetNewGameSetting(fi->flags & 8 ? fi->rando : kRando_Off);
@@ -345,6 +349,11 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
 
 // --- frame encoding ---
 
+// How many bytes WriteFrame writes for fi.
+static int FrameSize(const MpFrameInput *fi) {
+  return kMpMaxPlayers * 2 + 1 + 1 + 4 + (fi->flags & 0x80 ? 4 : 0) + (fi->flags & 8 ? 4 : 0) + fi->nevents * 4;
+}
+
 static void WriteFrame(Writer *w, const MpFrameInput *fi) {
   for (int i = 0; i < kMpMaxPlayers; i++)
     Wr16(w, fi->inputs[i]);
@@ -395,6 +404,7 @@ const SessionStatus *Session_GetStatus() {
 
 void Session_ResetCounters() {
   g_s.st.resyncs = g_s.st.rollbacks = g_s.st.own_corrections = 0;
+  g_s.st.mispredicted = g_s.st.b_flips = g_s.st.replayed_frames = g_s.st.max_rollback = 0;
 }
 
 bool Session_IsNetplay() {
@@ -754,9 +764,19 @@ static void HostSend() {
       continue;
     if (g_s.conf - first >= kRingSize - 1)
       first = g_s.conf - (kRingSize - 2);
-    int count = g_s.conf - first + 1;
-    if (count > kMaxFramesPerPacket)
-      count = kMaxFramesPerPacket;
+    // As many frames as fit in one packet. The frames a client still needs
+    // (from the one it last asked for, which we learn a round trip late) pile
+    // up over a round trip: with fewer per packet than the round trip holds
+    // in frames, the stream can never catch up on a slow link and the client
+    // falls ever further behind.
+    int count = 0, bytes = 3 + 4 + 1 + 4 + 1 + 1;
+    while ((int32)(g_s.conf - (first + count)) >= 0 && count < kMaxFramesPerPacket) {
+      int n = FrameSize(&g_s.ring[(first + count) & (kRingSize - 1)]);
+      if (bytes + n > (int)sizeof(w.buf))
+        break;
+      bytes += n;
+      count++;
+    }
     WBegin(&w, kPkt_Frames);
     Wr32(&w, first);
     Wr8(&w, count);
@@ -813,7 +833,16 @@ static void SaveRollbackState(uint32 f) {
   if (!*sn)
     *sn = Inst_SnapshotNew();
   Inst_SnapshotSave(*sn);
-  g_s.rb_hash[f % kRbSize] = f % kHashInterval == 0 ? Inst_HashState() : 0;
+  g_s.rb_hash[f % kRbSize] = f % kHashInterval == 0 || g_session_dump_every ? Inst_HashState() : 0;
+}
+
+// Test instrumentation: the confirmed state after frame f, as last simulated.
+static void DumpConfirmed(uint32 f) {
+  if (!g_session_dump_every || f % g_session_dump_every || !g_s.rb[f % kRbSize])
+    return;
+  printf("DUMP %u %08x", f, g_s.rb_hash[f % kRbSize]);
+  Inst_SnapshotPrintSprites(g_s.rb[f % kRbSize]);
+  printf("\n");
 }
 
 static bool SameFrameInput(const MpFrameInput *a, const MpFrameInput *b) {
@@ -854,6 +883,7 @@ static void ClientRunFrame(const MpFrameInput *fi) {
 static bool ClientConfirm(uint32 f) {
   const MpFrameInput *fi = &g_s.ring[f & (kRingSize - 1)];
   g_s.conf = f;
+  DumpConfirmed(f);
   if ((fi->flags & 0x80) && g_s.rb_hash[f % kRbSize] != fi->hash) {
     char msg[96];
     snprintf(msg, sizeof(msg), "Out of sync at frame %u, resyncing", f);
@@ -889,12 +919,14 @@ static void GetPlayerPositions(PlayerPositions *pp) {
     pp->world[p] = Inst_PlayerPos(p, &pp->x[p], &pp->y[p]);
 }
 
-// Other players' Links were shown in the wrong place. Rather than jumping,
-// they slide over to where they really are.
+// Links were shown in the wrong place. Rather than jumping, they slide over
+// to where they really are. (Mostly other players' Links; our own buttons are
+// never guessed, but in a fight what a teammate really did can change what an
+// enemy did to our Link, a knockback say, and then ours slides too.)
 static void SmoothCorrections(const PlayerPositions *was) {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     uint16 x, y;
-    if (IsLocalSlot(p) || was->world[p] < 0 || Inst_PlayerPos(p, &x, &y) != was->world[p])
+    if (was->world[p] < 0 || Inst_PlayerPos(p, &x, &y) != was->world[p])
       continue;
     int dx = g_mp_draw_offset[p][0] + (int16)(was->x[p] - x);
     int dy = g_mp_draw_offset[p][1] + (int16)(was->y[p] - y);
@@ -933,10 +965,20 @@ static int ClientTick(const uint16 *local_inputs) {
     GetPlayerPositions(&was);
     Inst_SnapshotLoad(g_s.rb[g_s.conf % kRbSize]);
     g_s.frame = g_s.conf;
+    g_s.st.replayed_frames += end - g_s.conf;
+    if ((int)(end - g_s.conf) > g_s.st.max_rollback)
+      g_s.st.max_rollback = end - g_s.conf;
     // Session slots only change in confirmed frames; restore them too.
     while ((int32)(g_s.frame - end) < 0) {
       uint32 f = g_s.frame + 1;
       if (HostFrameAvailable(f) && f == g_s.conf + 1) {
+        // Was our guess for this frame wrong? (Statistics.)
+        const MpFrameInput *h = &g_s.ring[f & (kRingSize - 1)], *g = &g_s.rb_in[f % kRbSize];
+        if (!SameFrameInput(h, g)) {
+          g_s.st.mispredicted++;
+          for (int p = 0; p < kMpMaxPlayers; p++)
+            if (!IsLocalSlot(p) && ((h->inputs[p] ^ g->inputs[p]) & 1)) { g_s.st.b_flips++; break; }
+        }
         ClientRunFrame(&g_s.ring[f & (kRingSize - 1)]);
         if (!ClientConfirm(f))
           return 0;
@@ -1004,6 +1046,8 @@ static int ClientTick(const uint16 *local_inputs) {
   }
   g_s.st.frames_buffered = behind;
   g_s.st.predicted = g_s.frame - g_s.conf;
+  g_s.st.margin = g_s.margin_known ? g_s.margin : -99;
+  g_s.st.lead_debt = g_s.lead_debt;
   return shown;
 }
 
@@ -1022,12 +1066,21 @@ static int HostTick(const uint16 *local_inputs, uint32 features) {
     uint32 end = g_s.frame;
     Inst_SnapshotLoad(g_s.rb[(g_s.host_rollback - 1) % kRbSize]);
     g_s.frame = g_s.host_rollback - 1;
+    g_s.st.replayed_frames += end - g_s.frame;
+    if ((int)(end - g_s.frame) > g_s.st.max_rollback)
+      g_s.st.max_rollback = end - g_s.frame;
     while ((int32)(g_s.frame - end) < 0) {
       uint32 f = g_s.frame + 1, i = f % kRbSize;
       // Buttons still unknown: the guess follows the frame before.
       for (int p = 0; p < kMpMaxPlayers; p++)
         if (!(g_s.pend_known[i] >> p & 1))
           g_s.pend[i].inputs[p] = g_s.pend[(f - 1) % kRbSize].inputs[p];
+      // (Statistics: was the guess for a client's buttons wrong?)
+      if (memcmp(&g_s.pend[i].inputs, &g_s.rb_in[i].inputs, sizeof(g_s.pend[i].inputs)) != 0) {
+        g_s.st.mispredicted++;
+        for (int p = 0; p < kMpMaxPlayers; p++)
+          if (g_s.pend_owner[i][p] != 0 && ((g_s.pend[i].inputs[p] ^ g_s.rb_in[i].inputs[p]) & 1)) { g_s.st.b_flips++; break; }
+      }
       ClientRunFrame(&g_s.pend[i]);
     }
     g_s.st.rollbacks++;
@@ -1060,6 +1113,19 @@ static int HostTick(const uint16 *local_inputs, uint32 features) {
     }
     if (!ready && g_s.frame - cf < kMaxWait)
       break;
+    bool missing = false;
+    for (int p = 0; p < kMpMaxPlayers; p++)
+      missing |= g_s.pend_owner[ci][p] != 0 && g_s.pend_owner[ci][p] < 0xfe && !(g_s.pend_known[ci] >> p & 1);
+    HostClient *hc1 = FindClientById(1);
+    if (missing && hc1 && !hc1->loading && g_session_dump_every) {
+      // (Tests, with dumpevery on: a frame made final without a client's buttons.)
+      static int n;
+      if (n++ < 80) {
+        HostClient *hc = hc1;
+        printf("WAITED-OUT frame %u (host frame %u, lead %d) known=%x %s silent=%u ms margin_report=%d\n", cf, g_s.frame, (int)(g_s.frame - cf), g_s.pend_known[ci],
+               ready ? "client stalled/loading" : "kMaxWait", hc ? now - hc->last_recv : 0, hc ? hc->margin_report : -99);
+      }
+    }
     MpFrameInput fi = g_s.pend[ci];
     if (cf % kHashInterval == 0) {
       fi.flags |= 0x80;
@@ -1068,6 +1134,7 @@ static int HostTick(const uint16 *local_inputs, uint32 features) {
     g_s.ring[cf & (kRingSize - 1)] = fi;
     g_s.ring_frame[cf & (kRingSize - 1)] = cf;
     g_s.conf = cf;
+    DumpConfirmed(cf);
   }
   g_s.st.predicted = g_s.frame - g_s.conf;
   HostSend();
@@ -1191,6 +1258,9 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     if (echo)
       g_s.st.ping_ms = SDL_GetTicks() - echo;
     if (margin_valid && !r->err) {
+      static int n;
+      if (g_session_dump_every && margin != g_s.margin && n++ < 300)
+        printf("MARGIN report=%d frame=%u conf=%u pred=%d debt=%d cooldown=%d ping=%d\n", margin, g_s.frame, g_s.conf, (int)(g_s.frame - g_s.conf), g_s.lead_debt, g_s.lead_cooldown, g_s.st.ping_ms);
       g_s.margin = margin;
       g_s.margin_known = true;
     }

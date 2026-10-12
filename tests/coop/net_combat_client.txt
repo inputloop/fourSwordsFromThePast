@@ -1,0 +1,52 @@
+# See net_combat_host.txt.
+netsim 150 40 2
+inputdelay 2
+atframe 420 clearsprites
+atframe 421 spawn 41 1 24
+atframe 421 spawn 41 1 -24
+atframe 421 spawn 41 2 24
+atframe 421 spawn 41 2 -24
+atframe 900 spawn 41 1 32
+atframe 900 spawn 41 2 -32
+atframe 900 spawn 41 1 -40
+atframe 1380 spawn 41 2 24
+atframe 1380 spawn 41 1 -24
+atframe 1380 spawn 41 2 40
+atframe 1860 spawn 41 1 24
+atframe 1860 spawn 41 2 -24
+dumpevery 1
+connect 127.0.0.1:47484
+waitplay
+expect_players 2
+# Let the connection settle (the first seconds find the right timing).
+tick 180
+resetcounters
+view 2
+trackkills 1
+hold 2 B
+tick 30
+hold 2 RB
+tick 40
+hold 2 -
+tickwander 300 21
+hold 2 B
+tick 40
+tickwander 400 22
+hold 2 LB
+tick 40
+hold 2 B
+tick 30
+tickwander 400 23
+hold 2 B
+tick 60
+tickwander 300 24
+hold 2 -
+tick 60
+trackkills 0
+netstats
+status
+expect_resyncs 0
+expect_own_corrections 0
+# A kill can be undone by a rollback when the other player did something else than guessed (inherent, rare here); many of them means the host finalized frames with guessed buttons.
+expect_resurrections 6
+disconnect
