@@ -1,0 +1,43 @@
+# Co-op free roaming, dungeon: what P2 killed in ANOTHER room of the dungeon
+# (room 0x51, north of the castle hall 0x61) must still count after P2 comes
+# back to P1's room and the worlds merge: the game's per-room kill record
+# (sprite_where_in_room) is per world, and only the surviving world's copy stays.
+load 2
+run 20
+enter 61
+run 150
+join 2
+run 10
+hold 2 U
+run 400
+hold 2 -
+run 30
+expect_instances 2
+expect_apart 1 2
+view 2
+peek a0 2
+# Exactly what a kill of soldier 1 (N=1) in room 0x51 leaves behind in P2's
+# world: the game's own record, sprite_where_in_room[0x51] |= 1 << 1
+# (Sprite_ManuallySetDeathFlagUW). Nothing else of a kill survives a room change.
+poke 1e022 02
+expect_ram 1e022 02
+# P2 goes back down to P1 (room 0x61): one world again
+hold 2 D
+run 480
+hold 2 -
+pos 2 700 3480
+run 60
+expect_instances 1
+expect_same 1 2
+view 1
+peek a0 2
+expect_ram 1e022 02
+# P1 goes north into room 0x51: soldier 1 must not be loaded there
+hold 1 U
+run 450
+hold 1 -
+run 30
+view 1
+peek a0 2
+status
+expect_sprite_gone 1

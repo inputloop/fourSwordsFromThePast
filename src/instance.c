@@ -512,7 +512,7 @@ typedef struct SpriteKills {
   uint32 key;               // the area or room the kills are of (Mp_AreaKeyPublic)
   bool indoors;
   uint16 room;
-  uint16 room_bits;         // sprite_where_in_room of the room (indoors)
+  uint16 room_bits[0x800];  // sprite_where_in_room: every room of this dungeon visit (indoors)
   uint8 area_bits[0x200];   // overworld_sprite_killed (outdoors)
 } SpriteKills;
 
@@ -520,7 +520,7 @@ static void GatherSpriteKills(SpriteKills *sk) {
   sk->key = Mp_AreaKeyPublic();
   sk->indoors = player_is_indoors != 0;
   sk->room = dungeon_room_index2;
-  sk->room_bits = sk->indoors ? sprite_where_in_room[dungeon_room_index2] : 0;
+  memcpy(sk->room_bits, sprite_where_in_room, sizeof(sk->room_bits));
   memcpy(sk->area_bits, overworld_sprite_killed, sizeof(sk->area_bits));
 }
 
@@ -536,11 +536,15 @@ static void ApplySpriteKills(const SpriteKills *sk) {
     return;
   int killed = 0;
   if (sk->indoors) {
-    sprite_where_in_room[sk->room] |= sk->room_bits;
+    // Same room means same dungeon: the record is cleared on entering one, so
+    // what |from| killed in the dungeon's other rooms is a kill here too.
+    for (int i = 0; i < 0x800; i++)
+      sprite_where_in_room[i] |= sk->room_bits[i];
+    uint16 bits = sk->room_bits[sk->room];
     for (int k = 0; k < 16; k++) {
       if (!sprite_state[k] || sprite_state[k] >= 10 || sign8(sprite_N[k]) || (sprite_defl_bits[k] & 1) || IsPrizeSprite(k))
         continue;
-      if (sk->room_bits & (1 << sprite_N[k]))
+      if (bits & (1 << sprite_N[k]))
         sprite_state[k] = 0, killed++;
     }
   } else {

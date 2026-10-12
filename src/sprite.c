@@ -3687,7 +3687,7 @@ void Dungeon_LoadSprites() {  // 89c290
 // one Sprite_KillSelf put away for being far off-screen, which comes back
 // with the camera. Indoors the game records this itself (sprite_where_in_room).
 // A world merging into another copy of the area takes its kills along
-// (instance.c, MergeSpriteKills).
+// (instance.c, ApplySpriteKills).
 void Sprite_RecordKillOW(int k) {
   uint16 blk = sprite_N_word[k];
   if (player_is_indoors || blk >= 0x1000)
