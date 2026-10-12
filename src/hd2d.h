@@ -28,6 +28,10 @@ extern Hd2dSettings g_hd2d;
 // Draws the current frame like ZeldaDrawPpuFrame, with the 2D-HD look
 // applied when it is enabled. view (0-3) is the split-screen pane; each
 // keeps its own focus, around the players of the world it shows.
+// The widescreen columns on each side every world is drawn with (a display
+// setting: each world's PPU can hold an old value, from before the setting
+// changed or from a snapshot). -1: leave the PPU's own.
+extern int g_draw_extra_left_right;
 void Hd2d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int view);
 
 // (Tests) how many hidden Link pixels the last frame showed through scenery,

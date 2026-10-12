@@ -32,6 +32,9 @@ typedef struct BindProfile {
 extern BindProfile g_bind[kBindPlayers];
 
 void Bindings_SetDefaults();
+// After loading the settings: a Ping key also used by another button (of
+// any player) is taken off Ping.
+void Bindings_ResolvePingClashes();
 void Bindings_ResetPlayer(int player);
 // Swaps A/B and X/Y on the controller (Xbox <-> Nintendo layout).
 void Bindings_SwapFaceButtons(int player);

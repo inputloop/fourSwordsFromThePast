@@ -1,0 +1,14 @@
+# Every world is drawn as wide as the widescreen setting says. A world's
+# video chip can still hold another width (the setting changed while the
+# world existed, or a rollback loaded an older snapshot): drawing with it
+# wrote past the window's buffer.
+load 2
+run 30
+join 2
+run 10
+view 2
+stalewidth 2 71
+drawrun 2
+hd2d 1
+stalewidth 2 71
+drawrun 2

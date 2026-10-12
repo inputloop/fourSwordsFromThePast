@@ -81,6 +81,7 @@ typedef struct HostClient {
   uint32 token;       // lets it back into its seat after losing the connection
   bool parked;        // connection lost: its players stand still, the seat waits
   uint32 parked_at;
+  bool ever_loaded;   // got into the game at least once (only then is a seat kept)
   uint16 ping_ms;     // as the client measures it
   uint32 last_recv;
   // Inputs the client sent ahead of time, for the frame they are meant for.
@@ -158,6 +159,9 @@ static struct {
   bool roster_known;
   uint32 last_roster;               // host: when the clients last got the list
   bool in_host_world;               // clients: the game here is the host's
+  // host: players removed from this game, so they can't knock their way back
+  struct { uint32 token, ip; char name[24]; } kicked[8];
+  int nkicked;
 } g_s;
 
 // --- snapshot compression (byte run length encoding) ---
@@ -353,8 +357,9 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
       // holding what it held (corrected by a rollback when they arrive).
       uint32 f = g_s.frame + 1;
       HostClient *hc = FindClientById(owner);
-      if (hc && hc->parked) {
-        // Lost the connection: its Link stands still until it is back.
+      if (hc && (hc->parked || hc->loading)) {
+        // Lost the connection, or downloading the game (again): its Link
+        // stands still until it plays.
         fi->inputs[p] = 0;
         *known |= 1 << p;
       } else if (hc && hc->sched_frame[f % kSchedSize] == f) {
@@ -488,8 +493,12 @@ static void SetMessage(const char *msg) {
 
 // --- host ---
 
-// (On the UPnP thread.) The public address: from the router, or from a
-// STUN server when the router won't open the port (forward it by hand).
+// The public address: from the router, or from a STUN server when the
+// router won't open the port (forward it by hand). Found on the UPnP thread
+// and handed to the game loop, which takes it while still hosting on that port.
+static SDL_SpinLock g_upnp_lock;
+static struct { bool ready, ok; uint16 port; char addr[48]; } g_upnp_result;
+
 static void UpnpDone(bool ok, const char *external_ip, uint16 port) {
   char buf[48];
   if (external_ip[0])
@@ -498,8 +507,24 @@ static void UpnpDone(bool ok, const char *external_ip, uint16 port) {
     snprintf(buf, sizeof(buf), "your public IP:%u", port);
   else
     snprintf(buf, sizeof(buf), "unknown - forward UDP %u", port);
-  g_s.st.upnp_failed = !ok;
-  memcpy(g_s.st.public_addr, buf, sizeof(buf));
+  SDL_AtomicLock(&g_upnp_lock);
+  memcpy(g_upnp_result.addr, buf, sizeof(buf));
+  g_upnp_result.ok = ok;
+  g_upnp_result.port = port;
+  g_upnp_result.ready = true;
+  SDL_AtomicUnlock(&g_upnp_lock);
+}
+
+static void TakeUpnpResult() {
+  SDL_AtomicLock(&g_upnp_lock);
+  if (g_upnp_result.ready) {
+    g_upnp_result.ready = false;
+    if (g_s.st.mode == kSessionHost && g_s.sock && g_upnp_result.port == Net_LocalPort(g_s.sock)) {
+      memcpy(g_s.st.public_addr, g_upnp_result.addr, sizeof(g_s.st.public_addr));
+      g_s.st.upnp_failed = !g_upnp_result.ok;
+    }
+  }
+  SDL_AtomicUnlock(&g_upnp_lock);
 }
 
 static void SaveRollbackState(uint32 f);
@@ -542,6 +567,10 @@ bool Session_Host(uint16 port, bool use_upnp) {
   Net_AddrToString(&a, g_s.st.host_addr, sizeof(g_s.st.host_addr));
   g_s.st.public_addr[0] = 0;
   g_s.st.upnp_failed = false;
+  g_s.nkicked = 0;
+  SDL_AtomicLock(&g_upnp_lock);
+  g_upnp_result.ready = false;
+  SDL_AtomicUnlock(&g_upnp_lock);
   if (use_upnp) {
     snprintf(g_s.st.public_addr, sizeof(g_s.st.public_addr), "Opening router port...");
     Upnp_MapPortAsync(a.port, &UpnpDone);
@@ -609,20 +638,38 @@ static HostClient *HostFindClient(const NetAddr *a) {
 }
 
 // A player coming back (maybe from another address or port): by the token
-// we gave it, or, after its game was restarted (the token is gone), by name
-// while its seat is waiting or it has gone quiet (we may not have noticed
-// yet that it was gone).
-static HostClient *HostFindReturning(uint32 token, const char *name) {
-  for (int c = 0; c < kSessionMaxClients; c++)
-    if (g_s.clients[c].used && token && g_s.clients[c].token == token)
-      return &g_s.clients[c];
+// we gave it. After its game was restarted the token is gone; then by name,
+// but only when exactly one seat fits: a waiting seat of that name, or one
+// that has gone quiet (we may not have noticed yet that it was gone) from
+// the same internet address. (Everybody is called "Link" by default: a
+// stranger must never get someone else's seat.) *by_name says which it was.
+static HostClient *HostFindReturning(uint32 token, const char *name, const NetAddr *from, bool *by_name) {
+  *by_name = false;
+  if (token) {
+    for (int c = 0; c < kSessionMaxClients; c++)
+      if (g_s.clients[c].used && g_s.clients[c].token == token)
+        return &g_s.clients[c];
+    return NULL;
+  }
   uint32 now = SDL_GetTicks();
+  HostClient *found = NULL;
+  int n = 0;
   for (int c = 0; c < kSessionMaxClients; c++) {
     HostClient *hc = &g_s.clients[c];
-    if (hc->used && (hc->parked || now - hc->last_recv > 1000) && !strcmp(hc->name, name))
-      return hc;
+    if (hc->used && hc->ever_loaded && !strcmp(hc->name, name) &&
+        (hc->parked || (now - hc->last_recv > 1000 && hc->addr.ip == from->ip)))
+      found = hc, n++;
   }
-  return NULL;
+  *by_name = n == 1;
+  return n == 1 ? found : NULL;
+}
+
+// Removed by the host: by token, or by name from the same address.
+static bool HostWasKicked(uint32 token, const char *name, const NetAddr *from) {
+  for (int i = 0; i < g_s.nkicked; i++)
+    if ((token && g_s.kicked[i].token == token) || (g_s.kicked[i].ip == from->ip && !strcmp(g_s.kicked[i].name, name)))
+      return true;
+  return false;
 }
 
 static bool HostClientHasSeat(const HostClient *hc) {
@@ -696,19 +743,37 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     }
     if (r->err)
       return;
-    bool moved = false;
+    if (HostWasKicked(token, name, from)) {
+      static const char kWhy[] = "The host removed you from the game";
+      WBegin(&w, kPkt_Reject);
+      WData(&w, kWhy, sizeof(kWhy));
+      Net_Send(g_s.sock, from, w.buf, w.pos);
+      return;
+    }
+    // A waiting seat found by its old address still has to be the same player.
+    if (hc && hc->parked && token != hc->token && (token || strcmp(name, hc->name)))
+      hc = NULL;
+    bool moved = false, by_name = false;
     if (!hc)
-      moved = (hc = HostFindReturning(token, name)) != NULL;
-    if (hc && (hc->parked || moved || (rejoin && !hc->loading))) {
+      moved = (hc = HostFindReturning(token, name, from, &by_name)) != NULL;
+    if (hc && (hc->parked || moved || rejoin)) {
       // Back after losing the connection: the same seat, and a fresh copy
-      // of the game (it missed what happened meanwhile).
-      char msg[96];
-      snprintf(msg, sizeof(msg), "%s is back", hc->name);
-      SetMessage(msg);
+      // of the game (it missed what happened meanwhile, and a download it
+      // was in the middle of starts over). Its Link stands still until then.
+      if (hc->parked || moved) {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "%s is back", hc->name);
+        SetMessage(msg);
+      }
       hc->addr = *from;
       hc->parked = false;
       hc->margin_count = 0;
       hc->margin_report = -128;
+      // (Found by name: a new token, so an old copy of that game can't take
+      // the seat back.)
+      if (by_name)
+        hc->token = NewToken();
+      memset(hc->sched_frame, 0, sizeof(hc->sched_frame));
       HostStartSnapshot(hc);
     }
     if (!hc) {
@@ -804,6 +869,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
         hc->snap_cursor = hc->snap_have;  // everything went out once: fill the holes
       if (hc->snap_have >= hc->snap_size) {
         hc->loading = false;
+        hc->ever_loaded = true;
         // Measure how early its buttons arrive afresh, from now on.
         hc->margin_count = 0;
         hc->margin_report = -128;
@@ -846,7 +912,7 @@ static void HostSend() {
     if (now - hc->last_recv > kTimeoutMs) {
       // A player in the game keeps the seat for a while; one that never got
       // in (still downloading its first copy) is just dropped.
-      if (HostClientHasSeat(hc))
+      if (hc->ever_loaded && HostClientHasSeat(hc))
         HostParkClient(hc);
       else
         HostDropClient(hc, "timed out");
@@ -1554,9 +1620,10 @@ void Session_Disconnect() {
   // The world we played in as a client is the host's, saves included: it
   // must never be written over our own files. (Our own come back with a
   // reset, see ZeldaReadSram.)
+  // (Hosting a world we got from someone else's game: still not ours.)
   if (was_client)
     g_sram_foreign = true;
-  else
+  else if (!g_sram_foreign)
     g_sram_write_disabled = false;
   memset(g_mp_draw_offset, 0, sizeof(g_mp_draw_offset));
   UpdateLocalSlots();
@@ -1614,6 +1681,7 @@ static void PollSocket(NetSocket *s) {
 }
 
 int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
+  TakeUpnpResult();
   PollSocket(g_s.sock);
   PollSocket(g_s.lan_sock);
   PollSocket(g_s.disc_sock);
@@ -1738,8 +1806,13 @@ bool Session_Kick(int slot) {
   static const char kWhy[] = "The host removed you from the game";
   WBegin(&w, kPkt_Reject);
   WData(&w, kWhy, sizeof(kWhy));
-  for (int i = 0; i < 3 && !hc->parked; i++)
+  for (int i = 0; i < 3; i++)
     Net_Send(g_s.sock, &hc->addr, w.buf, w.pos);
+  // It can't knock its way back in (a lost rejection, or reconnecting).
+  int k = g_s.nkicked < (int)countof(g_s.kicked) ? g_s.nkicked++ : (int)countof(g_s.kicked) - 1;
+  g_s.kicked[k].token = hc->token;
+  g_s.kicked[k].ip = hc->addr.ip;
+  memcpy(g_s.kicked[k].name, hc->name, sizeof(g_s.kicked[k].name));
   HostDropClient(hc, "was removed from the game");
   return true;
 }

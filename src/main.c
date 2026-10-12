@@ -409,7 +409,7 @@ static uint32 CalcRenderFlags() {
 static void ApplyDisplaySettings() {
   bool size_changed = g_snes_width != g_config.extended_aspect_ratio * 2 + 256 ||
                       g_snes_height != (g_config.extend_y ? 240 : 224);
-  g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
+  g_zenv.ppu->extraLeftRight = g_draw_extra_left_right = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
   g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
   g_snes_height = (g_config.extend_y ? 240 : 224);
   g_disp_width = g_snes_width, g_disp_height = g_snes_height;
@@ -435,7 +435,7 @@ int main(int argc, char** argv) {
   LoadLinkGraphics();
 
   ZeldaInitialize();
-  g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
+  g_zenv.ppu->extraLeftRight = g_draw_extra_left_right = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
   g_snes_width = (g_config.extended_aspect_ratio * 2 + 256);
   g_snes_height = (g_config.extend_y ? 240 : 224);
   g_disp_width = g_snes_width, g_disp_height = g_snes_height;
@@ -458,7 +458,7 @@ int main(int argc, char** argv) {
 
   if (argc >= 2 && strcmp(argv[0], "--mptest") == 0) {
     int RunMpTest(const char *script, int width, int height, uint32 render_flags);
-    g_zenv.ppu->extraLeftRight = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
+    g_zenv.ppu->extraLeftRight = g_draw_extra_left_right = UintMin(g_config.extended_aspect_ratio, kPpuExtraLeftRight);
     return RunMpTest(argv[1], g_snes_width, g_snes_height, g_ppu_render_flags);
   }
 
@@ -937,6 +937,7 @@ static void RumbleForEvents() {
     uint8 hp = Inst_PlayerHealth(p);
     if (prev[i].known && g_bind[i].rumble) {
       int lost = prev[i].hp - hp;
+      bool fired = true;
       if (downed && !prev[i].downed)
         Rumble(i, 0xffff, 0xc000, 600);              // down
       else if (!downed && prev[i].downed)
@@ -952,10 +953,18 @@ static void RumbleForEvents() {
         Rumble(i, 0x1800, 0x2800, 80);               // lifted
       else if (carrying && !prev[i].carrying)
         Rumble(i, 0x3000, 0x1000, 80);               // lifting someone
-      // Low on hearts (as the game beeps for it): a heartbeat.
+      else
+        fired = false;
+      // Low on hearts (as the game beeps for it), while playing: a
+      // heartbeat. (Not over an event just felt: a new rumble replaces the
+      // one going on.)
       int c = IntMin(link_health_capacity >> 3, 20);
       int limit = c < 8 ? 9 : c < 15 ? 17 : 25;
-      if (!downed && hp < limit && hp < link_health_capacity && now - prev[i].beat > 1400) {
+      uint8 m = Inst_PlayerModule(p);
+      if (fired) {
+        prev[i].beat = now;
+      } else if (!downed && hp > 0 && hp < limit && hp < link_health_capacity && (m == 7 || m == 9) &&
+                 now - prev[i].beat > 1400) {
         Rumble(i, 0x2400, 0, 70);
         prev[i].beat = now;
       }

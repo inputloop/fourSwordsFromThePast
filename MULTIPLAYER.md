@@ -41,7 +41,8 @@ Players can drop in and drop out at any time.
   Link stands still and their seat is kept for two minutes. Their game says
   "reconnecting" and keeps knocking; once through, it downloads the game again
   and they carry on as the same player. Restarting the game and joining again
-  with the same name works too. After two minutes the seat is given up.
+  with the same name works too (give everybody their own `PlayerName` in
+  `zelda3.ini`). After two minutes the seat is given up.
 - **Keep a copy of the host's game**: when you play in someone else's game
   (also after leaving it), *Multiplayer > Keep a copy in* saves its progress
   into one of your own three files (left/right picks the file; a file in use
@@ -307,12 +308,17 @@ frames gives the same game everywhere.
   stops and it sends hellos with that token every half second. The host,
   after 6 seconds without packets, parks the client: its players keep their
   seats but their buttons are zero (decided by the host, so every computer
-  runs the same), and nobody waits for them. A hello with the token (or,
-  from a restarted game without one, the same name while the seat waits or
-  the old connection has gone quiet) puts the client back into its seat,
-  from whatever address it now has, with a fresh snapshot. After two minutes
-  the host drops the client and its players leave. A kick sends the client a
-  rejection and drops it at once.
+  runs the same), and nobody waits for them (nor for a client downloading
+  the game: its Links stand still too). A hello with the token puts the
+  client back into its seat, from whatever address it now has, with a fresh
+  snapshot. A restarted game has no token: it gets the seat back by its
+  name, but only when exactly one waiting seat has that name (or one gone
+  quiet from the same internet address), and then gets a new token. A
+  stranger who happens to have the same name gets a seat of their own. A
+  client that drops before it ever got into the game is just dropped. After
+  two minutes the host drops the client and its players leave. A kick sends
+  the client a rejection, drops it at once, and refuses it if it knocks
+  again (by token, or by name from the same address).
 - **Player list.** Twice a second the host sends every client the seats:
   name, state, seconds left for a reconnecting player, and each client's own
   measured ping. It is shown in *Players*; nothing in it affects the game.

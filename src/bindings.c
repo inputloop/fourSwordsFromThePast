@@ -62,6 +62,23 @@ void Bindings_ResetPlayer(int p) {
   }
 }
 
+// The Ping button came after the others: its key gives way to any other
+// button of any player that uses the same key (the keyboard is shared), as
+// with a binding line from before it existed.
+void Bindings_ResolvePingClashes() {
+  for (int p = 0; p < kBindPlayers; p++)
+    for (int s = 0; s < kBindSlots; s++) {
+      int32 k = g_bind[p].keys[kBind_Ping][s];
+      for (int q = 0; q < kBindPlayers && k; q++)
+        for (int b = 0; b < kBindButtons && k; b++)
+          for (int t = 0; t < kBindSlots; t++)
+            if (b != kBind_Ping && g_bind[q].keys[b][t] == k) {
+              g_bind[p].keys[kBind_Ping][s] = k = 0;
+              break;
+            }
+    }
+}
+
 void Bindings_SetDefaults() {
   for (int p = 0; p < kBindPlayers; p++)
     Bindings_ResetPlayer(p);

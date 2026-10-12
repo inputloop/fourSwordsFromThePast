@@ -620,5 +620,6 @@ void ParseConfigFile(const char *filename) {
   }
   // Settings saved from the in-game options menu.
   ParseOneConfigFile("zelda3.coop.ini", 0);
+  Bindings_ResolvePingClashes();
   RegisterDefaultKeys();
 }

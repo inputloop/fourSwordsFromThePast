@@ -1,0 +1,7 @@
+# The Ping button is the 13th bindable button, Q for player 1 by default. A
+# controls line from before it existed has 12 columns; if any player's other
+# buttons use Q, Ping gives the key up (the keyboard is shared by everyone).
+expect_keys 1 12 Q
+bindline P2Keys Up,Down,Left,Right,i,j,k,l,u,o,Return,q
+expect_keys 1 12 -
+expect_keys 2 11 Q

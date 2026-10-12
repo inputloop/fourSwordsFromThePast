@@ -261,6 +261,7 @@ static struct {
   bool own_file_used[3];
   bool own_files_read;
   int kick_confirm;       // seat + 1 waiting for a second press
+  int kick_owner;         // ... and the computer in that seat then
 } g_ui;
 
 static bool Item(const char *label, const char *value) {
@@ -614,16 +615,24 @@ static void ScreenPlayers() {
         snprintf(ping, sizeof(ping), "host ");
       snprintf(value, sizeof(value), "%s%s%s", ping, Inst_PlayerDowned(p) ? "DOWN " : "", where);
     }
-    // Hosting: a remote player's line removes them (press twice).
+    // Hosting: a remote player's line removes them (press twice, on the same
+    // player: the question goes away when someone else takes the seat or
+    // the cursor moves on).
     bool kickable = st->mode == kSessionHost && sp->owner != 0;
+    if (g_ui.kick_confirm == p + 1 && (!kickable || sp->owner != g_ui.kick_owner))
+      g_ui.kick_confirm = 0;
     if (kickable) {
       Item(label, g_ui.kick_confirm == p + 1 ? "remove? press again" : value);
-      if (Act() == kAct_Select) {
+      int a = Act();
+      if (g_ui.kick_confirm == p + 1 && g_ui.cursor != g_ui.nlines - 1)
+        g_ui.kick_confirm = 0;
+      if (a == kAct_Select) {
         if (g_ui.kick_confirm == p + 1) {
           Session_Kick(p);
           g_ui.kick_confirm = 0;
         } else {
           g_ui.kick_confirm = p + 1;
+          g_ui.kick_owner = sp->owner;
         }
       }
     } else {
@@ -1440,7 +1449,7 @@ static void DrawPings() {
       char label[12];
       PingLabel(label, sizeof(label), q, pg.kind);
       int sx = (int16)(pg.x - me.cam_x) + extra, sy = (int16)(pg.y - me.cam_y);
-      if (sx < 0 || sx >= view->w || sy < 0 || sy >= view->h) {
+      if (sx < 2 || sx > view->w - 3 || sy < 2 || sy > view->h - 3) {
         DrawEdgeArrow(view, sx, sy, color, label);
         continue;
       }
@@ -1455,7 +1464,7 @@ static void DrawPings() {
       FillRect(px - 1, py - 1, 2, 2, color);
       int tw = TextWidth(label);
       int lx = IntMax(view->x + 1, IntMin(px - tw / 2, view->x + view->w - tw - 1));
-      int ly = py - 28 >= view->y + 1 ? py - 28 : py + 20;
+      int ly = py - 28 >= view->y + 1 ? py - 28 : IntMin(py + 20, view->y + view->h - 9);
       ShadeRect(lx - 1, ly - 1, tw + 2, 9);
       DrawText(lx, ly, label, color);
     }
@@ -1676,7 +1685,7 @@ static void DrawTeamPanel(int qx, int qy, int qw, int qh) {
       snprintf(where, sizeof(where), "reconnecting");
     else
       LocationName(p, where, sizeof(where));
-    DrawTextFit(qx + 112, y, where, 0xb8c8f8, qw - 118);
+    DrawTextFit(qx + 126, y, where, 0xb8c8f8, qw - 132);
     y += 12;
   }
 }
@@ -1735,37 +1744,26 @@ static void DrawSeedNotice() {
   DrawText(x + 4, y + 3, buf, 0xffe080);
 }
 
-// An 8x8 tile of the HUD layer (2 bits per pixel) as the game would draw it,
-// from video memory and the palette: word is a tilemap entry.
-static void DrawHudTile(int x, int y, uint16 word) {
-  const Ppu *ppu = g_zenv.ppu;
-  const uint16 *t = &g_zenv.vram[(ppu->bgLayer[2].tileAdr + (word & 0x3ff) * 8) & 0x7fff];
-  int pal = (word >> 10) & 7;
-  for (int r = 0; r < 8; r++) {
-    uint16 row = t[word & 0x8000 ? 7 - r : r];
-    for (int c = 0; c < 8; c++) {
-      int b = word & 0x4000 ? c : 7 - c;
-      int v = (row >> b & 1) | (row >> (b + 8) & 1) << 1;
-      if (v)
-        FillRect(x + c, y + r, 1, 1, SnesColor(ppu->cgram[pal * 4 + v]));
-    }
-  }
-}
-
 // Each player's selected item, as the HUD's item box would show it for them
-// (worked out again when it changes, and twice a second for counts).
-static struct { uint8 item; bool ok; uint32 when; uint16 tiles[4]; } g_icons[kMpMaxPlayers];
+// in their own world (worked out again when it changes, and twice a second
+// for counts).
+static struct { uint8 item; bool ok; uint32 when; uint32 rgba[16 * 16]; } g_icons[kMpMaxPlayers];
 
-static bool PlayerIcon(int p, uint16 tiles[4]) {
+static bool PlayerIcon(int p) {
   uint8 item = Inst_PlayerItem(p);
   uint32 now = SDL_GetTicks();
   if (item != g_icons[p].item || now - g_icons[p].when > 500) {
     g_icons[p].item = item;
     g_icons[p].when = now;
-    g_icons[p].ok = item && Inst_PlayerItemIcon(p, g_icons[p].tiles);
+    g_icons[p].ok = item && Inst_PlayerItemIcon(p, g_icons[p].rgba);
   }
-  memcpy(tiles, g_icons[p].tiles, sizeof(g_icons[p].tiles));
   return g_icons[p].ok;
+}
+
+static void DrawIcon(int x, int y, const uint32 *rgba) {
+  for (int i = 0; i < 16 * 16; i++)
+    if (rgba[i])
+      FillRect(x + (i & 15), y + (i >> 4), 1, 1, rgba[i] & 0xffffff);
 }
 
 // Low on hearts, the way the game beeps for it (fewer than 1, 2 or 3 hearts
@@ -1788,19 +1786,24 @@ static void DrawCornerHud() {
   SessionPlayer seats[kMpMaxPlayers];
   Session_GetPlayers(seats);
   bool names = Session_IsNetplay();
+  int max_w = (g_cv.width - 3) / 2;  // two panels side by side never overlap
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!Inst_IsJoined(p))
       continue;
     char label[12];
-    if (names && seats[p].name[0])
-      snprintf(label, sizeof(label), "%.6s", seats[p].name);
-    else
-      snprintf(label, sizeof(label), "P%d", p + 1);
-    int lw = TextWidth(label) + 5;
-    uint16 icon[4];
-    bool has_icon = !Inst_PlayerDowned(p) && PlayerIcon(p, icon);
-    int panel_w = IntMax(lw + 2 + IntMin(hearts, per_row) * 8, lw + 56);  // (room for "DOWN" and its bar)
-    panel_w += 18;  // the item
+    int panel_w = 0, lw = 0;
+    // The name if it fits, else P1-P4.
+    for (int k = 0; k < 2; k++) {
+      if (k == 0 && names && seats[p].name[0])
+        snprintf(label, sizeof(label), "%.6s", seats[p].name);
+      else
+        snprintf(label, sizeof(label), "P%d", p + 1);
+      lw = TextWidth(label) + 5;
+      panel_w = IntMax(lw + 2 + IntMin(hearts, per_row) * 8, lw + 56) + 18;  // (room for "DOWN" and its bar; the item)
+      if (panel_w <= max_w)
+        break;
+    }
+    bool has_icon = !Inst_PlayerDowned(p) && PlayerIcon(p);
     int panel_h = IntMax(5 + rows * 8, 17);  // hearts, then the magic meter; the item is 16 high
     bool right = p & 1, bottom = p >= 2;
     int x = right ? g_cv.width - panel_w - 1 : 1;
@@ -1809,8 +1812,7 @@ static void DrawCornerHud() {
     DrawText(x + 2, y + 2 + (rows - 1) * 4, label, Mp_PlayerColorRgb(p));
     int hx = x + lw;
     if (has_icon)
-      for (int i = 0; i < 4; i++)
-        DrawHudTile(x + panel_w - 17 + (i & 1) * 8, y + 1 + (i >> 1) * 8, icon[i]);
+      DrawIcon(x + panel_w - 17, y + 1, g_icons[p].rgba);
     if (Inst_PlayerDowned(p)) {
       DrawText(hx, y + 2, "DOWN", 0xffffff);
       // A heart at the end: A would send a teammate a heart now.

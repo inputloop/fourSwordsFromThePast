@@ -1315,12 +1315,34 @@ bool Inst_PlayerDowned(int p) {
   return i >= 0 && MpOf(i)->p[p].downed;
 }
 
-bool Inst_PlayerItemIcon(int p, uint16 tiles[4]) {
+bool Inst_PlayerItemIcon(int p, uint32 rgba[16 * 16]) {
   int i = Inst_OfPlayer(p), r = g_cur;
   if (i < 0)
     return false;
   Inst_Switch(i);
+  uint16 tiles[4];
   bool ok = Mp_ItemIconTiles(p, tiles);
+  if (ok) {
+    // The four 8x8 tiles of the HUD layer (2 bits per pixel), with this
+    // world's palette (another world may be showing the map's colors).
+    const Ppu *ppu = g_zenv.ppu;
+    for (int t = 0; t < 4; t++) {
+      uint16 word = tiles[t];
+      const uint16 *src = &ppu->vram[(ppu->bgLayer[2].tileAdr + (word & 0x3ff) * 8) & 0x7fff];
+      int pal = (word >> 10) & 7;
+      for (int y = 0; y < 8; y++) {
+        uint16 row = src[word & 0x8000 ? 7 - y : y];
+        for (int x = 0; x < 8; x++) {
+          int b = word & 0x4000 ? x : 7 - x;
+          int v = (row >> b & 1) | (row >> (b + 8) & 1) << 1;
+          uint16 c = ppu->cgram[pal * 4 + v];
+          int rr = c & 31, gg = c >> 5 & 31, bb = c >> 10 & 31;
+          rgba[((t >> 1) * 8 + y) * 16 + (t & 1) * 8 + x] =
+              v ? 0xff000000u | (rr << 3 | rr >> 2) << 16 | (gg << 3 | gg >> 2) << 8 | (bb << 3 | bb >> 2) : 0;
+        }
+      }
+    }
+  }
   Inst_Switch(r);
   return ok;
 }

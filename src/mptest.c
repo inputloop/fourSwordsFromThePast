@@ -70,6 +70,7 @@
 //   expect_shot <name> [max % of pixels that may differ] [channel tolerance]  compare with tests/baseline/<name>.ppm
 //   benchdraw <n>       times n frames drawn (with the current 2D-HD setting)
 //   drawrun <n>         run n frames, drawing each into a buffer exactly the size the renderer asks for (fails on an overrun)
+//   stalewidth <p> <n>  p's world's video chip keeps n widescreen columns per side (drawing must use the setting)
 //   runcheckdraw <p> <n>  run n frames; player p (not its world's leader) must never be drawn with shrunken body pieces
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
@@ -87,7 +88,10 @@
 //   expect_badcode <code>  a mistyped room code is refused
 //   keepcopy <file 1-3> <path>  keep a copy of the game we play in (a client's) in that file of the save at path
 //   expect_save_file <path> <file> <empty|valid|copy>  that file is empty / in use and intact / this game as it is now
+//   expect_saves_blocked <0|1>  our own save file is protected (we play someone else's world)
 //   removefile <path>
+//   bindline <key> <value>  a controls line of the settings file (value without spaces)
+//   expect_keys <p> <button 0-12> <text>  the keys of a button as the Controls screen shows them
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
 //   inputdelay <frames> online input delay
 //   netsim <delay ms> <jitter ms> <loss %>  simulate a bad link (before host/connect), like ZELDA3_NETSIM
@@ -133,6 +137,7 @@
 #include "dungeon.h"
 #include "assets.h"
 #include "session.h"
+#include "bindings.h"
 #include "ui.h"
 #include "upnp.h"
 
@@ -508,6 +513,13 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           break;
         }
       }
+    } else if (!strcmp(cmd, "stalewidth")) {
+      // stalewidth <p> <n>: player p's world's video chip still has n widescreen
+      // columns per side (as from before the setting changed, or a snapshot)
+      int home = Inst_Current();
+      Inst_Switch(Inst_ViewOfPlayer(PlayerArg(arg1)));
+      g_zenv.ppu->extraLeftRight = atoi(arg2);
+      Inst_Switch(home);
     } else if (!strcmp(cmd, "shot")) {
       g_mp_local_mask = 1 << view;
       Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
@@ -1097,6 +1109,29 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       char ip[64];
       bool ok = Upnp_StunPublicIp(arg1, ip, sizeof(ip));
       printf("stun %s: %s\n", arg1, ok ? ip : "no answer");
+    } else if (!strcmp(cmd, "expect_saves_blocked")) {
+      // expect_saves_blocked <0|1>: the game may not write our own save file
+      // (we play in a world from someone else's game)
+      if (g_sram_write_disabled != (atoi(arg1) != 0)) {
+        printf("FAIL: saves %s, expected %s at frame %d\n", g_sram_write_disabled ? "blocked" : "allowed",
+               atoi(arg1) ? "blocked" : "allowed", frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "bindline")) {
+      // bindline <key> <value>: a line of the settings file (no spaces in the
+      // value), then the clean-up done after loading the settings
+      char value[256];
+      snprintf(value, sizeof(value), "%s", arg2);
+      Bindings_ParseConfig(arg1, value);
+      Bindings_ResolvePingClashes();
+    } else if (!strcmp(cmd, "expect_keys")) {
+      // expect_keys <p> <button index> <description>: as the Controls screen shows it
+      char keys[64];
+      Bindings_DescribeKeys(PlayerArg(arg1), atoi(arg2), keys, sizeof(keys));
+      if (strcmp(keys, arg3)) {
+        printf("FAIL: P%s button %s keys are '%s', expected '%s'\n", arg1, arg2, keys, arg3);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "removefile")) {
       remove(arg1);
     } else if (!strcmp(cmd, "keepcopy")) {

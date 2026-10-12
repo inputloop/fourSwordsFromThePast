@@ -575,7 +575,12 @@ static void ApplyLight(uint8 *pixels, size_t pitch, int w, int h) {
   ParallelFor(h, StageMode7Rows);
 }
 
+int g_draw_extra_left_right = -1;
+
 void Hd2d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int view) {
+  // (The window's buffer is as wide as the setting says.)
+  if (g_draw_extra_left_right >= 0)
+    g_zenv.ppu->extraLeftRight = g_draw_extra_left_right;
   if (!g_hd2d.enabled) {
     ZeldaDrawPpuFrame(pixel_buffer, pitch, render_flags);
     return;

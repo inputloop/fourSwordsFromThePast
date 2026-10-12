@@ -43,3 +43,14 @@ expect_message removed
 keepcopy 3 tests/out/keepcopy_sram.dat
 expect_save_file tests/out/keepcopy_sram.dat 3 copy
 expect_save_file tests/out/keepcopy_sram.dat 2 valid
+# Removed means removed: knocking again is refused.
+connect 127.0.0.1:47474
+waitoffline
+expect_message removed
+# Hosting the world we got from that game, then stopping, still leaves our
+# own save file alone.
+expect_saves_blocked 1
+host 47480
+tick 10
+disconnect
+expect_saves_blocked 1
