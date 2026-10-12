@@ -1,0 +1,19 @@
+# Leaving and coming back isn't a free refill: a player gets back the hearts
+# it left with (a ghost comes back with three hearts).
+load 2
+run 30
+join 2
+run 10
+hp 2 2
+leave 2
+run 10
+join 2
+run 2
+expect_hp 2 2
+down 2
+run 5
+leave 2
+run 10
+join 2
+run 2
+expect_hp 2 24

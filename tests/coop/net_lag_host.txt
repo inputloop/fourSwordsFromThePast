@@ -9,3 +9,5 @@ tick 300
 expect_players 2
 tickwander 1500 7
 tick 200
+expect_resyncs 0
+expect_own_corrections 0

@@ -75,8 +75,6 @@ typedef struct HostClient {
   uint8 id;
   char name[24];
   uint32 last_recv;
-  uint16 inputs[kSessionMaxLocal];  // newest inputs
-  uint32 inputs_frame;               // the frame they were stamped for
   // Inputs the client sent ahead of time, for the frame they are meant for.
   uint16 sched[kSchedSize][kSessionMaxLocal];
   uint32 sched_frame[kSchedSize];
@@ -90,14 +88,17 @@ typedef struct HostClient {
   uint8 snap_id;
   uint8 *snap;
   uint32 snap_size;
-  uint32 snap_have;
+  uint32 snap_have;    // the client has everything up to here
+  uint32 snap_cursor;  // sent up to here
 } HostClient;
 
 static struct {
   SessionStatus st;
   NetSocket *sock;
   NetSocket *lan_sock;
+  NetSocket *disc_sock;  // hosting on another port: answers "Find LAN games" on the usual one
   char name[24];
+  char host_name[24];    // clients: whom we play with
   uint32 frame;  // number of frames simulated (clients: including predicted ones)
   uint32 conf;   // frames up to this one are final (host: everyone's input is known)
   MpFrameInput ring[kRingSize];
@@ -131,6 +132,7 @@ static struct {
   int margin;                       // host's latest report of how early our inputs arrive
   bool margin_known;
   int lead_cooldown;
+  int lead_debt;                    // frames still to catch up, a few per tick
   // host prediction: frame f as currently known, which slots' inputs are real
   // (not guessed) and who owned each slot when the frame was built
   MpFrameInput pend[kRbSize];
@@ -273,14 +275,18 @@ static void QueueJoinLeave(MpFrameInput *fi, uint8 owner, uint8 *join_mask, uint
   for (int i = 0; i < kSessionMaxLocal; i++) {
     int slot = FindSlotOf(owner, i);
     if ((*join_mask & (1 << i))) {
+      bool done = slot >= 0;
       if (slot < 0) {
         int s = FindFreeSlot(reserved);
         if (s >= 0 && fi->nevents < kSessionMaxEvents) {
           reserved[s] = 1;
           AddEvent(fi, kSessEv_Join, s, owner, i);
+          done = true;
         }
       }
-      *join_mask &= ~(1 << i);
+      // (No free slot right now: the join waits for one.)
+      if (done)
+        *join_mask &= ~(1 << i);
     }
     if ((*leave_mask & (1 << i))) {
       if (slot >= 0 && fi->nevents < kSessionMaxEvents)
@@ -488,6 +494,9 @@ bool Session_Host(uint16 port, bool use_upnp) {
     SetMessage("Unable to open the network port");
     return false;
   }
+  // Hosting on another port: still answer "Find LAN games" on the usual one.
+  if (Net_LocalPort(g_s.sock) != kSessionPort)
+    g_s.disc_sock = Net_Open(kSessionPort, true);
   g_s.st.mode = kSessionHost;
   g_s.st.my_id = 0;
   HostResetPrediction();
@@ -535,6 +544,7 @@ static void HostStartSnapshot(HostClient *hc) {
   hc->snap = comp.data;
   hc->snap_size = (uint32)comp.size;
   hc->snap_have = 0;
+  hc->snap_cursor = 0;
   hc->snap_id = ++g_s.next_snap_id;
   hc->loading = true;
   hc->need_frame = g_s.conf + 1;
@@ -601,6 +611,17 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
       return;
     }
     if (!hc) {
+      // Room for one more? Players whose join is still queued count too.
+      int pending = 0;
+      for (int c = 0; c < kSessionMaxClients; c++)
+        if (g_s.clients[c].used && (g_s.clients[c].join_mask & 1) && FindSlotOf(g_s.clients[c].id, 0) < 0)
+          pending++;
+      if (Inst_NumJoined() + pending >= kMpMaxPlayers) {
+        WBegin(&w, kPkt_Reject);
+        WData(&w, "Game is full", 13);
+        Net_Send(g_s.sock, from, w.buf, w.pos);
+        return;
+      }
       for (int c = 0; c < kSessionMaxClients && !hc; c++) {
         if (!g_s.clients[c].used) {
           hc = &g_s.clients[c];
@@ -617,9 +638,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
           SetMessage(msg);
         }
       }
-      if (!hc || Inst_NumJoined() >= kMpMaxPlayers) {
-        if (hc)
-          hc->used = false;
+      if (!hc) {
         WBegin(&w, kPkt_Reject);
         WData(&w, "Game is full", 13);
         Net_Send(g_s.sock, from, w.buf, w.pos);
@@ -658,10 +677,6 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
       } else if ((int32)(f - g_s.conf) > 0 && (int32)(f - g_s.frame) <= 0) {
         HostLateInput(hc, f, inputs[k]);
       }
-      if (hc->inputs_frame == 0 || (int32)(f - hc->inputs_frame) > 0) {
-        memcpy(hc->inputs, inputs[k], sizeof(inputs[k]));
-        hc->inputs_frame = f;
-      }
     }
     if (count) {
       // The next frame built is g_s.frame + 1.
@@ -680,6 +695,8 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     if (hc->loading && snap_id == hc->snap_id) {
       if (snap_have > hc->snap_have)
         hc->snap_have = snap_have;
+      else if (hc->snap_cursor >= hc->snap_size)
+        hc->snap_cursor = hc->snap_have;  // everything went out once: fill the holes
       if (hc->snap_have >= hc->snap_size) {
         hc->loading = false;
         // Measure how early its buttons arrive afresh, from now on.
@@ -716,7 +733,11 @@ static void HostSend() {
       Wr8(&w, hc->snap_id);
       Wr32(&w, hc->snap_size);
       Net_Send(g_s.sock, &hc->addr, w.buf, w.pos);
-      for (uint32 i = 0, off = hc->snap_have; i < kChunksPerTick && off < hc->snap_size; i++, off += kChunkSize) {
+      // Each chunk goes out once (not again every tick until it is acknowledged,
+      // which would flood a slow uplink); lost ones are sent again once
+      // everything went out and the acknowledgements stop advancing.
+      uint32 off = hc->snap_cursor > hc->snap_have ? hc->snap_cursor : hc->snap_have;
+      for (uint32 i = 0; i < kChunksPerTick && off < hc->snap_size; i++, off += kChunkSize) {
         uint32 n = hc->snap_size - off < kChunkSize ? hc->snap_size - off : kChunkSize;
         WBegin(&w, kPkt_SnapData);
         Wr8(&w, hc->snap_id);
@@ -725,6 +746,7 @@ static void HostSend() {
         WData(&w, hc->snap + off, n);
         Net_Send(g_s.sock, &hc->addr, w.buf, w.pos);
       }
+      hc->snap_cursor = off;
     }
     // Frames after the snapshot are sent even while loading so they are ready.
     uint32 first = hc->need_frame;
@@ -948,12 +970,21 @@ static int ClientTick(const uint16 *local_inputs) {
   if (adv && g_s.margin_known && g_s.lead_cooldown <= 0) {
     int rtt_frames = g_s.st.ping_ms * 60 / 1000;
     if (g_s.margin < 1) {
-      adv += 1 - g_s.margin < 30 ? 1 - g_s.margin : 30;
+      g_s.lead_debt = 1 - g_s.margin < 30 ? 1 - g_s.margin : 30;
       g_s.lead_cooldown = kMarginWindow + rtt_frames + 4;
     } else if (g_s.margin > 4) {
       adv = 0;
+      g_s.lead_debt = 0;
       g_s.lead_cooldown = kMarginWindow + rtt_frames + 4;
     }
+  }
+  // Catching up is spread over several ticks: one input packet (the newest
+  // kInputsPerPacket frames) must still cover every frame run since the
+  // last one, or the host never hears some of our buttons and waits.
+  if (adv && g_s.lead_debt > 0) {
+    int extra = g_s.lead_debt < 3 ? g_s.lead_debt : 3;
+    adv += extra;
+    g_s.lead_debt -= extra;
   }
   if (g_s.lead_cooldown > 0)
     g_s.lead_cooldown--;
@@ -1062,12 +1093,15 @@ static void ClientFinishSnapshot() {
   memset(g_s.my_in, 0, sizeof(g_s.my_in));
   g_s.margin_known = false;
   g_s.lead_cooldown = 0;
+  g_s.lead_debt = 0;
   memset(g_mp_draw_offset, 0, sizeof(g_mp_draw_offset));
   SaveRollbackState(frame);
   UpdateLocalSlots();
   g_s.st.client_state = 3;
   g_s.want_resync = false;
-  SetMessage("Connected");
+  char msg[64];
+  snprintf(msg, sizeof(msg), "Connected to %s", g_s.host_name[0] ? g_s.host_name : "the host");
+  SetMessage(msg);
 }
 
 static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
@@ -1101,6 +1135,8 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
   g_s.last_recv = SDL_GetTicks();
   if (type == kPkt_Welcome) {
     uint8 id = Rd8(r);
+    RData(r, g_s.host_name, 24);
+    g_s.host_name[23] = 0;
     if (g_s.st.client_state == 1) {
       g_s.st.my_id = id;
       g_s.st.client_state = 2;
@@ -1117,6 +1153,7 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     if (r->err || size > 4 << 20)
       return;
     if (!g_s.snap_known || id != g_s.snap_id) {
+      g_s.want_resync = false;  // the host heard us: stop asking
       free(g_s.snap);
       free(g_s.snap_chunk_have);
       g_s.snap = (uint8 *)malloc(size);
@@ -1242,11 +1279,16 @@ void Session_Disconnect() {
     Net_Close(g_s.sock);
     g_s.sock = NULL;
   }
+  if (g_s.disc_sock) {
+    Net_Close(g_s.disc_sock);
+    g_s.disc_sock = NULL;
+  }
   if (g_s.st.mode == kSessionHost)
     Upnp_UnmapPort();
   // Keep playing locally: remote players drop out.
   int me = g_s.st.mode == kSessionClient ? g_s.st.my_id : 0;
   bool was_playing = g_s.st.mode == kSessionHost || g_s.st.client_state == 3;
+  bool was_client = was_playing && g_s.st.mode == kSessionClient;
   for (int c = 0; c < kSessionMaxClients; c++) {
     free(g_s.clients[c].snap);
     memset(&g_s.clients[c], 0, sizeof(g_s.clients[c]));
@@ -1273,7 +1315,13 @@ void Session_Disconnect() {
   g_s.st.ping_ms = 0;
   g_s.st.host_addr[0] = 0;
   g_s.st.public_addr[0] = 0;
-  g_sram_write_disabled = false;
+  // The world we played in as a client is the host's, saves included: it
+  // must never be written over our own files. (Our own come back with a
+  // reset, see ZeldaReadSram.)
+  if (was_client)
+    g_sram_foreign = true;
+  else
+    g_sram_write_disabled = false;
   memset(g_mp_draw_offset, 0, sizeof(g_mp_draw_offset));
   UpdateLocalSlots();
   free(g_s.snap);
@@ -1316,10 +1364,14 @@ static void PollSocket(NetSocket *s) {
     if (n < 3 || buf[0] != 'Z' || buf[1] != '3')
       continue;
     Reader r = { buf + 3, buf + n, false };
-    if (g_s.st.mode == kSessionHost && s == g_s.sock)
+    if (s == g_s.disc_sock) {
+      if (g_s.st.mode == kSessionHost && buf[2] == kPkt_Discover)
+        HostHandlePacket(&from, &r, buf[2]);
+    } else if (g_s.st.mode == kSessionHost && s == g_s.sock) {
       HostHandlePacket(&from, &r, buf[2]);
-    else
+    } else {
       ClientHandlePacket(&from, &r, buf[2]);
+    }
     if (!g_s.sock && s != g_s.lan_sock)
       break;  // disconnected while handling
   }
@@ -1328,6 +1380,7 @@ static void PollSocket(NetSocket *s) {
 int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
   PollSocket(g_s.sock);
   PollSocket(g_s.lan_sock);
+  PollSocket(g_s.disc_sock);
 
   if (g_s.st.mode == kSessionHost)
     return HostTick(local_inputs, wanted_features);
@@ -1344,8 +1397,10 @@ int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
 
   // Client
   if (SDL_GetTicks() - g_s.last_recv > kTimeoutMs) {
+    int state = g_s.st.client_state;
     Session_Disconnect();
-    SetMessage("Lost connection to the host");
+    SetMessage(state == 1 ? "No answer: check the address and port" :
+               state == 2 ? "Lost the host while downloading" : "Lost connection to the host");
     return 0;
   }
   int run = g_s.st.client_state == 3 ? ClientTick(local_inputs) : 0;

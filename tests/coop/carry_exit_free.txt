@@ -1,0 +1,46 @@
+# Free roaming: a carried teammate comes along through an exit instead of
+# being set down at the door and left behind. With two players the whole
+# world travels; with a third one standing elsewhere the carrier and its
+# passenger get a world of their own.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3920 1690
+pos 2 3920 1675
+pram 1 2f 00
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+hold 1 U
+run 300
+view 1
+expect_module 7
+expect_same 1 2
+hold 1 -
+load 2
+run 30
+join 2
+join 3
+run 10
+clearsprites
+pos 1 3920 1690
+pos 2 3920 1675
+pos 3 3800 1690
+pram 1 2f 00
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+hold 1 U
+run 300
+expect_same 1 2
+expect_apart 1 3
+view 1
+expect_module 7
+view 3
+expect_module 9

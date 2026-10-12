@@ -195,7 +195,8 @@ bool Net_ParseAddr(const char *str, uint16_t default_port, NetAddr *out) {
   char *colon = strrchr(host, ':');
   if (colon) {
     *colon = 0;
-    port = (uint16_t)atoi(colon + 1);
+    int p = atoi(colon + 1);
+    port = p > 0 && p < 65536 ? (uint16_t)p : default_port;  // ("host:" keeps the usual port)
   }
   if (host[0] == 0)
     return false;

@@ -1,54 +1,79 @@
 // Headless scripted test runner for co-op: zelda3 --mptest <script>
 //
-// Script commands, one per line:
-//   load <n>            load reference save chapter n (1..13)
+// One command per line; "#" starts a comment. Numbers are decimal unless
+// marked hex. <p> is a player 1..4. The script fails (MPTEST FAILED) on any
+// expect_* that doesn't hold, an unknown command or key, or a bad player.
+//
+// Game and players:
+//   load <n>            load reference save chapter n (1..13; 2 = outside Link's house)
+//   newgame / loadslot  make a new save file in slot 1 and load it / load slot 1
+//   spoke <hexoff> <hexval>  change a byte of save slot 1 (fixing its checksum)
+//   rando <off|random|hexseed>  randomizer setting for new save files
 //   join <p> / leave <p>
 //   hold <p> <keys>     keys held by player p (B Y s=select S=start U D L R A X l r, "-" for none)
 //   run <frames>
-//   shot <file.ppm>     render the current frame
-//   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
+//   pos <p> <x> <y>     put player p there (no collision check)
+//   hp <p> <health>     set a player's health (1/8 hearts)
+//   pram <p> <hexaddr> <hexval>  change a byte of player p's own Link state
+//   poke <hexaddr> <hexval>  change a RAM byte (shared progress spreads to every world)
+//   peek <hexaddr> [n]  print RAM bytes
+//   receive <hexitem>   the viewed player gets an item, as from a chest
+//   enter <hexroom>     go into a room through the game's first entrance to it
+//   message <hexid>     open a text box
+//   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
+//   clearsprites        remove all enemies
+//   settiles <x0> <y0> <x1> <y1> <hexattr>  (dungeon) make those tiles behave like attr (20: a pit)
+//   down <p> / revive <p>  player p goes down right now / gets up again
+//   setleader <p>       player p leads its world (as if it had opened a door)
 //   ff <0|1>            friendly fire
 //   together <0|1>      1: shared screen with group exits, 0: free roaming (default)
-//   expect_instances <n>  fail unless the players are spread over n worlds
-//   expect_same <p> <q> / expect_apart <p> <q>  players in the same / different worlds
+//   story <0|1> / title <0|1>  the Four Swords opening story / title screen text
+//   hd2d <0|1> [lighting] [see through 0|1]  the 2D-HD look for screenshots
 //   view <p>            later commands without a player (shot, peek, expect_module) use p's world
+//   wander <frames> <seed>  every player walks around randomly and swings the sword
 //   status              print player state
-//   expect_alive <p>    fail unless player p is standing
-//   expect_downed <p>   fail unless player p is down
-//   expect_hp <p> <n>   fail unless player p has n health (1/8 hearts)
-//   clearsprites        remove all enemies
-//   message <hexid>     open a text box
-//   holecheck           verify every overworld fall hole resolves correctly in co-op
-//   expect_module <n>   fail unless the game module is n (7 dungeon, 9 overworld)
-//   peek <hexaddr> [n]  print RAM bytes
-//   newgame             create a save file in slot 1 and load it
-//   enter <hexroom>     go into a room through the game's first entrance to it
-//   spoke <hexoff> <hexval> / loadslot  change a byte of save slot 1 / load slot 1
-//   rando <off|random|hexseed>  randomizer setting for new save files
-//   randocheck <seed> <count> [v]  check that seeds can be beaten (v: print spoilers)
-//   pos <p> <x> <y>     put player p at x,y
-//   poke <hexaddr> <hexval>  change a RAM byte (shared progress spreads to every world)
-//   expect_ram <hexaddr> <hexval>  fail unless the RAM byte has that value
-//   expect_near <p> <x> <y>  fail unless player p is within 4 pixels of x,y
-//   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
-//   hp <p> <health>     set a player's health (1/8 hearts)
+// Checks:
+//   expect_instances <n>  the players are spread over n worlds
+//   expect_same <p> <q> / expect_apart <p> <q>  players in the same / different worlds
+//   expect_module <n>   the game module of the viewed world (7 dungeon, 9 overworld, 14 menus and text)
+//   expect_playing <p>  player p's world is in plain gameplay (not stuck in a transition)
+//   expect_running <p> <frames>  player p's world keeps running for that many frames
+//   expect_leader <p>   player p leads its world (the camera follows it)
+//   expect_alive <p> / expect_downed <p>
+//   expect_hp <p> <n>   player p has n health (1/8 hearts)
+//   expect_near <p> <x> <y>  player p is within 4 pixels of x,y
+//   expect_camx <p> <x> / expect_camy <p> <y>  the camera of player p's world
+//   expect_ram <hexaddr> <hexval> / expect_pram <p> <hexaddr> <hexval>  a RAM byte / a byte of p's own state
+//   expect_sees <a> <b> / expect_not_sees <a> <b>  player a's screen shows player b, who is in another world
+//   expect_drawn_right <a> <b>  player b (from another world) is drawn on a's screen where b really is
+//   expect_bg3hofs <x>  the HUD layer's horizontal scroll (after drawing)
+//   expect_hd2d <min hidden> <max hidden> <dark 0|1> [min lights]  the 2D-HD pass's see-through, darkness and lights
+//   check_area          no standing Link on the overworld is outside the area its world has loaded
+//   holecheck           every overworld fall hole resolves to the right entrance from any camera position
+//   reload              save and load every world the way netplay sends them; nothing may change
+//   randocheck <seed> <count> [v]  every seed gives a beatable placement (v: print spoilers)
+//   storycheck          every rewritten story message fits the text box
+// Pictures:
+//   shot <file.ppm>     render the current frame
+//   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
+//   expect_shot <name> [max % of pixels that may differ] [channel tolerance]  compare with tests/baseline/<name>.ppm
+//   benchdraw <n>       times n frames drawn (with the current 2D-HD setting)
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart)
 //   waitplay            tick until connected and playing (max 15s)
-//   story <0|1>         the Four Swords opening story
-//   title <0|1>         "Four Swords of the Past" on the title screen
-//   inputdelay <frames> online input delay
-//   pram <p> <hexaddr> <hexval>  change a byte of player p's own Link state
-//   resetcounters       zero the netplay statistics (resyncs, rollbacks, own corrections)
-//   expect_own_corrections <n>  fail if our own Link was corrected more than n times
+//   waitplayers <n>     tick until n players are in the game (max 15s)
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
+//   inputdelay <frames> online input delay
 //   localjoin <i> / localleave <i>
+//   resetcounters       zero the netplay statistics (resyncs, rollbacks, own corrections)
+//   expect_players <n> / expect_resyncs <n> / expect_own_corrections <n>
 //   corrupt             flip a byte of RAM (to test desync recovery)
 //   lan [n]             search for LAN games (and expect n)
 //   menu                toggle the overlay menu (navigate with hold + tick)
-//   expect_players <n>  fail unless n players are in the game
-//   expect_resyncs <n>  fail unless exactly n resyncs happened
+//   key <up|down|left|right|enter|back> [times]  a button press in the menu
+// Debug only (not for tests): trace <0|1>, chestdump, dumprender <p>, dumpworldmap <file> <dark>,
+//   findtile <p> <hexattr>, spoiler <hexseed> <file>, upnp (asks the router for a port mapping).
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -77,13 +102,31 @@
 #include "ui.h"
 #include "upnp.h"
 
+static int g_failures;
+
+// A player argument "1".."4" as an index; anything else fails the test (and
+// counts as player 1 so the script can go on without touching memory it
+// shouldn't).
+static int PlayerArg(const char *s) {
+  int p = atoi(s) - 1;
+  if (p >= 0 && p < kMpMaxPlayers)
+    return p;
+  printf("FAIL: bad player '%s'\n", s);
+  g_failures++;
+  return 0;
+}
+
 static uint16 ParseKeys(const char *s) {
   static const char kKeys[] = "BYsSUDLRAXlr";
   uint16 v = 0;
   for (; *s; s++) {
     const char *t = strchr(kKeys, *s);
-    if (t)
+    if (t) {
       v |= 1 << (t - kKeys);
+    } else if (*s != '-') {
+      printf("FAIL: unknown key '%c' in '%s'\n", *s, s);
+      g_failures++;
+    }
   }
   return v;
 }
@@ -170,7 +213,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   Ui_Init(NULL);
   uint32 *pixels = calloc(width * height * 4 * 16, 1);
   char line[256];
-  int frame = 0, failures = 0;
+  int frame = 0;
+  g_failures = 0;
   while (fgets(line, sizeof(line), f)) {
     char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 }, arg3[64] = { 0 }, arg4[64] = { 0 }, arg5[64] = { 0 };
     if (sscanf(line, "%31s %199s %63s %63s %63s %63s", cmd, arg1, arg2, arg3, arg4, arg5) < 1 || cmd[0] == '#')
@@ -180,34 +224,41 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     if (Inst_ViewOfPlayer(view) >= 0)
       Inst_Switch(Inst_ViewOfPlayer(view));
     if (!strcmp(cmd, "load")) {
-      SaveLoadSlot(kSaveLoad_Load, 256 + atoi(arg1) - 1);
+      int n = atoi(arg1);
+      if (n < 1 || n > 13) {
+        printf("FAIL: no chapter %s at frame %d\n", arg1, frame);
+        g_failures++;
+      } else if (!SaveLoadSlot(kSaveLoad_Load, 256 + n - 1)) {
+        printf("FAIL: chapter %s didn't load (saves/ref missing?) at frame %d\n", arg1, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "join")) {
-      Inst_Join(atoi(arg1) - 1);
+      Inst_Join(PlayerArg(arg1));
     } else if (!strcmp(cmd, "leave")) {
-      Inst_Leave(atoi(arg1) - 1);
+      Inst_Leave(PlayerArg(arg1));
     } else if (!strcmp(cmd, "hold")) {
-      held[atoi(arg1) - 1] = ParseKeys(arg2);
+      held[PlayerArg(arg1)] = ParseKeys(arg2);
     } else if (!strcmp(cmd, "ff")) {
       Inst_SetFriendlyFire(atoi(arg1));
     } else if (!strcmp(cmd, "together")) {
       Inst_SetIndependent(!atoi(arg1));
     } else if (!strcmp(cmd, "view")) {
-      view = atoi(arg1) - 1;
+      view = PlayerArg(arg1);
     } else if (!strcmp(cmd, "expect_instances")) {
       if (Inst_Count() != atoi(arg1)) {
         printf("FAIL: %d worlds, expected %s at frame %d\n", Inst_Count(), arg1, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_same") || !strcmp(cmd, "expect_apart")) {
-      bool same = Inst_OfPlayer(atoi(arg1) - 1) == Inst_OfPlayer(atoi(arg2) - 1);
+      bool same = Inst_OfPlayer(PlayerArg(arg1)) == Inst_OfPlayer(PlayerArg(arg2));
       if (same != !strcmp(cmd, "expect_same")) {
         printf("FAIL: P%s and P%s are %s at frame %d\n", arg1, arg2, same ? "together" : "apart", frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_drawn_right")) {
       // expect_drawn_right <a> <b>: wherever player b is drawn on player a's screen (from
       // another world), it is drawn where b really is
-      int a = atoi(arg1) - 1, b = atoi(arg2) - 1;
+      int a = PlayerArg(arg1), b = PlayerArg(arg2);
       uint16 bx, by;
       Inst_PlayerPos(b, &bx, &by);
       SwitchToPlayer(a);
@@ -228,12 +279,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         int ex = (int16)(bx - cx), ey = (int16)(by - cy);
         if (abs(x - ex) > 24 || abs(y - ey) > 32) {
           printf("FAIL: P%s is drawn at %d,%d on P%s's screen but is at %d,%d at frame %d\n", arg2, x, y, arg1, ex, ey, frame);
-          failures++;
+          g_failures++;
         }
       }
     } else if (!strcmp(cmd, "expect_sees") || !strcmp(cmd, "expect_not_sees")) {
       // expect_sees <a> <b>: player a's screen shows player b, who is in another world.
-      int a = atoi(arg1) - 1, b = atoi(arg2) - 1;
+      int a = PlayerArg(arg1), b = PlayerArg(arg2);
       bool seen = false;
       SwitchToPlayer(a);
       InstRemoteLink rl[kMpMaxPlayers * 2];
@@ -248,7 +299,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
       if (seen != !strcmp(cmd, "expect_sees")) {
         printf("FAIL: P%s %s P%s at frame %d\n", arg1, seen ? "sees" : "does not see", arg2, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "reload")) {
       // reload: save and load every world the way netplay sends them; nothing may change.
@@ -257,14 +308,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Inst_SaveState(&arr);
       if (!Inst_LoadState(arr.data, arr.size) || Inst_HashState() != before) {
         printf("FAIL: the state changed when reloaded at frame %d\n", frame);
-        failures++;
+        g_failures++;
       }
       ByteArray_Destroy(&arr);
     } else if (!strcmp(cmd, "expect_bg3hofs")) {
       // expect_bg3hofs <x>: the HUD layer's horizontal scroll (after drawing)
       if (g_zenv.ppu->bgLayer[2].hScroll != atoi(arg1)) {
         printf("FAIL: BG3 scroll is %d, expected %s at frame %d\n", g_zenv.ppu->bgLayer[2].hScroll, arg1, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_hd2d")) {
       // expect_hd2d <min hidden> <max hidden> <dark 0|1> [min lights]: draws the frame
@@ -279,7 +330,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       if (n < atoi(arg1) || n > atoi(arg2) || Hd2d_LitDarkRoom() != atoi(arg3) || Hd2d_NumLights() < atoi(arg4)) {
         printf("FAIL: 2D-HD showed %d hidden pixels (expected %s-%s), dark room %d, %d lights at frame %d\n",
                n, arg1, arg2, Hd2d_LitDarkRoom(), Hd2d_NumLights(), frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "hd2d")) {
       // hd2d <0|1> [lighting] [see through 0|1]: the 2D-HD look for screenshots
@@ -336,7 +387,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         if (pct > limit) {
           printf("FAIL: screenshot %s differs from its baseline in %.2f%% of the pixels (limit %.2f%%) at frame %d; see tests/out/%s_diff.ppm\n",
                  arg1, pct, limit, frame, arg1);
-          failures++;
+          g_failures++;
           WritePpm(out, width, height, pixels, width);
           for (int i = 0; i < width * height; i++) {
             uint32 c = ref[i];
@@ -362,7 +413,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
       printf("randocheck: %d of %s seeds failed\n", bad, arg2);
       if (bad)
-        failures++;
+        g_failures++;
     } else if (!strcmp(cmd, "newgame")) {
       // newgame: make a new save file in slot 1 and load it, as if picked on the file select screen
       uint8 *sram = g_zenv.sram;
@@ -586,7 +637,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       if (checks || together) {
         printf("wander: %d jumps, %d invisible, %d runaways\n", jumps, invisible, runaways);
         if (jumps || invisible || runaways)
-          failures++;
+          g_failures++;
       }
     } else if (!strcmp(cmd, "splitshot")) {
       int r = Inst_Current();
@@ -607,7 +658,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // revive <p>: player p gets up again
       // (revive 0: the player the last "down 0" put down)
       static int last_down = -1;
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       if (p < 0 && !strcmp(cmd, "down")) {
         SwitchToPlayer(view);
         p = last_down = g_mp.leader;
@@ -622,7 +673,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // spoiler <hexseed> <file>: writes the spoiler log of a seed
       if (!Rando_WriteSpoiler(strtoul(arg1, NULL, 16), arg2)) {
         printf("FAIL: no spoiler for seed %s\n", arg1);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "receive")) {
       // receive <hexitem>: the viewed player gets an item, as from a chest
@@ -630,14 +681,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Link_ReceiveItem(strtol(arg1, NULL, 16), 0);
     } else if (!strcmp(cmd, "setleader")) {
       // setleader <p>: player p leads its world (as if it had opened a door)
-      SwitchToPlayer(atoi(arg1) - 1);
-      Mp_SetLeader(atoi(arg1) - 1);
+      SwitchToPlayer(PlayerArg(arg1));
+      Mp_SetLeader(PlayerArg(arg1));
     } else if (!strcmp(cmd, "expect_playing")) {
       // expect_playing <p>: player p's world is in plain gameplay (not stuck in a transition)
-      SwitchToPlayer(atoi(arg1) - 1);
+      SwitchToPlayer(PlayerArg(arg1));
       if (!((main_module_index == 7 || main_module_index == 9) && submodule_index == 0)) {
         printf("FAIL: P%s's world is in module %d/%d at frame %d\n", arg1, main_module_index, submodule_index, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "check_area")) {
       // check_area: fail if a standing Link on the overworld is outside the area its world has loaded
@@ -651,28 +702,28 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         int dx = Mp_PlayerX(p) - kOverworld_OffsetBaseX[a], dy = Mp_PlayerY(p) - kOverworld_OffsetBaseY[a];
         if (dx < -8 || dx > size + 8 || dy < -16 || dy > size + 8) {
           printf("FAIL: P%d at (%d,%d) is outside area %02x at frame %d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p), a, frame);
-          failures++;
+          g_failures++;
         }
       }
     } else if (!strcmp(cmd, "spawn")) {
-      SwitchToPlayer(atoi(arg2) - 1);
+      SwitchToPlayer(PlayerArg(arg2));
       for (int j = 15; j >= 0; j--) {
         if (sprite_state[j] == 0) {
           sprite_type[j] = strtol(arg1, NULL, 16);
           sprite_state[j] = 9;
           SpritePrep_LoadProperties(j);
-          int sp = atoi(arg2) - 1;
+          int sp = PlayerArg(arg2);
           Sprite_SetX(j, Mp_PlayerX(sp) + (arg3[0] ? atoi(arg3) : 24));
           Sprite_SetY(j, Mp_PlayerY(sp));
-          sprite_floor[j] = link_is_on_lower_level;
+          sprite_floor[j] = *Mp_PlayerRam(sp, 0xEE);  // that player's floor (link_is_on_lower_level)
           if (player_is_indoors) sprite_N[j] = 0xff; else sprite_N_word[j] = 0xffff;
           printf("spawned sprite %d type %x\n", j, sprite_type[j]);
           break;
         }
       }
     } else if (!strcmp(cmd, "hp")) {
-      SwitchToPlayer(atoi(arg1) - 1);
-      *Mp_PlayerRam(atoi(arg1) - 1, 0xF36D) = atoi(arg2);
+      SwitchToPlayer(PlayerArg(arg1));
+      *Mp_PlayerRam(PlayerArg(arg1), 0xF36D) = atoi(arg2);
     } else if (!strcmp(cmd, "host")) {
       Session_Host(atoi(arg1), false);
     } else if (!strcmp(cmd, "connect")) {
@@ -680,12 +731,13 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "disconnect")) {
       Session_Disconnect();
     } else if (!strcmp(cmd, "localjoin")) {
-      Session_LocalJoin(atoi(arg1) - 1);
+      Session_LocalJoin(PlayerArg(arg1));
     } else if (!strcmp(cmd, "localleave")) {
-      Session_LocalLeave(atoi(arg1) - 1);
-    } else if (!strcmp(cmd, "tick") || !strcmp(cmd, "waitplay")) {
-      bool wait = !strcmp(cmd, "waitplay");
-      int n = wait ? 15 * 60 : atoi(arg1);
+      Session_LocalLeave(PlayerArg(arg1));
+    } else if (!strcmp(cmd, "tick") || !strcmp(cmd, "waitplay") || !strcmp(cmd, "waitplayers")) {
+      // waitplayers <n>: tick until n players are in the game (max 15 s)
+      bool wait = !strcmp(cmd, "waitplay"), waitn = !strcmp(cmd, "waitplayers");
+      int n = wait || waitn ? 15 * 60 : atoi(arg1);
       for (int i = 0; i < n; i++) {
         uint16 in[kMpMaxPlayers];
         memcpy(in, held, sizeof(in));
@@ -695,10 +747,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         SDL_Delay(16);
         if (wait && Session_GetStatus()->client_state == 3)
           break;
+        if (waitn && Inst_NumJoined() >= atoi(arg1))
+          break;
+      }
+      if (waitn && Inst_NumJoined() < atoi(arg1)) {
+        printf("FAIL: %d players, expected %s after 15 s at frame %d\n", Inst_NumJoined(), arg1, frame);
+        g_failures++;
       }
       if (wait && Session_GetStatus()->client_state != 3) {
         printf("FAIL: not connected: %s\n", Session_GetStatus()->message);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "storycheck")) {
       // storycheck: every rewritten message fits the text box (measured with the font)
@@ -706,7 +764,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Story_MeasureOriginals(true);
       if (bad) {
         printf("FAIL: %d story text lines don't fit\n", bad);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "story")) {
       Story_SetEnabled(atoi(arg1));
@@ -715,7 +773,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       g_config.four_swords_title = atoi(arg1);
     } else if (!strcmp(cmd, "dumprender")) {
       // dumprender <p>: the extra sprites of player p (count, first entries' flags)
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       SwitchToPlayer(view);
       MpRenderPlayer *rp = &g_mp_render.p[p];
       printf("[frame %d] P%d render: visible=%d count=%d leader=P%d resident=P%d area_key=%x aux=%d", frame, p + 1, rp->visible, rp->count, g_mp.leader + 1, g_mp.resident + 1, g_mp.area_key, link_auxiliary_state);
@@ -724,7 +782,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       printf("\n");
     } else if (!strcmp(cmd, "pram")) {
       // pram <p> <hexaddr> <hexval>: change a byte of player p's own state (its Link context)
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       SwitchToPlayer(p);
       *Mp_PlayerRam(p, strtol(arg2, NULL, 16)) = strtol(arg3, NULL, 16);
     } else if (!strcmp(cmd, "dumpworldmap")) {
@@ -734,31 +792,35 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "expect_running")) {
       // expect_running <p> <frames>: the world player p's Link is in keeps
       // running (its frame counter advances) for that many frames
-      int p = atoi(arg1) - 1, n = atoi(arg2);
+      int p = PlayerArg(arg1), n = atoi(arg2);
       SwitchToPlayer(p);
-      uint8 f0 = frame_counter;
-      for (int k = 0; k < n; k++, frame++)
+      uint8 last = frame_counter;
+      int ran = 0;
+      for (int k = 0; k < n; k++, frame++) {
         Inst_RunFrame(held);
-      SwitchToPlayer(p);
-      if ((uint8)(frame_counter - f0) != (uint8)n) {
-        printf("FAIL: P%d's world ran %d of %d frames at frame %d\n", p + 1, (uint8)(frame_counter - f0), n, frame);
-        failures++;
+        SwitchToPlayer(p);
+        ran += (uint8)(frame_counter - last);
+        last = frame_counter;
+      }
+      if (ran != n) {
+        printf("FAIL: P%d's world ran %d of %d frames at frame %d\n", p + 1, ran, n, frame);
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_pram")) {
       // expect_pram <p> <hexaddr> <hexval>: a byte of player p's own state
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       SwitchToPlayer(p);
       int v = *Mp_PlayerRam(p, strtol(arg2, NULL, 16));
       if (v != strtol(arg3, NULL, 16)) {
         printf("FAIL: P%s ram %s is %02x, expected %s at frame %d\n", arg1, arg2, v, arg3, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "resetcounters")) {
       Session_ResetCounters();
     } else if (!strcmp(cmd, "expect_own_corrections")) {
       if (Session_GetStatus()->own_corrections > atoi(arg1)) {
         printf("FAIL: %d own corrections (rubber banding), at most %s expected\n", Session_GetStatus()->own_corrections, arg1);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "inputdelay")) {
       Session_SetInputDelay(atoi(arg1));
@@ -814,7 +876,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
              Session_GetStatus()->rollbacks, Session_GetStatus()->own_corrections);
       if (jumps) {
         printf("FAIL: %d jumps\n", jumps);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "lan")) {
       Session_RefreshLan();
@@ -829,14 +891,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("  %s %s players=%d\n", games[i].name, games[i].addr, games[i].players);
       if (arg1[0] && n != atoi(arg1)) {
         printf("FAIL: expected %s LAN games\n", arg1);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "upnp")) {
       char ip[64] = { 0 };
       bool ok = Upnp_MapPort(atoi(arg1), ip, sizeof(ip));
       printf("UPnP map port %s: %s external=%s\n", arg1, ok ? "OK" : "FAILED", ip);
       if (!ok)
-        failures++;
+        g_failures++;
       Upnp_UnmapPort();
     } else if (!strcmp(cmd, "menu")) {
       Ui_HandleKey(SDLK_ESCAPE, true);
@@ -854,16 +916,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "expect_players")) {
       if (Inst_NumJoined() != atoi(arg1)) {
         printf("FAIL: %d players, expected %s\n", Inst_NumJoined(), arg1);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_resyncs")) {
       if (Session_GetStatus()->resyncs != atoi(arg1)) {
         printf("FAIL: %d resyncs, expected %s\n", Session_GetStatus()->resyncs, arg1);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "pos")) {
       // pos <p> <x> <y>: put player p there (no collision check)
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       SwitchToPlayer(p);
       WORD(*Mp_PlayerRam(p, 0x22)) = atoi(arg2);
       WORD(*Mp_PlayerRam(p, 0x20)) = atoi(arg3);
@@ -871,23 +933,23 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       g_ram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
     } else if (!strcmp(cmd, "expect_camx")) {
       // expect_camx <p> <x>: the camera of player p's world is at x
-      SwitchToPlayer(atoi(arg1) - 1);
+      SwitchToPlayer(PlayerArg(arg1));
       if (BG2HOFS_copy2 != atoi(arg2)) {
         printf("FAIL: P%s's camera x is %d, expected %s at frame %d\n", arg1, BG2HOFS_copy2, arg2, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_ram")) {
       int v = g_ram[strtol(arg1, NULL, 16)];
       if (v != strtol(arg2, NULL, 16)) {
         printf("FAIL: ram %s is %02x, expected %s at frame %d\n", arg1, v, arg2, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_near")) {
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       SwitchToPlayer(p);
       if (abs(Mp_PlayerX(p) - atoi(arg2)) > 4 || abs(Mp_PlayerY(p) - atoi(arg3)) > 4) {
         printf("FAIL: P%d is at %d,%d, expected %s,%s at frame %d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p), arg2, arg3, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "peek")) {
       int addr = strtol(arg1, NULL, 16), n = arg2[0] ? atoi(arg2) : 1;
@@ -898,13 +960,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "expect_module")) {
       if (main_module_index != atoi(arg1)) {
         printf("FAIL: module %d, expected %s at frame %d\n", main_module_index, arg1, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "holecheck")) {
       // For every overworld fall hole, put a Link anywhere the original camera
       // could show it and check the co-op search finds that hole's entrance.
       int bad = 0, total = 0;
-      for (int i = 0; i <= 36 / 2; i++) {
+      int holes = kFallHole_Area_SIZE / 2;
+      for (int i = 0; i < holes; i++) {
         int a = kFallHole_Area[i];
         int j = a & 0xbf;
         bool big = !kOverworldMapIsSmall[a & 0x3f];
@@ -925,14 +988,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
       printf("holecheck: %d of %d positions resolved to the wrong hole\n", bad, total);
       if (bad)
-        failures++;
+        g_failures++;
     } else if (!strcmp(cmd, "message")) {
       dialogue_message_index = strtol(arg1, NULL, 16);
       Main_ShowTextMessage();
     } else if (!strcmp(cmd, "findtile")) {
       // findtile <p> <hexattr>: (overworld) prints the tiles with that
       // behavior within 200 pixels of player p
-      int p = atoi(arg1) - 1, want = strtol(arg2, NULL, 16), n = 0;
+      int p = PlayerArg(arg1), want = strtol(arg2, NULL, 16), n = 0;
       SwitchToPlayer(p);
       for (int dy = -200; dy <= 200 && n < 12; dy += 8)
         for (int dx = -200; dx <= 200 && n < 12; dx += 8) {
@@ -950,30 +1013,46 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;
     } else if (!strcmp(cmd, "expect_hp")) {
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       SwitchToPlayer(p);
       if (Mp_PlayerHealth(p) != atoi(arg2)) {
         printf("FAIL: P%d has %d health, expected %s\n", p + 1, Mp_PlayerHealth(p), arg2);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_downed")) {
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       if (!Inst_IsJoined(p) || !Inst_PlayerDowned(p)) {
         printf("FAIL: P%d not downed at frame %d\n", p + 1, frame);
-        failures++;
+        g_failures++;
       }
     } else if (!strcmp(cmd, "expect_alive")) {
-      int p = atoi(arg1) - 1;
+      int p = PlayerArg(arg1);
       if (!Inst_IsJoined(p) || Inst_PlayerDowned(p)) {
         printf("FAIL: P%d not alive at frame %d\n", p + 1, frame);
-        failures++;
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_leader")) {
+      // expect_leader <p>: player p leads its world (the camera follows it)
+      int p = PlayerArg(arg1);
+      SwitchToPlayer(p);
+      if (!Inst_IsJoined(p) || g_mp.leader != p) {
+        printf("FAIL: P%d's world is led by P%d, expected P%d at frame %d\n", p + 1, g_mp.leader + 1, p + 1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_camy")) {
+      // expect_camy <p> <y>: the camera of player p's world is at y
+      SwitchToPlayer(PlayerArg(arg1));
+      if (BG2VOFS_copy2 != atoi(arg2)) {
+        printf("FAIL: P%s's camera y is %d, expected %s at frame %d\n", arg1, BG2VOFS_copy2, arg2, frame);
+        g_failures++;
       }
     } else {
-      fprintf(stderr, "unknown command %s\n", cmd);
+      printf("FAIL: unknown command %s\n", cmd);
+      g_failures++;
     }
   }
   fclose(f);
   free(pixels);
-  printf(failures ? "MPTEST FAILED\n" : "MPTEST OK\n");
-  return failures != 0;
+  printf(g_failures ? "MPTEST FAILED\n" : "MPTEST OK\n");
+  return g_failures != 0;
 }

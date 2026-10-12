@@ -1,0 +1,29 @@
+# Four players in three worlds with two item menus open need five worlds:
+# every player can have a world for its Link and one for its menu, so the
+# menus never pause anybody.
+load 2
+run 30
+join 2
+join 3
+join 4
+run 20
+pos 3 3920 1900
+pos 4 3700 1700
+run 120
+expect_instances 3
+hold 3 S
+run 1
+hold 3 -
+run 20
+expect_instances 4
+hold 2 S
+run 1
+hold 2 -
+run 60
+expect_instances 5
+view 1
+expect_module 9
+hold 1 D
+run 60
+hold 1 -
+expect_near 1 3920 1643

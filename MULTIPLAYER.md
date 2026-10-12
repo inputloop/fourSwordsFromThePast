@@ -15,8 +15,10 @@ Players can drop in and drop out at any time.
   swap. A live "Pressed" line shows what the game sees. Arrows, Enter,
   Backspace and the d-pad always work in the menu.
 - **Couch co-op**: the keyboard plus the first controller is player 1. Every
-  other controller joins by pressing START. Use *Multiplayer > Remove local
-  player* (or unplug the controller) to drop out.
+  other controller joins by pressing START (Back+Start opens the menu
+  instead, to set the controller up first). Use *Multiplayer > Remove local
+  player* (or unplug the controller) to drop out. A player who comes back
+  gets the hearts they left with, not a refill.
 - **Host**: choose *Multiplayer > Host a game*. LAN players see the game under
   *Find LAN games*. For internet play the game asks your router to open UDP
   port 47474 (UPnP); the menu shows the public address to give your friends.
@@ -255,7 +257,7 @@ diff with the changed pixels in red in `tests/out/`.
 
 - Players sharing a screen share one camera, which follows the leader.
   There's no zoomed-out camera; walking out of view gives a player their own.
-- Free roaming with up to four worlds costs up to four times the CPU, which
+- Free roaming with up to four worlds (plus one for each open item menu) costs up to four times the CPU, which
   is still far below what any PC needs.
 - Room contents in two worlds can differ (for example an enemy killed in one
   world still lives in the other) until the worlds merge. Then the world

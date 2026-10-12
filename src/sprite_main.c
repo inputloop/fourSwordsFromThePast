@@ -1285,6 +1285,10 @@ void Sprite_WishPond3(int k) {
       (&link_item_bow)[sprite_C[k]] = sprite_D[k];  // given back unchanged
       Hud_RefreshIcon();
     } else {
+      // (Randomized items are progressive: the boomerang handed back must
+      // see the one that was thrown in, or an upgrade comes back blue.)
+      if (Rando_CurrentSeed())
+        (&link_item_bow)[sprite_C[k]] = sprite_D[k];
       Link_ReceiveItem(sprite_graphics[k], 0);
     }
     sprite_ai_state[k] = 10;

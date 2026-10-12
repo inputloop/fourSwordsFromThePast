@@ -1,0 +1,21 @@
+# When the leader goes down, the camera goes to a teammate who is playing,
+# not to one standing still in the item menu.
+load 2
+run 30
+join 2
+join 3
+run 10
+clearsprites
+hold 2 S
+run 5
+hold 2 -
+run 10
+expect_instances 2
+down 1
+run 5
+expect_leader 3
+hold 3 D
+run 100
+hold 3 -
+expect_leader 3
+expect_near 3 3920 1675

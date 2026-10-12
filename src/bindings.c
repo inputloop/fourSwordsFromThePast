@@ -230,17 +230,31 @@ uint16 Bindings_GetInput(int p) {
   return r;
 }
 
-uint16 Bindings_GetMenuFallbackInput(int controller) {
+// Is controller c the one some other local player's profile uses?
+static bool PadOfAnotherPlayer(int c, int owner) {
+  for (int i = 0; i < kBindPlayers; i++)
+    if (i != owner && g_bind[i].controller == c)
+      return true;
+  return false;
+}
+
+uint16 Bindings_GetMenuFallbackInput(int owner, int controller) {
   uint16 r = 0;
-  if (IsKeyDown(SDLK_UP)) r |= 1 << 4;
-  if (IsKeyDown(SDLK_DOWN)) r |= 1 << 5;
-  if (IsKeyDown(SDLK_LEFT)) r |= 1 << 6;
-  if (IsKeyDown(SDLK_RIGHT)) r |= 1 << 7;
-  if (IsKeyDown(SDLK_RETURN) || IsKeyDown(SDLK_KP_ENTER)) r |= 1 << 8;  // select
-  if (IsKeyDown(SDLK_BACKSPACE)) r |= 1 << 0;  // back
+  // The keyboard's arrows, Enter and Backspace are player 1's: the others
+  // may be playing on it while player 1 is in the menu.
+  if (owner <= 0) {
+    if (IsKeyDown(SDLK_UP)) r |= 1 << 4;
+    if (IsKeyDown(SDLK_DOWN)) r |= 1 << 5;
+    if (IsKeyDown(SDLK_LEFT)) r |= 1 << 6;
+    if (IsKeyDown(SDLK_RIGHT)) r |= 1 << 7;
+    if (IsKeyDown(SDLK_RETURN) || IsKeyDown(SDLK_KP_ENTER)) r |= 1 << 8;  // select
+    if (IsKeyDown(SDLK_BACKSPACE)) r |= 1 << 0;  // back
+  }
   for (int c = 0; c < kMaxControllers; c++) {
-    if (controller >= 0 && c != controller)
-      continue;  // only the menu user's controller (and the keyboard)
+    // Only the menu user's controller; with none of its own, any pad that
+    // isn't some other player's.
+    if (controller >= 0 ? c != controller : PadOfAnotherPlayer(c, owner))
+      continue;
     uint32 d = g_pad_down[c];
     if (d >> kGamepadBtn_DpadUp & 1) r |= 1 << 4;
     if (d >> kGamepadBtn_DpadDown & 1) r |= 1 << 5;
@@ -253,16 +267,21 @@ uint16 Bindings_GetMenuFallbackInput(int controller) {
 
 // --- config ---
 
+// A key without a usable name (the comma, or one SDL can't name) is written
+// as its code: "key44". (Not "#44": the ini reader takes '#' for a comment
+// and would drop the rest of the line.)
 static void WriteKeyName(FILE *f, int32 key) {
   const char *name = SDL_GetKeyName(key);
   if (!name[0] || strpbrk(name, ",|#"))
-    fprintf(f, "#%d", (int)key);
+    fprintf(f, "key%d", (int)key);
   else
     fprintf(f, "%s", name);
 }
 
 static int32 ParseKeyName(const char *s) {
-  if (s[0] == '#')
+  if (!SDL_strncasecmp(s, "key", 3) && s[3] >= '0' && s[3] <= '9')  // (not "Keypad 0")
+    return atoi(s + 3);
+  if (s[0] == '#')  // (older files)
     return atoi(s + 1);
   return SDL_GetKeyFromName(s);
 }

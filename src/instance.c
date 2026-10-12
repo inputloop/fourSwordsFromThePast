@@ -50,6 +50,16 @@ static int g_audio_player;
 static int g_audio_inst = -1;
 static uint8 g_shared[kSharedEnd - kSharedStart];  // progress as of the last sync
 
+// Bits the game clears again on every overworld transition (the dam switch
+// pulled, the swamp drained): they belong to one world, like the water
+// itself, instead of being OR-ed together with the flags that only ever get
+// set.
+static uint8 TransientBits(int addr) {
+  return addr == 0xF2BB || addr == 0xF2FB ? 0x20 : addr == 0xF216 ? 0x80 : addr == 0xF051 ? 0x01 : 0;
+}
+static const uint16 kTransientAddrs[] = { 0xF2BB, 0xF2FB, 0xF216, 0xF051 };
+
+
 // Pre-frame copy of an instance, so a frame can be replayed without a player.
 static uint8 g_snap_ram[kRamSize];
 static Ppu g_snap_ppu;
@@ -276,6 +286,7 @@ void Inst_Leave(int p) {
     return;
   int r = g_cur;
   Inst_Switch(i);
+  Mp_RecordLeaving(p);
   if (Mp_NumJoined() > 1) {
     Mp_Leave(p);
   } else {
@@ -289,6 +300,21 @@ void Inst_Leave(int p) {
     Deactivate(i);
     if (r == i)
       r = other;
+  }
+  // The last one on its feet left: nobody could get the ghosts up again, so
+  // they get up by themselves, with three hearts, as after a game over.
+  bool standing = false;
+  for (int q = 0; q < kMpMaxPlayers; q++)
+    standing |= Inst_IsJoined(q) && !Inst_PlayerDowned(q);
+  if (!standing) {
+    for (int k = 0; k < kInstMax; k++) {
+      if (!g_inst[k].active)
+        continue;
+      Inst_Switch(k);
+      for (int q = 0; q < kMpMaxPlayers; q++)
+        if (g_mp.p[q].joined && g_mp.p[q].downed)
+          Mp_Revive(q, 0x18);
+    }
   }
   Inst_Switch(r);
   UpdateCoopFlag();
@@ -331,7 +357,9 @@ static void RestoreSnapshot() {
 
 // Copies the current instance into slot j, keeping only player p there.
 // A follower (Zelda, the old man...) stays in only one of the two worlds.
-static void SplitOff(int j, int p, bool follower_goes_along) {
+// Copies this world into slot j for player p (and keep, the teammate p
+// carries, or -1); everybody else is removed there.
+static void SplitOff(int j, int p, bool follower_goes_along, int keep) {
   int i = g_cur;
   Alloc(j);
   Instance *d = &g_inst[j];
@@ -346,7 +374,7 @@ static void SplitOff(int j, int p, bool follower_goes_along) {
   Inst_Switch(j);
   Mp_SetLeader(p);
   for (int q = 0; q < kMpMaxPlayers; q++)
-    if (q != p)
+    if (q != p && q != keep)
       Mp_RemovePlayer(q);
   g_mp.split_request = -1;
   if (!follower_goes_along)
@@ -384,7 +412,7 @@ static bool RunInstance(int i, const uint16 *inputs) {
       // The menu continues in the new world; here the frame is played again
       // without it, with this Link standing still until the menu closes.
       TRACE("  P%d opens a menu in world %d (from %d)\n", p + 1, j, i);
-      SplitOff(j, p, false);
+      SplitOff(j, p, false, -1);
       MpOf(j)->away[p] = 0;
       RestoreSnapshot();
       g_mp.away[p] = 1;
@@ -398,13 +426,20 @@ static bool RunInstance(int i, const uint16 *inputs) {
       TakeSnapshot();
       continue;
     }
-    if (!can_split || Mp_NumJoined() < 2)
+    // The teammate p held over its head comes along. (As the frame started:
+    // an exit's transition has already set it down. With nobody else left
+    // behind there is nothing to split: the whole world travels.)
+    int q = -1;
+    for (int k = 0; k < kMpMaxPlayers; k++)
+      if (g_snap_mp.carried_by[k] == p + 1 && g_mp.p[k].joined && k != p)
+        q = k;
+    if (!can_split || Mp_NumJoined() - (q >= 0) < 2)
       break;
     TRACE("  split P%d from world %d into %d travel=%d module=%d/%d\n", p + 1, i, j, travel, main_module_index, submodule_index);
     // The follower follows whoever led the group before this frame.
     // (Not into a menu: split_travel 2.)
     bool follower_goes_along = travel == 1 && p == g_snap_mp.leader;
-    SplitOff(j, p, follower_goes_along);
+    SplitOff(j, p, follower_goes_along, q);
     if (!travel) {
       // The new world's camera still has to catch up with its Link; until
       // then everybody looks in view of both cameras, and the worlds would
@@ -412,12 +447,16 @@ static bool RunInstance(int i, const uint16 *inputs) {
       // other), only to split again.
       g_mp.merge_grace = g_inst[j].mp.merge_grace = kMergeGrace;
       Mp_RemovePlayer(p);
+      if (q >= 0)
+        Mp_RemovePlayer(q);
       break;
     }
     // The traveler continues in the new world. Everybody else replays the
     // frame as if they had never been here.
     RestoreSnapshot();
     Mp_RemovePlayer(p);
+    if (q >= 0)
+      Mp_RemovePlayer(q);
     if (follower_goes_along)
       follower_indicator = 0;
     can_split = Mp_NumJoined() > 1;
@@ -431,7 +470,11 @@ static void MovePlayers(int from, int to) {
   TRACE("  move players of world %d into %d\n", from, to);
   uint8 ctx[kMpMaxPlayers][kMpCtxMaxBytes];
   uint8 joined[kMpMaxPlayers] = { 0 }, downed[kMpMaxPlayers], ctr[kMpMaxPlayers], away[kMpMaxPlayers];
+  uint8 transient[countof(kTransientAddrs)];
   Inst_Switch(from);
+  // Whoever drained the swamp keeps it drained when met by a teammate.
+  for (size_t k = 0; k < countof(kTransientAddrs); k++)
+    transient[k] = g_ram[kTransientAddrs[k]] & TransientBits(kTransientAddrs[k]);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!g_mp.p[p].joined)
       continue;
@@ -443,6 +486,8 @@ static void MovePlayers(int from, int to) {
   }
   Inst_Switch(to);
   Deactivate(from);
+  for (size_t k = 0; k < countof(kTransientAddrs); k++)
+    g_ram[kTransientAddrs[k]] |= transient[k];
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!joined[p])
       continue;
@@ -499,9 +544,14 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
     // worlds don't split and merge back and forth.)
     if (sx < 8 || sx > 256 - 24 || sy < 8 || sy > 224 - 24)
       return false;
+    // Not while held over a teammate's head or flying from a throw: the
+    // other world knows nothing about it and would set the Link down.
+    if (g_mp.carried_by[p] || g_mp.thrown[p])
+      return false;
     if (g_mp.p[p].downed)
       continue;
     if (*Mp_PlayerRam(p, 0x5D) != 0 ||   // link_player_handler_state: ground
+        *Mp_PlayerRam(p, 0x4D) != 0 ||   // link_auxiliary_state: recoil, falling...
         *Mp_PlayerRam(p, 0x308) != 0 ||  // carrying something
         *Mp_PlayerRam(p, 0x309) != 0 ||
         *Mp_PlayerRam(p, 0x301) != 0 ||  // item in hand
@@ -626,21 +676,28 @@ static void Inst_Sync() {
     int ks = KeySlot();
     if (ks >= 0)
       g_ram[ks] = link_num_keys;
-    // A world split off this frame is a copy of one that reports the same changes.
-    if (g_inst[i].born)
-      continue;
+    // A world split off this frame is mostly a copy of one that reports the
+    // same changes, so it doesn't report counters (they would count twice).
+    // Its flag bits are still welcome (OR-ing them twice changes nothing):
+    // after an exit the traveler's frame was replayed without it in the old
+    // world, so what that frame flushed (the room's keys taken, doors
+    // opened) only exists here.
+    bool born = g_inst[i].born;
     const uint8 *r = g_ram + kSharedStart;
-    rupee_delta += (int16)(link_rupees_goal - WORD(base[0xF360 - kSharedStart]));
+    if (!born)
+      rupee_delta += (int16)(link_rupees_goal - WORD(base[0xF360 - kSharedStart]));
     for (int j = 0; j < kSharedEnd - kSharedStart; j++) {
       int addr = kSharedStart + j;
       if (r[j] == base[j] || IsPerWorld(addr))
         continue;
-      if (n > 1 && IsCounter(addr))
-        delta[j] += r[j] - base[j];
-      else if (n > 1 && addr < kFlagsEnd)
-        merged[j] |= r[j];
-      else
+      if (n > 1 && IsCounter(addr)) {
+        if (!born)
+          delta[j] += r[j] - base[j];
+      } else if (n > 1 && addr < kFlagsEnd) {
+        merged[j] |= r[j] & ~TransientBits(addr);
+      } else if (!born) {
         merged[j] = r[j];
+      }
     }
   }
   for (int j = 0; j < kSharedEnd - kSharedStart; j++) {
@@ -656,9 +713,12 @@ static void Inst_Sync() {
       continue;
     Inst_Switch(i);
     uint8 *r = g_ram + kSharedStart;
-    for (int j = 0; j < kSharedEnd - kSharedStart; j++)
-      if (!IsPerWorld(kSharedStart + j) || j == 0xF360 - kSharedStart || j == 0xF361 - kSharedStart)
-        r[j] = merged[j];
+    for (int j = 0; j < kSharedEnd - kSharedStart; j++) {
+      if (!IsPerWorld(kSharedStart + j) || j == 0xF360 - kSharedStart || j == 0xF361 - kSharedStart) {
+        uint8 m = TransientBits(kSharedStart + j);
+        r[j] = (merged[j] & ~m) | (r[j] & m);
+      }
+    }
     int ks = KeySlot();
     if (ks >= 0)
       link_num_keys = g_ram[ks];
@@ -836,6 +896,8 @@ bool Inst_LoadState(const uint8 *data, size_t size) {
   }
   Inst_Switch(first);
   memcpy(g_shared, g_ram + kSharedStart, sizeof(g_shared));
+  // (Nothing of these worlds has been seen yet.)
+  memset(g_last_seen, 0, sizeof(g_last_seen));
   g_audio_inst = -1;
   UpdateCoopFlag();
   return ok && !rd.fail && rd.p == rd.end;
@@ -869,6 +931,7 @@ struct InstSnapshot {
   int cur, audio_inst;
   uint8 shared[kSharedEnd - kSharedStart];
   uint8 sram[0x2000];
+  LastSeen last_seen[kMpMaxPlayers];  // display state, rolled back with the rest
 };
 
 InstSnapshot *Inst_SnapshotNew() {
@@ -907,6 +970,7 @@ void Inst_SnapshotSave(InstSnapshot *s) {
   s->audio_inst = g_audio_inst;
   memcpy(s->shared, g_shared, sizeof(g_shared));
   memcpy(s->sram, g_zenv.sram, sizeof(s->sram));
+  memcpy(s->last_seen, g_last_seen, sizeof(g_last_seen));
 }
 
 void Inst_SnapshotLoad(const InstSnapshot *s) {
@@ -928,6 +992,7 @@ void Inst_SnapshotLoad(const InstSnapshot *s) {
   g_audio_inst = s->audio_inst;
   memcpy(g_shared, s->shared, sizeof(g_shared));
   memcpy(g_zenv.sram, s->sram, sizeof(s->sram));
+  memcpy(g_last_seen, s->last_seen, sizeof(g_last_seen));
   UpdateCoopFlag();
 }
 

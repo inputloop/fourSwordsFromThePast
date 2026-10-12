@@ -520,14 +520,18 @@ static void ScreenSeed() {
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Gameplay);
-  snprintf(g_ui.footer, sizeof(g_ui.footer), "Same seed = same item places");
+  snprintf(g_ui.footer, sizeof(g_ui.footer), g_ui.seed_edit <= kRando_RandomSeed ? "Seeds start at 00000002" : "Same seed = same item places");
 }
 
 static void ScreenJoinAddress() {
   snprintf(g_ui.title, sizeof(g_ui.title), "JOIN BY ADDRESS");
   Label("Type the host's address, then ENTER");
   char buf[72];
-  snprintf(buf, sizeof(buf), "%s%s", g_ui.join_addr, (SDL_GetTicks() / 400) & 1 ? "_" : " ");
+  // (A long name: its end, where the typing happens.)
+  const char *addr = g_ui.join_addr;
+  if (strlen(addr) > 34)
+    addr += strlen(addr) - 34;
+  snprintf(buf, sizeof(buf), "%s%s", addr, (SDL_GetTicks() / 400) & 1 ? "_" : " ");
   Label(buf);
   Item("Connect", NULL);
   if (Act() == kAct_Select && g_ui.join_addr[0]) {
@@ -538,7 +542,7 @@ static void ScreenJoinAddress() {
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Multiplayer);
-  snprintf(g_ui.footer, sizeof(g_ui.footer), "Example: 192.168.1.20 or myhost.net:47474");
+  snprintf(g_ui.footer, sizeof(g_ui.footer), "Example: 192.168.1.20 or host.net:47474");
 }
 
 static void ScreenLan() {
@@ -936,6 +940,10 @@ void Ui_ToggleFromController(int controller) {
   ToggleBy(owner);
 }
 
+int Ui_MenuOwner() {
+  return Ui_IsOpen() ? g_ui.owner : -1;
+}
+
 int Ui_MenuController() {
   return Ui_IsOpen() && g_bind[g_ui.owner].controller != kBindNoController ? g_bind[g_ui.owner].controller : -1;
 }
@@ -999,7 +1007,11 @@ static void CycleMapButton(uint16 *local_inputs) {
     if (p < 0 || p >= kMpMaxPlayers || (Ui_IsOpen() && i == g_ui.owner))
       continue;
     if (Inst_PlayerViewModule(p) == 14) {
-      g_ui.minimap[p] = 0;  // in the full map (or the item menu): X is the game's
+      // The game's own maps, menus and text boxes: X is the game's. (The mini
+      // map is back after a text box or the item menu; the full map ends the
+      // cycle, so X there turns it off.)
+      if (press)
+        g_ui.minimap[p] = 0;
     } else if (press && !g_ui.minimap[p]) {
       g_ui.minimap[p] = 1;
       g_ui.map_btn_eaten[i] = 1;
@@ -1057,7 +1069,7 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
     MoveCursor(-1);
   if (pressed & 0x20)
     MoveCursor(1);
-  g_ui.action = (pressed & 0x100) || ((pressed & 8) && !(all & 4)) ? kAct_Select :
+  g_ui.action = (pressed & 0x100) ? kAct_Select :
                 (pressed & 0x40) ? kAct_Left : (pressed & 0x80) ? kAct_Right : kAct_None;
   if (pressed & 1) {  // B goes back
     if (g_ui.screen == kScreen_Main)
@@ -1188,12 +1200,15 @@ static void DrawArrow(int px, int py, float ux, float uy, int size, uint32 color
 // view (in this world or another one), as long as they are somewhere the
 // direction means something: the same overworld, dungeon or room.
 static void DrawTeammateArrows() {
-  if (Inst_NumJoined() < 2 || main_module_index < 6 || main_module_index == 0x14 || main_module_index == 0x1a)
+  if (Inst_NumJoined() < 2)
     return;
   for (int v = 0; v < g_nviews; v++) {
     const UiView *view = &g_views[v];
     InstPlace me, them;
     if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
+      continue;
+    uint8 m = Inst_PlayerViewModule(view->player);
+    if (m < 6 || m == 0x14 || m == 0x1a)
       continue;
     int extra = (view->w - 256) / 2;  // widescreen: columns left of the camera
     for (int q = 0; q < kMpMaxPlayers; q++) {
@@ -1294,12 +1309,21 @@ static void DrawMiniMap(const UiView *view) {
   if (p < 0 || !g_ui.minimap[p] || !Inst_PlayerPlace(p, &me))
     return;
   int x0 = view->x + view->w - kMiniW - 3, y0 = view->y + 30;
+  // Nothing to show in a house or cave, or without this floor's rooms: no box either.
+  const uint32 *img = NULL;
+  const uint8 *ram = NULL, *rooms = NULL;
+  if (me.space < 0x10000) {
+    img = WorldMapImage(me.space & 0x40);
+    if (!img)
+      return;
+  } else {
+    ram = Inst_PlayerWorldRam(p);
+    if (!ram || me.space >= 0x20000 || !(rooms = DungMap_FloorRooms(me.space & 0xff, ram[0xA4])))
+      return;
+  }
   ShadeRect(x0 - 2, y0 - 2, kMiniW + 4, kMiniH + 4);
   if (me.space < 0x10000) {
     // Overworld: the game's world map (1 pixel = 16), around the player.
-    const uint32 *img = WorldMapImage(me.space & 0x40);
-    if (!img)
-      return;
     int cx = 128 + me.x / 16, cy = 128 + me.y / 16;  // map pixels
     int left = cx - kMiniW / 2, top = cy - kMiniH / 2;
     for (int y = 0; y < kMiniH; y++) {
@@ -1320,13 +1344,7 @@ static void DrawMiniMap(const UiView *view) {
   } else {
     // In a dungeon: this floor's rooms as the dungeon map lays them out
     // (5x5), the ones seen filled in (all of them with the map).
-    const uint8 *ram = Inst_PlayerWorldRam(p);
-    if (!ram || me.space >= 0x20000)
-      return;  // (a house or cave: no map)
     int palace = me.space & 0xff;
-    const uint8 *rooms = DungMap_FloorRooms(palace, ram[0xA4]);  // dung_cur_floor
-    if (!rooms)
-      return;
     bool have_map = WORD(ram[0xF368]) & kUpperBitmasks[(palace >> 1) & 15];  // link_dungeon_map
     uint8 room_here = ram[0xA0];  // dungeon_room_index (low byte)
     int cw = kMiniW / 5, ch = kMiniH / 5;
@@ -1364,12 +1382,16 @@ static void DrawMiniMaps() {
 
 // A small P1-P4 tag over every Link on screen (an option).
 static void DrawNameTags() {
-  if (!g_config.mp_name_tags || Inst_NumJoined() < 2 || (main_module_index != 7 && main_module_index != 9))
+  if (!g_config.mp_name_tags || Inst_NumJoined() < 2)
     return;
   for (int v = 0; v < g_nviews; v++) {
     const UiView *view = &g_views[v];
     InstPlace me, them;
     if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
+      continue;
+    // (This pane's world, not the one the sound comes from.)
+    uint8 m = Inst_PlayerViewModule(view->player);
+    if (m != 7 && m != 9)
       continue;
     int extra = (view->w - 256) / 2;
     for (int q = 0; q < kMpMaxPlayers; q++) {
@@ -1412,7 +1434,7 @@ static void DrawCornerHud() {
   int hearts = IntMin(IntMax(cap / 8, 1), 20);
   int per_row = 10;
   int rows = (hearts + per_row - 1) / per_row;
-  int panel_w = 18 + IntMin(hearts, per_row) * 8;
+  int panel_w = IntMax(18 + IntMin(hearts, per_row) * 8, 72);  // (room for "DOWN" and its bar)
   int panel_h = 5 + rows * 8;  // hearts, then the magic meter
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!Inst_IsJoined(p))
@@ -1429,9 +1451,9 @@ static void DrawCornerHud() {
       // A heart at the end: A would send a teammate a heart now.
       bool heart = Inst_PlayerCanSendHeart(p);
       int bar = panel_w - 46 - (heart ? 10 : 0);
-      int w = (panel_w - 20) * Inst_PlayerReviveCtr(p) / kMpReviveFrames;
+      int w = bar * Inst_PlayerReviveCtr(p) / kMpReviveFrames;
       FillRect(x + 44, y + 4, bar, 3, 0x303030);
-      FillRect(x + 44, y + 4, IntMin(w, bar), 3, Mp_PlayerColorRgb(p));
+      FillRect(x + 44, y + 4, w, 3, Mp_PlayerColorRgb(p));
       if (heart)
         DrawHeart(x + panel_w - 9, y + 1, 2, 0xf04060);
       continue;
@@ -1556,13 +1578,43 @@ static void DrawTitleBanner() {
   }
 }
 
+// The pane of the player whose menu is open (the whole picture with one pane).
+static const UiView *OwnerView() {
+  static UiView whole;
+  whole.x = whole.y = 0, whole.w = g_cv.width, whole.h = g_cv.height, whole.player = -1;
+  int p = g_ui.owner >= 0 && g_ui.owner < kSessionMaxLocal ? Session_GetStatus()->local_slot[g_ui.owner] : -1;
+  for (int v = 0; v < g_nviews && g_nviews > 1; v++)
+    if (p >= 0 && g_views[v].player == p)
+      return &g_views[v];
+  return &whole;
+}
+
+// Text that fits in the box: the end is cut and marked.
+static void DrawTextFit(int x, int y, const char *s, uint32 col, int max_w) {
+  if (TextWidth(s) <= max_w) {
+    DrawText(x, y, s, col);
+    return;
+  }
+  char buf[80];
+  int n = max_w / 6 - 2;
+  if (n < 1)
+    n = 1;
+  snprintf(buf, sizeof(buf), "%.*s..", n, s);
+  DrawText(x, y, buf, col);
+}
+
 static void DrawMenu() {
   if (!Ui_IsOpen())
     return;
   BuildScreen();
+  const UiView *mv = OwnerView();
   int w = 236, line_h = 10;
   int h = 24 + g_ui.nlines * line_h + (g_ui.footer[0] ? 12 : 0);
-  int x = (g_cv.width - w) / 2, y = IntMax((g_cv.height - h) / 2, 2);
+  if (h > mv->h) {  // (20 lines on a 224-line screen: a little tighter)
+    line_h = 9;
+    h = 24 + g_ui.nlines * line_h + (g_ui.footer[0] ? 12 : 0);
+  }
+  int x = mv->x + (mv->w - w) / 2, y = mv->y + IntMax((mv->h - h) / 2, 2);
   ShadeRect(x, y, w, h);
   ShadeRect(x, y, w, h);
   FillRect(x, y, w, 1, 0xe0c060);
@@ -1575,14 +1627,17 @@ static void DrawMenu() {
     if (sel)
       FillRect(x + 4, ly - 2, w - 8, line_h, 0x304878);
     uint32 col = !l->selectable ? 0xa0a0a0 : sel ? 0xffffff : 0xd8d8d8;
-    DrawText(x + 8, ly, l->label, col);
+    int vw = l->value[0] ? IntMin(TextWidth(l->value), w / 2) : 0;
+    DrawTextFit(x + 8, ly, l->label, col, w - 16 - (vw ? vw + 6 : 0));
     if (l->value[0]) {
-      int vx = x + w - 8 - TextWidth(l->value);
-      DrawText(vx, ly, l->value, sel ? 0xf8d878 : 0xb8c8f8);
+      int vx = x + w - 8 - vw;
+      DrawTextFit(vx, ly, l->value, sel ? 0xf8d878 : 0xb8c8f8, vw);
     }
   }
-  if (g_ui.footer[0])
-    DrawText(x + (w - TextWidth(g_ui.footer)) / 2, y + h - 12, g_ui.footer, 0x90a0b0);
+  if (g_ui.footer[0]) {
+    int fw = IntMin(TextWidth(g_ui.footer), w - 8);
+    DrawTextFit(x + (w - fw) / 2, y + h - 12, g_ui.footer, 0x90a0b0, fw);
+  }
 }
 
 void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
@@ -1609,9 +1664,15 @@ void Ui_SaveSettings() {
     return;
   fprintf(f, "# Written by the in-game options menu. Overrides zelda3.ini.\n");
   fprintf(f, "[General]\n");
-  int e = g_config.extended_aspect_ratio;
-  fprintf(f, "ExtendedAspectRatio = %s\n", e == (224 * 16 / 10 - 256) / 2 ? "16:10" : e == (224 * 16 / 9 - 256) / 2 ? "16:9" :
-          e == (224 * 18 / 9 - 256) / 2 ? "18:9" : "4:3");
+  // The widescreen setting as it was set (height, sprite and visual fix
+  // options included); anything else stays as zelda3.ini says.
+  int e = g_config.extended_aspect_ratio, ah = g_config.extend_y ? 240 : 224;
+  const char *ar = e == 0 ? "4:3" : e == (ah * 16 / 10 - 256) / 2 ? "16:10" : e == (ah * 16 / 9 - 256) / 2 ? "16:9" :
+                   e == (ah * 18 / 9 - 256) / 2 ? "18:9" : NULL;
+  if (ar)
+    fprintf(f, "ExtendedAspectRatio = %s%s%s%s\n", g_config.extend_y ? "extend_y, " : "", ar,
+            e && !(g_config.features0 & kFeatures0_ExtendScreen64) ? ", unchanged_sprites" : "",
+            e && !(g_config.features0 & kFeatures0_WidescreenVisualFixes) ? ", no_visual_fixes" : "");
   fprintf(f, "[Graphics]\n");
   fprintf(f, "EnhancedMode7 = %d\n", g_config.enhanced_mode7);
   fprintf(f, "LinearFiltering = %d\n", g_config.linear_filtering);

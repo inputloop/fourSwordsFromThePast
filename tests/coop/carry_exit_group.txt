@@ -1,0 +1,21 @@
+# Shared screen: a Link held over a teammate's head goes where the carrier
+# goes, so the carrier can walk into the Eastern Palace.
+together 1
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3920 1690
+pos 2 3920 1675
+pram 1 2f 00
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+hold 1 U
+hold 2 U
+run 300
+expect_module 7
+expect_same 1 2

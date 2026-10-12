@@ -24,7 +24,7 @@ view 2
 expect_module 7
 message 7a
 run 60
-peek 10 1
+expect_module 14
 view 1
 clearsprites
 hold 1 U

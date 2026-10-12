@@ -1,0 +1,30 @@
+# The dam switch and the drained swamp are cleared again by the game on
+# every overworld transition. With two worlds, one world's transition
+# doesn't resurrect them from the other, and a teammate elsewhere doesn't
+# undo them either.
+load 2
+run 30
+poke f2bb 20
+poke f216 80
+poke f051 01
+join 2
+run 20
+pos 2 3920 1900
+run 120
+expect_instances 2
+expect_apart 1 2
+pos 1 3920 2450
+run 5
+hold 1 D
+run 420
+hold 1 -
+run 60
+view 1
+status
+expect_ram f2bb 00
+expect_ram f216 00
+expect_ram f051 00
+view 2
+expect_ram f2bb 20
+expect_ram f216 80
+expect_ram f051 01

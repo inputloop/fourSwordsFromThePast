@@ -41,7 +41,7 @@ The mod is built on **zelda3**, a free project by snesrev that rewrote the whole
 
 The original game only knows about one Link. The mod adds three more by giving each player a private copy of "Link's memory" and swapping copies in and out, very fast, many times per frame.
 
-**The Link context.** About 400 bytes of RAM describe Link: where he stands, which way he faces, his sword swing, his health, what he is holding and so on. The mod calls this the *Link context*. The list of exactly which RAM addresses count as "Link" is in `src/mp.c` (`kMpCtxRanges`). Everything else (the room, enemies, items, story progress) is shared by all players.
+**The Link context.** About 315 bytes of RAM describe Link: where he stands, which way he faces, his sword swing, his health, what he is holding and so on. The mod calls this the *Link context*. The list of exactly which RAM addresses count as "Link" is in `src/mp.c` (`kMpCtxRanges`). Everything else (the room, enemies, items, story progress) is shared by all players.
 
 **Swapping.** Each player has their own saved copy of the Link context. When the game needs to work with Player 3, the mod:
 
@@ -79,7 +79,7 @@ The original code never knows other players exist. It just runs once per Link.
 
 **The options menu.** The menu drawn by the mod (Esc) also doesn't stop co-op: only the player who opened it stands still, and only their keys and controller move its cursor. The others keep playing.
 
-**The map button.** X goes round three states: a mini map, the full screen map, no map. The press that turns on the mini map is taken away before the game sees it; the next one reaches the game and opens its map. Outdoors the mini map shows the game's own world map (built once from its mode 7 picture: 1 pixel for 16 of the overworld) around the player, with teammates in the same world as colored dots. In a dungeon it shows the current floor as the dungeon map lays it out (5 by 5 rooms), the rooms already seen filled in, all of them once the team has that dungeon's map.
+**The map button.** X goes round three states: a mini map, the full screen map, no map. The press that turns on the mini map is taken away before the game sees it; the next one reaches the game and opens its map. (A text box or the item menu in between leaves the mini map alone.) Outdoors the mini map shows the game's own world map (built once from its mode 7 picture: 1 pixel for 16 of the overworld) around the player, with teammates in the same world as colored dots. In a dungeon it shows the current floor as the dungeon map lays it out (5 by 5 rooms), the rooms already seen filled in, all of them once the team has that dungeon's map.
 
 **Teammates off to the side.** The game's code for drawing Link only expects Link near the middle of the screen. For a teammate far off to the right it got the sprites' position wrong, and they appeared wrapped around onto the left side of the screen. The mod works out each sprite's real position again and leaves out the ones that are off screen.
 
@@ -91,7 +91,7 @@ Players can go anywhere they want, apart from each other. To make this work, the
 
 ```mermaid
 flowchart LR
-    A["One shared world"] -- "a player walks out of view,<br/>or takes a door, stairs or pit alone" --> B["Separate worlds<br/>(up to 4)"]
+    A["One shared world"] -- "a player walks out of view,<br/>or takes a door, stairs or pit alone" --> B["Separate worlds<br/>(one per Link, plus one per open menu)"]
     B -- "same room or screen,<br/>cameras within 48 pixels" --> A
     B -. "every frame: items, keys, rupees<br/>and opened chests copied to every world" .-> B
 ```
@@ -302,7 +302,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 **The 2D-HD look (beta).** An optional picture filter in the style of Octopath Traveler, in `src/hd2d.c`. *Video > 2D-HD settings* turns it on and sets how strong each part is. After the game draws a frame, the filter:
 
 - keeps the players in focus and lets the screen go softly out of focus above and below them, so the world looks like a tiny model seen through a camera (in split screen each pane focuses on its own player), and makes far layers, like a cave's distant floor, softer and hazy,
-- lights dark rooms for real: instead of the game's flat darkness with a cone cut out of it, the room gets a warm glow around each Link that has the Lamp, around lit torches, fire and explosions, over a darkness that lifts as torches are lit (outside dark rooms, a Link whose selected item is the Lamp glows too),
+- lights dark rooms for real: instead of the game's flat darkness with a cone cut out of it, the room gets a warm glow around each Link that has the Lamp, around lit torches, fire-rod fire and the big explosions, over a darkness that lifts as torches are lit (outside dark rooms, a Link whose selected item is the Lamp glows too),
 - can show a Link hidden behind a roof, bridge or door frame through it (an option, off by default so Link stays hidden as in the original; never when the game hides Link on purpose, like while he walks out of a door),
 - makes the brightest parts glow, warms up the colors and darkens the corners.
 
@@ -381,7 +381,7 @@ The mod has 53 automatic tests that play the game with no window, by following w
 | Input delay | Online, how many frames after a press it takes effect (2 by default) |
 | LAN | A local network, such as everyone on the same home Wi-Fi |
 | Leader | The player the camera, rooms and menus follow in a shared world |
-| Link context | The roughly 400 bytes of memory that describe one Link |
+| Link context | The roughly 315 bytes of memory that describe one Link |
 | Merge | Two worlds becoming one when their players meet |
 | Prediction | The client's guess at what the other players are pressing |
 | Progressive item | An item that always gives the next level of what you have |

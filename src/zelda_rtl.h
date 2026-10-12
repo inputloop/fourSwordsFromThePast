@@ -65,9 +65,12 @@ enum {
   kSaveLoad_Replay = 2,
 };
 
-void SaveLoadSlot(int cmd, int which);
+bool SaveLoadSlot(int cmd, int which);  // false: no such file
 void ZeldaWriteSram();
 extern bool g_sram_write_disabled;
+// The SRAM in memory is another player's (a host's game we joined): a reset
+// reads our own files back from disk.
+extern bool g_sram_foreign;
 void ZeldaReadSram();
 
 typedef struct ByteArray ByteArray;

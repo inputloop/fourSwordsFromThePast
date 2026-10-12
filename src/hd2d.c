@@ -9,7 +9,7 @@
 #include "mp.h"
 #include "snes/ppu.h"
 
-Hd2dSettings g_hd2d = { false, 60, 40, 45, 50, 70, false };
+Hd2dSettings g_hd2d;  // from the config (config.c has the defaults)
 
 enum {
   kMaxW = kPpuXPixels,
@@ -268,15 +268,16 @@ static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
              ppu->addSubscreen && ppu->subtractColor && (ppu->screenEnabled[1] & 1);
   if (sc->dark) {
     float lit = (31 - ppu->fixedColorR) / 31.0f;  // 0 with no torch lit, 1 with all
-    sc->ambient = 0.03f + 0.97f * lit;
+    // (Never pitch black: without the Lamp the room stays a dim room.)
+    sc->ambient = 0.12f + 0.88f * lit;
   }
   bool have_lamp = link_item_torch != 0;
   float flicker = 0.93f + 0.07f * sinf(frame_counter * 0.37f);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!Mp_IsAlive(p))  // (the players in this world: alone it need not be P1)
       continue;
-    float x = (uint16)(Mp_PlayerX(p) - cam_x) + 8.0f, y = (int16)(Mp_PlayerY(p) - cam_y) + 14.0f;
-    if (x < -64 || x > w + 64)
+    float x = (int16)(Mp_PlayerX(p) - cam_x) + 8.0f, y = (int16)(Mp_PlayerY(p) - cam_y) + 14.0f;
+    if (x < -64 || x > w + 64 || y < -64 || y > h + 64)
       continue;
     sc->player_y[sc->num_players++] = y;
     // The Lamp lights a circle around the Link, a little ahead of it: in a
@@ -382,6 +383,7 @@ static struct {
   float top, bottom, dof;
   int glow_k, haze_k, haze[3];
   Grade grade;
+  float m7_k;  // the world map's vignette strength
 } A;
 
 // The frame, split into channels, with hidden Links showing through.
@@ -420,7 +422,7 @@ static void StageGlowThreshold(int y0, int y1) {
       int sum[3] = { 0, 0, 0 };
       for (int k = 0; k < 4; k++) {
         int sx = 2 * x + (k & 1), sy = 2 * y + (k >> 1), si = sy * A.w + sx;
-        if (g_layer[sy * kMaxW + sx] == 2)
+        if (g_layer[sy * kMaxW + sx] == 2 || g_layer[sy * kMaxW + sx] == 0xff)
           continue;
         for (int ch = 0; ch < 3; ch++) {
           int v = g_src[ch][si] - 215;
@@ -472,8 +474,9 @@ static void StageCompose(int y0, int y1) {
     const uint8 *layers = g_layer + y * kMaxW, *vig = g_vignette + y * w;
     for (int x = 0; x < w; x++) {
       uint8 layer = layers[x];
-      // The HUD (BG3) is left exactly as it is.
-      if (layer == 2)
+      // The HUD (BG3) is left exactly as it is, and so are the blanked
+      // columns and rows outside the picture (0xff).
+      if (layer == 2 || layer == 0xff)
         continue;
       int i = y * w + x;
       // Sprites (Links, enemies, items) stay sharp; far layers are softer and hazy.
@@ -493,8 +496,12 @@ static void StageCompose(int y0, int y1) {
         }
       }
       if (A.lighting) {
+        // Links, enemies and items stay plainly visible in the dark (the
+        // game's darkness never covered them either).
+        float floor = sc->dark && (layer == 4 || layer == 6) ? 0.75f : 0.0f;
         for (int ch = 0; ch < 3; ch++) {
           float l = g_light[ch][i];
+          l = l < floor ? floor : l;
           c[ch] = (int)(c[ch] * (l < 1.25f ? l : 1.25f));
         }
       }
@@ -540,19 +547,32 @@ static void Apply(uint8 *pixels, size_t pitch, int w, int h, int view) {
   ParallelFor(h, StageCompose);
 }
 
-// The HD world map (4x mode 7): just the grade and vignette.
-static void ApplyLight(uint8 *pixels, size_t pitch, int w, int h) {
-  Grade grade = MakeGrade();
-  float k = g_hd2d.vignette / 100.0f * 0.45f;
-  for (int y = 0; y < h; y++) {
-    uint32 *row = (uint32 *)(pixels + y * pitch);
-    float dy = (y + 0.5f) / h - 0.5f;
-    for (int x = 0; x < w; x++) {
+// The HD world map (4x mode 7): just the grade and vignette, on all cores.
+static float g_m7_col[kMaxW * 4];  // (dx * dx) * 2 per column
+
+static void StageMode7Rows(int y0, int y1) {
+  for (int y = y0; y < y1; y++) {
+    uint32 *row = (uint32 *)(A.pixels + y * A.pitch);
+    float dy = (y + 0.5f) / A.h - 0.5f, dy2 = dy * dy * 2;
+    for (int x = 0; x < A.w; x++) {
       uint32 c = row[x];
-      float dx = (x + 0.5f) / w - 0.5f, d = (dx * dx + dy * dy) * 2;
-      row[x] = GradeAndPack(&grade, c >> 16 & 0xff, c >> 8 & 0xff, c & 0xff, (int)(255 * (1 - k * d * d)));
+      float d = g_m7_col[x] + dy2;
+      row[x] = GradeAndPack(&A.grade, c >> 16 & 0xff, c >> 8 & 0xff, c & 0xff, (int)(255 * (1 - A.m7_k * d * d)));
     }
   }
+}
+
+static void ApplyLight(uint8 *pixels, size_t pitch, int w, int h) {
+  if (w > (int)countof(g_m7_col))
+    return;
+  A.pixels = pixels, A.pitch = pitch, A.w = w, A.h = h;
+  A.grade = MakeGrade();
+  A.m7_k = g_hd2d.vignette / 100.0f * 0.45f;
+  for (int x = 0; x < w; x++) {
+    float dx = (x + 0.5f) / w - 0.5f;
+    g_m7_col[x] = dx * dx * 2;
+  }
+  ParallelFor(h, StageMode7Rows);
 }
 
 void Hd2d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int view) {

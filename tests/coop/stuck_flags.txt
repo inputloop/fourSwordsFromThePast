@@ -1,0 +1,21 @@
+# A sprite that freezes the Link it touched (a Devalant pit: "can't move")
+# sets per-frame flags in that Link's own state. They are cleared every
+# frame for every Link, not only the leader, so P2 walks again once the
+# sprite is gone.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 2 3900 1700
+spawn 63 2 0
+run 60
+clearsprites
+run 10
+hold 2 R
+run 60
+hold 2 -
+expect_pram 2 b7b 00
+expect_pram 1 b7b 00
+# P2 moved: it started at 3900.
+expect_near 2 3988 1700

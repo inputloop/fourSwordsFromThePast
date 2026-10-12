@@ -11,9 +11,17 @@ static struct {
   char service_type[96];
   uint16 mapped_port;
   bool mapped;
+  int lease;           // seconds the mapping lives without renewal (0: for good)
   UpnpCallback *cb;
   uint16 want_port;
+  SDL_atomic_t generation;  // bumped whenever hosting starts or stops: an older mapping thread stands down
+  SDL_atomic_t threads;     // mapping threads alive
 } g_upnp;
+
+enum {
+  kLeaseSeconds = 7200,  // the router forgets the mapping by itself if the game dies
+  kRenewSeconds = 3600,
+};
 
 static const char *FindNoCase(const char *hay, const char *needle) {
   size_t n = strlen(needle);
@@ -173,58 +181,104 @@ static int SoapCall(const char *action, const char *args, char *resp, int maxlen
   return strncmp(resp + 9, "200", 3) == 0 ? 200 : atoi(resp + 9);
 }
 
-bool Upnp_MapPort(uint16 port, char *external_ip, size_t ip_size) {
+static bool AddMapping(uint16 port, int lease) {
+  uint32 local = Net_GetLocalIp();
+  char args[512], resp[4096];
+  snprintf(args, sizeof(args),
+           "<NewRemoteHost></NewRemoteHost><NewExternalPort>%u</NewExternalPort><NewProtocol>UDP</NewProtocol>"
+           "<NewInternalPort>%u</NewInternalPort><NewInternalClient>%u.%u.%u.%u</NewInternalClient>"
+           "<NewEnabled>1</NewEnabled><NewPortMappingDescription>Zelda3 co-op</NewPortMappingDescription>"
+           "<NewLeaseDuration>%d</NewLeaseDuration>",
+           port, port, local >> 24, (local >> 16) & 255, (local >> 8) & 255, local & 255, lease);
+  return SoapCall("AddPortMapping", args, resp, sizeof(resp)) == 200;
+}
+
+static void DeleteMapping(uint16 port) {
+  char args[256], resp[2048];
+  snprintf(args, sizeof(args),
+           "<NewRemoteHost></NewRemoteHost><NewExternalPort>%u</NewExternalPort><NewProtocol>UDP</NewProtocol>",
+           port);
+  SoapCall("DeletePortMapping", args, resp, sizeof(resp));
+}
+
+// A mapping with a lease first (some routers only take permanent ones).
+static bool MapPort(uint16 port, char *external_ip, size_t ip_size, int gen) {
   char location[256];
   if (!Discover(location, sizeof(location)) || !FetchControlUrl(location))
     return false;
-  uint32 local = Net_GetLocalIp();
-  char args[512], resp[4096];
-  for (int lease = 0; lease <= 1; lease++) {
-    snprintf(args, sizeof(args),
-             "<NewRemoteHost></NewRemoteHost><NewExternalPort>%u</NewExternalPort><NewProtocol>UDP</NewProtocol>"
-             "<NewInternalPort>%u</NewInternalPort><NewInternalClient>%u.%u.%u.%u</NewInternalClient>"
-             "<NewEnabled>1</NewEnabled><NewPortMappingDescription>Zelda3 co-op</NewPortMappingDescription>"
-             "<NewLeaseDuration>%d</NewLeaseDuration>",
-             port, port, local >> 24, (local >> 16) & 255, (local >> 8) & 255, local & 255, lease ? 7200 : 0);
-    if (SoapCall("AddPortMapping", args, resp, sizeof(resp)) == 200) {
-      g_upnp.mapped = true;
-      g_upnp.mapped_port = port;
-      break;
-    }
+  if (SDL_AtomicGet(&g_upnp.generation) != gen)
+    return false;  // hosting stopped meanwhile
+  g_upnp.lease = kLeaseSeconds;
+  if (!AddMapping(port, kLeaseSeconds)) {
+    g_upnp.lease = 0;
+    if (!AddMapping(port, 0))
+      return false;
   }
-  if (!g_upnp.mapped)
-    return false;
+  g_upnp.mapped = true;
+  g_upnp.mapped_port = port;
   external_ip[0] = 0;
+  char resp[4096];
   if (SoapCall("GetExternalIPAddress", "", resp, sizeof(resp)) == 200)
     ExtractTag(resp, "NewExternalIPAddress", external_ip, ip_size);
   return true;
 }
 
+bool Upnp_MapPort(uint16 port, char *external_ip, size_t ip_size) {
+  return MapPort(port, external_ip, ip_size, SDL_AtomicGet(&g_upnp.generation));
+}
+
+// Maps the port, keeps the lease alive until hosting stops, then removes the
+// mapping: all on this thread, so the game never waits for the router.
 static int SDLCALL UpnpThread(void *arg) {
+  int gen = SDL_AtomicGet(&g_upnp.generation);
+  uint16 port = g_upnp.want_port;
+  // An earlier thread still at it (hosting stopped and started again quickly):
+  // let it remove its mapping first, or it would remove ours.
+  for (int i = 0; i < 400 && SDL_AtomicGet(&g_upnp.threads) > 1; i++)
+    SDL_Delay(25);
   char ip[64] = { 0 };
-  bool ok = Upnp_MapPort(g_upnp.want_port, ip, sizeof(ip));
-  if (g_upnp.cb)
-    g_upnp.cb(ok, ip[0] ? ip : "your public IP", g_upnp.want_port);
+  bool ok = MapPort(port, ip, sizeof(ip), gen);
+  if (SDL_AtomicGet(&g_upnp.generation) != gen) {
+    if (ok)
+      DeleteMapping(port);
+  } else {
+    if (g_upnp.cb)
+      g_upnp.cb(ok, ip[0] ? ip : "your public IP", port);
+    while (ok) {
+      // Look now and then whether hosting stopped; renew well before the lease runs out.
+      for (int i = 0; i < kRenewSeconds * 4 && SDL_AtomicGet(&g_upnp.generation) == gen; i++)
+        SDL_Delay(250);
+      if (SDL_AtomicGet(&g_upnp.generation) != gen)
+        break;
+      if (g_upnp.lease)
+        AddMapping(port, g_upnp.lease);
+    }
+    if (ok) {
+      DeleteMapping(port);
+      g_upnp.mapped = false;
+    }
+  }
+  SDL_AtomicDecRef(&g_upnp.threads);
   return 0;
 }
 
 void Upnp_MapPortAsync(uint16 port, UpnpCallback *cb) {
+  SDL_AtomicIncRef(&g_upnp.generation);
   g_upnp.cb = cb;
   g_upnp.want_port = port;
+  SDL_AtomicIncRef(&g_upnp.threads);
   SDL_Thread *t = SDL_CreateThread(&UpnpThread, "upnp", NULL);
-  if (t)
+  if (t) {
     SDL_DetachThread(t);
-  else if (cb)
-    cb(false, "", port);
+  } else {
+    SDL_AtomicDecRef(&g_upnp.threads);
+    if (cb)
+      cb(false, "", port);
+  }
 }
 
 void Upnp_UnmapPort() {
-  if (!g_upnp.mapped)
-    return;
-  char args[256], resp[2048];
-  snprintf(args, sizeof(args),
-           "<NewRemoteHost></NewRemoteHost><NewExternalPort>%u</NewExternalPort><NewProtocol>UDP</NewProtocol>",
-           g_upnp.mapped_port);
-  SoapCall("DeletePortMapping", args, resp, sizeof(resp));
-  g_upnp.mapped = false;
+  // The mapping thread notices and removes the mapping; nothing to wait for.
+  // (With the game closing before it gets to it, the lease runs out.)
+  SDL_AtomicIncRef(&g_upnp.generation);
 }

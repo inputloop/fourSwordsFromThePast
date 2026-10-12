@@ -30,6 +30,8 @@ bool Ui_HandleKey(int sdl_keycode, bool pressed);
 void Ui_ToggleFromController(int controller);
 // The controller of the player using the menu, or -1.
 int Ui_MenuController();
+// The local player whose menu is open, or -1.
+int Ui_MenuOwner();
 void Ui_HandleText(const char *text);
 bool Ui_IsOpen();
 // True when the game should not advance (menu open while playing alone).

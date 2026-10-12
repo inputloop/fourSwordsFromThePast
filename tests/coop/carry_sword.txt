@@ -1,0 +1,31 @@
+# A Link holding a teammate over its head can't swing the sword or use items.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3860 1690
+pos 2 3860 1705
+pram 1 2f 02
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+hold 1 B
+run 6
+expect_pram 1 3c 00
+hold 1 -
+run 30
+hold 1 Y
+run 6
+expect_pram 1 3c 00
+hold 1 -
+run 10
+# Still carried, and A throws.
+expect_pram 2 24 0e
+hold 1 A
+run 2
+hold 1 -
+run 60
+expect_pram 2 24 ff

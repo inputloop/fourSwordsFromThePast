@@ -1,0 +1,17 @@
+# When the last player on its feet leaves, the ghosts left behind get up
+# (nobody could ever revive them otherwise).
+load 2
+run 30
+join 2
+run 10
+down 2
+run 5
+expect_downed 2
+leave 1
+run 5
+expect_alive 2
+expect_hp 2 24
+hold 2 D
+run 30
+hold 2 -
+expect_near 2 3920 1622

@@ -1,0 +1,11 @@
+# Two players in different worlds are drawn side by side (split screen):
+# the worlds render without a hitch and each pane shows its own world.
+load 2
+run 30
+join 2
+run 20
+pos 2 3920 1900
+run 120
+expect_instances 2
+splitshot /tmp/zelda3_split_screen.ppm 1 2
+expect_apart 1 2

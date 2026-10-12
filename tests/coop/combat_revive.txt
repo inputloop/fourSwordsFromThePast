@@ -30,7 +30,8 @@ hold 3 B
 run 2
 hold 3 -
 run 30
-status
+# The spawned enemy (slot 15) is dying.
+expect_ram ddf 06
 clearsprites
 hold 3 R
 run 20

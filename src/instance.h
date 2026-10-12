@@ -21,7 +21,7 @@
 #include "mp.h"
 
 enum {
-  kInstMax = 4,
+  kInstMax = 2 * kMpMaxPlayers,  // a world for every Link plus one for its menu
 };
 
 typedef struct ByteArray ByteArray;

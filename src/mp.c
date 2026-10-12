@@ -68,6 +68,7 @@ static const MpRange kMpPersonalRanges[] = {
 };
 
 static bool Mp_IsTravel(uint8 m0, uint8 m1, uint8 s1);
+static bool Mp_LeavesRoom(uint8 m0, uint8 m1, uint8 s1);
 
 static int Mp_CtxOffset(uint32 addr) {
   int off = 0;
@@ -186,6 +187,35 @@ static void Mp_RegroupPlayer(int p) {
   Mp_SwapTo(r);
 }
 
+// Save-area bytes (shared, saved, synced between worlds) that remember the
+// hearts and magic a player left the game with, so it comes back with them.
+enum { kRam_LeftHealth = 0xF4E8, kRam_LeftMagic = 0xF4EC };
+
+void Mp_RecordLeaving(int p) {
+  if (p < 0 || p >= kMpMaxPlayers || !g_mp.p[p].joined)
+    return;
+  uint8 h = Mp_PlayerHealth(p);
+  g_ram[kRam_LeftHealth + p] = g_mp.p[p].downed || !h ? 0x18 : h;  // a ghost gets three hearts
+  g_ram[kRam_LeftMagic + p] = Mp_PlayerMagic(p);
+}
+
+// Forgets what the co-op layer knows about a player who leaves this world
+// (or has just arrived): nothing carried, thrown, away or cooling down, and
+// whoever it was holding is set down where it is.
+static void Mp_ClearCoopState(int p) {
+  g_mp.carried_by[p] = 0;
+  g_mp.thrown[p] = 0;
+  g_mp.away[p] = 0;
+  g_mp.ghost_cooldown[p] = 0;
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    if (g_mp.carried_by[q] == p + 1) {
+      g_mp.carried_by[q] = 0;
+      if (g_mp.p[q].joined)
+        WORD(*Mp_PlayerRam(q, 0x24)) = 0;  // the carrier left: set down where it is
+    }
+  }
+}
+
 void Mp_Join(int p) {
   if (p < 0 || p >= kMpMaxPlayers || g_mp.p[p].joined)
     return;
@@ -195,15 +225,25 @@ void Mp_Join(int p) {
   g_mp.p[p].joined = 1;
   g_mp.p[p].downed = 0;
   g_mp.p[p].revive_ctr = 0;
+  Mp_ClearCoopState(p);
   Mp_RegroupPlayer(p);
-  *Mp_PlayerRam(p, 0xF36D) = link_health_capacity ? link_health_capacity : 0x18;
-  *Mp_PlayerRam(p, 0xF36E) = link_magic_power;
+  // Full hearts for a newcomer; what it left with for one coming back.
+  uint8 cap = link_health_capacity ? link_health_capacity : 0x18;
+  uint8 left = g_ram[kRam_LeftHealth + p];
+  *Mp_PlayerRam(p, 0xF36D) = left && left <= cap ? left : cap;
+  *Mp_PlayerRam(p, 0xF36E) = left ? g_ram[kRam_LeftMagic + p] : link_magic_power;
+  g_ram[kRam_LeftHealth + p] = 0;
   *Mp_PlayerRam(p, 0x202) = hud_cur_item;
   *Mp_PlayerRam(p, 0x303) = current_item_y;
   Mp_SwapTo(r);
 }
 
 static int Mp_FindNewLeader(int except) {
+  // Someone standing and playing first (not in a menu: the camera would park
+  // on a Link that can't move), then anyone standing, then anyone at all.
+  for (int i = 0; i < kMpMaxPlayers; i++)
+    if (i != except && Mp_IsAlive(i) && !g_mp.away[i])
+      return i;
   for (int i = 0; i < kMpMaxPlayers; i++)
     if (i != except && Mp_IsAlive(i))
       return i;
@@ -216,6 +256,7 @@ static int Mp_FindNewLeader(int except) {
 void Mp_Leave(int p) {
   if (p < 0 || p >= kMpMaxPlayers || !g_mp.p[p].joined || Mp_NumJoined() <= 1)
     return;
+  Mp_ClearCoopState(p);
   if (p == g_mp.leader) {
     int nl = Mp_FindNewLeader(p);
     Mp_SwapTo(nl);
@@ -355,7 +396,7 @@ static bool Mp_IsFreeToCarry(int p) {
          *Mp_PlayerRam(p, 0x345) == 0;              // not swimming
 }
 
-static int Mp_CarriedBy(int carrier) {
+int Mp_CarriedBy(int carrier) {
   for (int q = 0; q < kMpMaxPlayers; q++)
     if (g_mp.carried_by[q] == carrier + 1)
       return q;
@@ -450,6 +491,19 @@ static void Mp_HandleCarry() {
   }
   if (!stable)
     return;
+  // A Link with a teammate over its head can walk, open the menu and throw
+  // (A); no sword, items or dash. (Bits: B 0x80, Y 0x40, Select 0x20, Start
+  // 0x10 and the directions in joypad1H_last/filtered_joypad_H; A 0x80, X
+  // 0x40, L 0x20, R 0x10 in joypad1L_last/filtered_joypad_L.)
+  for (int q = 0; q < kMpMaxPlayers; q++) {
+    int c = g_mp.carried_by[q] - 1;
+    if (c < 0)
+      continue;
+    *Mp_PlayerRam(c, 0xF0) &= 0x3f;
+    *Mp_PlayerRam(c, 0xF4) &= 0x3f;
+    *Mp_PlayerRam(c, 0xF2) &= 0x80;
+    *Mp_PlayerRam(c, 0xF6) &= 0x80;
+  }
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if (!Mp_IsAlive(p) || !(*Mp_PlayerRam(p, 0xF6) & 0x80))  // filtered_joypad_L: A
       continue;
@@ -772,9 +826,22 @@ uint8 Mp_AnyPlayerU8(int k, MpSpriteCheckFuncU8 *func) {
 void Mp_ClearPerFrameSpriteFlags() {
   if (!Mp_Active())
     return;
-  for (int p = 0; p < kMpMaxPlayers; p++)
-    if (g_mp.p[p].joined && p != g_mp.resident)
-      *Mp_PlayerRam(p, 0x314) = 0;  // flag_is_sprite_to_pick_up
+  // What Sprite_Main resets every frame for the resident Link: the flags a
+  // sprite sets on the Link it touched (pick-up, pedestal pose, pull-switch
+  // lean, "can't move", platform drag). Sprites set them in the touched
+  // player's context, so the others need the same reset or they stay stuck.
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!g_mp.p[p].joined || p == g_mp.resident)
+      continue;
+    *Mp_PlayerRam(p, 0x314) = 0;  // flag_is_sprite_to_pick_up
+    *Mp_PlayerRam(p, 0x377) = 0;  // link_unk_master_sword
+    *Mp_PlayerRam(p, 0x379) = 0;  // byte_7E0379 (pull switch)
+    *Mp_PlayerRam(p, 0xB7B) = 0;  // link_prevent_from_moving
+    if (submodule_index == 0) {
+      WORD(*Mp_PlayerRam(p, 0xB7C)) = 0;  // drag_player_x
+      WORD(*Mp_PlayerRam(p, 0xB7E)) = 0;  // drag_player_y
+    }
+  }
 }
 
 // Called when the resident Link takes fatal damage. Returns true if co-op
@@ -839,7 +906,7 @@ bool Mp_OnFatalDamage() {
   return false;
 }
 
-static void Mp_Revive(int p, uint8 health) {
+void Mp_Revive(int p, uint8 health) {
   g_mp.p[p].downed = 0;
   g_mp.p[p].revive_ctr = 0;
   *Mp_PlayerRam(p, 0xF36D) = health;
@@ -1329,7 +1396,8 @@ void Mp_PrepareRender(Ppu *ppu) {
     set->count += na;
     int dx = g_mp_draw_offset[p][0], dy = g_mp_draw_offset[p][1];
     if (dx | dy) {
-      for (int i = 0; i < rp->count; i++) {
+      // (The projectiles too: a hookshot chain stays on its Link.)
+      for (int i = 0; i < set->count; i++) {
         int x = (set->oam[i * 2] & 0xff) | (set->high[i] & 1) << 8;
         int y = set->oam[i * 2] >> 8;
         x = (x + dx) & 0x1ff, y = (y + dy) & 0xff;
@@ -1388,6 +1456,20 @@ void Mp_FinishRender(Ppu *ppu) {
 // player walked into an exit alone, it is simulated again from a RAM snapshot
 // with that player standing still, which makes the exit act like a wall.
 
+// Did the world just start to go somewhere else (a warp, a cutscene that
+// ends elsewhere, the flute...), as opposed to something that happens in
+// this very room: a door unlocking, shutters, a crystal switch, a pressure
+// plate, the swamp draining, the item menu?
+static bool Mp_LeavesRoom(uint8 m0, uint8 m1, uint8 s1) {
+  if (m1 != m0)
+    return m1 != 14;
+  if (m1 == 7)
+    return !(s1 == 3 || s1 == 4 || s1 == 5 || (s1 >= 9 && s1 <= 0x0d) || s1 == 0x16 || s1 == 0x17);
+  if (m1 == 9)
+    return !((s1 >= 9 && s1 <= 0x0c) || s1 == 0x2a);
+  return true;
+}
+
 static bool Mp_IsTravel(uint8 m0, uint8 m1, uint8 s1) {
   if (m1 != m0) {
     // dungeon/overworld loads, spotlight exits, falling into a dungeon
@@ -1430,7 +1512,7 @@ void Mp_RunRouting(void (*routing)(void)) {
       ghost |= p != g_mp.leader && g_mp.p[p].joined && g_mp.p[p].downed;
     bool moved_on = main_module_index != m0 || submodule_index != s0;
     if (Mp_IsTravel(m0, main_module_index, submodule_index) ||
-        (ghost && moved_on && main_module_index != 14 && Mp_IsAlive(g_mp.leader))) {
+        (ghost && moved_on && Mp_IsAlive(g_mp.leader) && Mp_LeavesRoom(m0, main_module_index, submodule_index))) {
       g_mp.split_request = g_mp.leader;
       g_mp.split_travel = 1;
     }
@@ -1447,10 +1529,11 @@ void Mp_RunRouting(void (*routing)(void)) {
     routing();
     return;
   }
-  // Directions everyone agrees on.
+  // Directions everyone agrees on. (A Link held over a teammate's head, or
+  // one in the item menu, goes where the others go.)
   uint8 common = 0x0f;
   for (int p = 0; p < kMpMaxPlayers; p++)
-    if (Mp_IsAlive(p))
+    if (Mp_IsAlive(p) && !g_mp.carried_by[p] && !g_mp.away[p])
       common &= Mp_HeldDirections(p);
 
   static uint8 before[0x20000], after[0x20000];
@@ -1464,7 +1547,8 @@ void Mp_RunRouting(void (*routing)(void)) {
   memcpy(after, g_ram, sizeof(after));
   mp_after = g_mp;
   for (int p = 0; p < kMpMaxPlayers; p++) {
-    if (!Mp_IsAlive(p) || !(*(p == mp_before.resident ? &before[0xF0] : &mp_before.p[p].ctx[Mp_CtxOffset(0xF0)]) & 0x0f))
+    if (!Mp_IsAlive(p) || mp_before.carried_by[p] ||
+        !(*(p == mp_before.resident ? &before[0xF0] : &mp_before.p[p].ctx[Mp_CtxOffset(0xF0)]) & 0x0f))
       continue;
     memcpy(g_ram, before, sizeof(before));
     g_mp = mp_before;
@@ -1515,13 +1599,7 @@ void Mp_ImportPlayer(int p, const uint8 *ctx, uint8 downed, uint8 revive_ctr) {
 void Mp_RemovePlayer(int p) {
   if (!g_mp.p[p].joined)
     return;
-  g_mp.carried_by[p] = 0;
-  for (int q = 0; q < kMpMaxPlayers; q++) {
-    if (g_mp.carried_by[q] == p + 1) {
-      g_mp.carried_by[q] = 0;
-      WORD(*Mp_PlayerRam(q, 0x24)) = 0;  // the carrier left: set down where it is
-    }
-  }
+  Mp_ClearCoopState(p);
   if (p == g_mp.leader) {
     int nl = Mp_FindNewLeader(p);
     if (nl < 0)

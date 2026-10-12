@@ -166,6 +166,13 @@ int Mp_CtxSize();
 void Mp_ExportPlayer(int p, uint8 *ctx_out);
 void Mp_ImportPlayer(int p, const uint8 *ctx, uint8 downed, uint8 revive_ctr);
 void Mp_RemovePlayer(int p);
+// Remembers the hearts and magic player p leaves the game with (Mp_Join
+// gives them back).
+void Mp_RecordLeaving(int p);
+// Gets a downed player back on its feet with that much health.
+void Mp_Revive(int p, uint8 health);
+// The teammate carrier holds over its head, or -1.
+int Mp_CarriedBy(int carrier);
 void Mp_SetLeader(int p);
 uint32 Mp_AreaKeyPublic();
 bool Mp_InStableGameplay();

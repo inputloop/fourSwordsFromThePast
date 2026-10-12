@@ -1,12 +1,17 @@
 # Netplay host. Run together with net_client.txt.
 load 2
 host 47474
-tick 300
+waitplayers 2
+tick 60
 status
 expect_players 2
 # In free roaming the host walks into the palace alone and gets a world of its own.
 hold 1 U
 tick 300
 hold 1 -
+expect_instances 2
+expect_apart 1 2
+expect_players 2
 tick 600
 status
+expect_resyncs 0

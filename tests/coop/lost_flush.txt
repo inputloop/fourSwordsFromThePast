@@ -1,0 +1,27 @@
+# What a room flushes to the save area in the frame a player takes a door
+# (keys taken, doors opened) isn't lost when that frame is replayed without
+# the traveler: the traveler's new world reports its flag bits.
+load 2
+run 30
+enter 61
+run 200
+join 2
+run 20
+poke 403 04
+run 2
+pos 1 760 3120
+run 2
+hold 1 U
+run 90
+hold 1 -
+run 60
+expect_instances 2
+expect_apart 1 2
+leave 2
+run 2
+view 1
+hold 1 D
+run 150
+hold 1 -
+run 30
+expect_ram 403 04

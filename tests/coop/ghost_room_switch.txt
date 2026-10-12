@@ -1,0 +1,21 @@
+# With a ghost lying in the room, things that happen in this very room (a
+# crystal switch, a door unlocking) don't send the leader off into a world
+# of its own; only real departures do.
+load 2
+run 30
+join 2
+run 10
+enter 77
+run 120
+pos 1 3840 3996
+pos 2 3860 4000
+down 2
+pram 1 2f 00
+run 10
+hold 1 B
+run 2
+hold 1 -
+run 12
+expect_instances 1
+run 20
+expect_instances 1

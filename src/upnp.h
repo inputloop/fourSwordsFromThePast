@@ -8,7 +8,7 @@ typedef void UpnpCallback(bool ok, const char *external_ip, uint16 port);
 
 // Runs discovery and port mapping on a background thread.
 void Upnp_MapPortAsync(uint16 port, UpnpCallback *cb);
-// Removes the mapping created by Upnp_MapPortAsync (best effort, blocking but short).
+// Removes the mapping created by Upnp_MapPortAsync (on its thread: returns at once).
 void Upnp_UnmapPort();
 
 // Exposed for testing: synchronous version. Returns true on success.

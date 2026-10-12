@@ -1,25 +1,32 @@
-# P2 shoots an arrow at P3 with friendly fire on.
+# Friendly fire: P2's arrow hurts P3 (and knocks it back) with friendly
+# fire on, and does nothing with it off.
 load 2
 run 30
 join 2
 join 3
-hold 1 U
-hold 2 U
-hold 3 U
-run 200
-hold 1 -
-hold 2 -
-hold 3 -
-hold 3 L
-run 40
-hold 3 -
+run 90
+clearsprites
+pos 2 3920 1690
+pos 3 3860 1690
+pram 2 2f 04
+pram 3 2f 06
 ff 1
-hold 2 L
-run 4
-hold 2 -
-run 2
+run 30
 hold 2 Y
 run 20
 hold 2 -
 run 40
-status
+expect_hp 3 36
+expect_alive 3
+ff 0
+pos 2 3920 1690
+pos 3 3860 1690
+pram 2 2f 04
+pram 3 2f 06
+run 30
+hold 2 Y
+run 20
+hold 2 -
+run 40
+expect_hp 3 36
+expect_near 3 3860 1690

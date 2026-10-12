@@ -1,0 +1,50 @@
+# Leaving the game while carrying someone sets them down; a carried player
+# who leaves and rejoins is not still "carried"; the carrier's lift state is
+# forgotten too.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3860 1690
+pos 2 3860 1705
+pram 1 2f 02
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+leave 1
+run 60
+hold 2 R
+run 60
+hold 2 -
+expect_near 2 3948 1691
+join 1
+run 2
+# P2 walks on, not on P1's head.
+hold 2 R
+run 20
+hold 2 -
+expect_near 2 3978 1691
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3860 1690
+pos 2 3860 1705
+pram 1 2f 02
+run 30
+hold 1 A
+run 2
+hold 1 -
+run 10
+leave 2
+run 60
+join 2
+run 2
+hold 2 R
+run 30
+hold 2 -
+expect_near 2 3903 1690

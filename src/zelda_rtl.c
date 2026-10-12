@@ -846,11 +846,11 @@ static const char *const kReferenceSaves[] = {
   "Chapter 13 - After Ganon's Tower.sav",
 };
 
-void SaveLoadSlot(int cmd, int which) {
+bool SaveLoadSlot(int cmd, int which) {
   char name[128];
   if (which & 256) {
-    if (cmd == kSaveLoad_Save)
-      return;
+    if (cmd == kSaveLoad_Save || which - 256 >= (int)countof(kReferenceSaves))
+      return false;
     sprintf(name, "saves/ref/%s", kReferenceSaves[which - 256]);
   } else {
     sprintf(name, "saves/save%d.sav", which);
@@ -867,6 +867,7 @@ void SaveLoadSlot(int cmd, int which) {
 
     fclose(f);
   }
+  return f != NULL;
 }
 
 typedef struct StateRecoderMultiPatch {
@@ -931,9 +932,13 @@ void ZeldaReadSram() {
     fclose(f);
     EmuSynchronizeWholeState();
   }
+  // Our own files again, whatever world we played in before.
+  g_sram_foreign = false;
+  g_sram_write_disabled = false;
 }
 
 bool g_sram_write_disabled;
+bool g_sram_foreign;
 
 void ZeldaWriteSram() {
   // A netplay client plays in the host's world and must not touch its own saves.

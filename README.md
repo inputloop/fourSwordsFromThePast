@@ -110,7 +110,7 @@ lens-and-light pass over the pixel art, in the style of Octopath Traveler.
   focuses on its own player. Far layers (a cave's distant floor, the void
   under a pit) are softer and hazy.
 - **Lighting**: dark rooms are lit for real: a warm glow around each Link
-  with the Lamp, lit torches, fire and explosions, over a darkness that lifts
+  with the Lamp, lit torches, fire-rod fire and the big explosions, over a darkness that lifts
   as torches are lit. Elsewhere fire glows, and so does a Link whose selected
   item is the Lamp.
 - **Seeing through** (an option, off by default): a Link hidden behind a
@@ -233,7 +233,8 @@ Additionally, the following commands are available:
 | Tab | Turbo mode |
 | W   | Fill health/magic     |
 | Shift+W   | Fill rupees/bombs/arrows     |
-| Ctrl+E | Reset            |
+| Ctrl+R | Reset            |
+| Ctrl+E | Walk through walls (cheat) |
 | P   | Pause (with dim)                |
 | Shift+P   | Pause (without dim)                |
 | Ctrl+Up   | Increase window size                |

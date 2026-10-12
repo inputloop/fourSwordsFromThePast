@@ -3265,7 +3265,7 @@ int Overworld_FindFallHoleNear(uint16 x, uint16 real_y) {
       uint16 yy = (real_y - k) & ~7, xx = (x + kDx[d]) & ~7;
       uint16 pos = ((yy - overworld_offset_base_y) & overworld_offset_mask_y) << 3;
       pos += (((xx >> 3) - overworld_offset_base_x) & overworld_offset_mask_x);
-      for (int i = 36 / 2; i >= 0; i--)
+      for (int i = kFallHole_Area_SIZE / 2 - 1; i >= 0; i--)
         if (kFallHole_Pos[i] == pos && kFallHole_Area[i] == overworld_area_index)
           return i;
     }
@@ -3280,7 +3280,7 @@ void Overworld_GetPitDestination() {  // 9bb860
   pos += (((x >> 3) - overworld_offset_base_x) & overworld_offset_mask_x);
 
 
-  int i = 36 / 2;
+  int i = kFallHole_Area_SIZE / 2 - 1;
   for (;;) {
     if (kFallHole_Pos[i] == pos && kFallHole_Area[i] == overworld_area_index)
       break;

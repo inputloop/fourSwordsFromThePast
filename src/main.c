@@ -446,6 +446,14 @@ int main(int argc, char** argv) {
   g_ppu_render_flags = CalcRenderFlags();
   ZeldaEnableMsu(g_config.enable_msu);
   ZeldaSetLanguage(g_config.language);
+  // The 2D-HD look as configured (the headless tests use it too).
+  g_hd2d.enabled = g_config.hd2d;
+  g_hd2d.depth_of_field = g_config.hd2d_depth_of_field;
+  g_hd2d.bloom = g_config.hd2d_bloom;
+  g_hd2d.vignette = g_config.hd2d_vignette;
+  g_hd2d.grade = g_config.hd2d_grade;
+  g_hd2d.lighting = g_config.hd2d_lighting;
+  g_hd2d.see_through = g_config.hd2d_see_through;
 
   if (argc >= 2 && strcmp(argv[0], "--mptest") == 0) {
     int RunMpTest(const char *script, int width, int height, uint32 render_flags);
@@ -550,13 +558,6 @@ int main(int argc, char** argv) {
   Session_SetFriendlyFire(g_config.mp_friendly_fire);
   Session_SetInputDelay(g_config.mp_input_delay);
   Session_SetStory(g_config.four_swords_story);
-  g_hd2d.enabled = g_config.hd2d;
-  g_hd2d.depth_of_field = g_config.hd2d_depth_of_field;
-  g_hd2d.bloom = g_config.hd2d_bloom;
-  g_hd2d.vignette = g_config.hd2d_vignette;
-  g_hd2d.grade = g_config.hd2d_grade;
-  g_hd2d.lighting = g_config.hd2d_lighting;
-  g_hd2d.see_through = g_config.hd2d_see_through;
   g_mp_color_scheme = g_config.mp_colorblind;
   Session_SetRandomizer(g_config.randomizer);
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
@@ -574,8 +575,10 @@ int main(int argc, char** argv) {
           g_pad_used[pad] = false;
           g_pad_modifiers[pad] = 0;
           Bindings_ResetController(pad);
-          if (pad != 0)
-            Session_LocalLeave(pad);
+          // The player whose profile used that pad leaves (not pad 0's: player 1 has the keyboard).
+          for (int i = 1; i < kSessionMaxLocal; i++)
+            if (g_bind[i].controller == pad)
+              Session_LocalLeave(i);
         }
         break;
       }
@@ -649,12 +652,13 @@ int main(int argc, char** argv) {
     for (int i = 0; i < kSessionMaxLocal; i++)
       local_inputs[i] = Bindings_GetInput(i);
     // Couch drop-in: Start on a controller without a player joins the game.
+    // (Not Back+Start: that opens the menu, to set the controller up first.)
     for (int i = 1; i < kSessionMaxLocal; i++) {
-      if (!Session_IsLocalJoined(i) && (local_inputs[i] & 8))
+      if (!Session_IsLocalJoined(i) && (local_inputs[i] & 0xc) == 8)
         Session_LocalJoin(i);
     }
     // The overlay menu takes the inputs while it is open.
-    Ui_Update(local_inputs, Bindings_GetMenuFallbackInput(Ui_MenuController()));
+    Ui_Update(local_inputs, Bindings_GetMenuFallbackInput(Ui_MenuOwner(), Ui_MenuController()));
 
     bool is_replay = false;
     // Sound comes from the world of the first local player.
@@ -701,7 +705,10 @@ int main(int argc, char** argv) {
       }
     }
   }
-  if (g_config.autosave)
+  // Tell the others we are leaving. (A client must not autosave the host's world.)
+  bool was_client = Session_IsNetplay() && !Session_AllowsLocalStateChanges();
+  Session_Disconnect();
+  if (g_config.autosave && !was_client)
     HandleCommand(kKeys_Save + 0, true);
 
   // clean sdl
@@ -805,8 +812,11 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
       (j <= kKeys_ReplayRef_Last || j == kKeys_CheatLife || j == kKeys_CheatEquipment || j == kKeys_CheatKeys ||
        j == kKeys_CheatWalkThroughWalls || j == kKeys_Reset || j == kKeys_ClearKeyLog || j == kKeys_StopReplay))
     return;
-  if (Session_IsNetplay() && (j <= kKeys_ReplayRef_Last || j == kKeys_Reset || (j >= kKeys_CheatLife && j <= kKeys_CheatWalkThroughWalls)))
-    Session_ResyncAll();
+  // A load, reset or cheat changes the world outside of the frame stream:
+  // the clients get a fresh copy once it is done (not for a save: nothing changed).
+  bool resync = Session_IsNetplay() &&
+                ((j <= kKeys_ReplayRef_Last && !(j >= kKeys_Save && j <= kKeys_Save_Last)) || j == kKeys_Reset ||
+                 (j >= kKeys_CheatLife && j <= kKeys_CheatWalkThroughWalls));
   if (j <= kKeys_Load_Last) {
     SaveLoadSlot(kSaveLoad_Load, j - kKeys_Load);
   } else if (j <= kKeys_Save_Last) {
@@ -832,6 +842,8 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
       SDL_ShowCursor(g_cursor);
       break;
     case kKeys_Reset:
+      if (g_sram_foreign)
+        ZeldaReadSram();  // back to our own files after a game we joined
       ZeldaReset(true);
       break;
     case kKeys_Pause: g_paused = !g_paused; break;
@@ -858,6 +870,8 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
     default: assert(0);
     }
   }
+  if (resync)
+    Session_ResyncAll();
 }
 
 static void HandleInput(int keyCode, int keyMod, bool pressed) {

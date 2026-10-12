@@ -21,6 +21,7 @@ static int ppu_getPixelForMode7(Ppu* ppu, int x, int layer, bool priority);
 static bool ppu_getWindowState(Ppu* ppu, int layer, int x);
 static bool ppu_evaluateSprites(Ppu* ppu, int line);
 static void PpuDrawWholeLine(Ppu *ppu, uint y);
+static void PpuWriteLayerLine(Ppu *ppu, uint y, bool known);
 
 #define IS_SCREEN_ENABLED(ppu, sub, layer) (ppu->screenEnabled[sub] & (1 << layer))
 #define IS_SCREEN_WINDOWED(ppu, sub, layer) (ppu->screenWindowed[sub] & (1 << layer))
@@ -175,6 +176,8 @@ void ppu_runLine(Ppu *ppu, int line) {
     // outside of visible range?
     if (line >= 225 + ppu->extraBottomCur) {
       memset(&ppu->renderBuffer[(line - 1) * ppu->renderPitch], 0, sizeof(uint32) * (256 + ppu->extraLeftRight * 2));
+      if (g_ppu_layer_out)
+        PpuWriteLayerLine(ppu, line, false);
       return;
     }
 
@@ -860,9 +863,12 @@ static void PpuWriteLayerLine(Ppu *ppu, uint y, bool known) {
   // Link pixels (sprite palette 7) that a background tile in front covers.
   bool sprites = known && ppu->lineHasSprites && (ppu->screenEnabled[0] & 0x10);
   int w = 256 + ppu->extraLeftRight * 2;
+  // Columns blanked at the sides (the picture is narrower than the window
+  // here) hold nothing: 0xff, so the pass leaves them black.
+  int blank_l = ppu->extraLeftRight - ppu->extraLeftCur, blank_r = ppu->extraLeftRight - ppu->extraRightCur;
   for (int d = 0; d < w && d < g_ppu_layer_pitch; d++) {
     int i = d - ppu->extraLeftRight + kPpuExtraLeftRight;
-    bool in = known && i >= 0 && i < kPpuXPixels;
+    bool in = known && i >= 0 && i < kPpuXPixels && d >= blank_l && d < w - blank_r;
     uint8_t layer = in ? (ppu->bgBuffers[0].data[i] >> 8) & 0xf : 0xff;
     out[d] = layer;
     if (hidden) {

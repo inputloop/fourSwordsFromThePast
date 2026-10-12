@@ -175,9 +175,12 @@ static void Evaluate(const State *s, Ev *e) {
   // The barrier to the tower needs the Master Sword level, or the cape.
   e->aga = (e->sword2 || e->cape) && e->sword1 && e->lamp;
   e->flippers = e->lift1;                          // Zora
-  // Dark World
-  e->dw_s = e->pearl && (e->aga || e->lift2 || (e->lift1 && e->hammer));
-  e->dw_n = e->pearl && (e->lift2 || (e->lift1 && e->hammer) || (e->aga && e->hook));
+  // Dark World. Beating Agahnim only drops you at the pyramid: pegs block
+  // the way south (the Hammer), a rock the way to the catfish's bank (a
+  // glove or the Hammer), and the hookshot gap west starts from that bank.
+  e->dw_n = e->pearl && (e->lift2 || (e->lift1 && e->hammer) ||
+                         (e->aga && e->hook && (e->lift1 || e->hammer || e->flippers)));
+  e->dw_s = e->pearl && (e->lift2 || (e->lift1 && e->hammer) || (e->aga && (e->hammer || e->flippers)) || e->dw_n);
   e->flute = e->dw_s;                              // shovel from the flute boy, then dig
   e->ether = e->dm && e->book && e->sword2;        // tablets need the Master Sword
   e->quake = e->dw_n && e->lift1;                  // catfish
@@ -478,8 +481,10 @@ void Rando_OnSmithsReturnSword() {
 
 void Rando_GiveStartItems() {
   uint8 *pending = &g_ram[0xF000 + kRandoPendingOffs];
+  // (Only in the uncle's own room, and so to the Link that met him: with
+  // free roaming a teammate elsewhere would get it otherwise.)
   if (!*pending || Rando_CurrentSeed() == 0 || submodule_index != 0 ||
-      (main_module_index != 7 && main_module_index != 9) ||
+      main_module_index != 7 || BYTE(dungeon_room_index) != 0x55 ||
       link_player_handler_state != 0 || link_auxiliary_state || item_receipt_method ||
       flag_is_link_immobilized)
     return;

@@ -541,6 +541,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       const char *seed_str = StringStartsWithNoCase(value, "seed:");
       if (seed_str) {
         uint32 seed = (uint32)strtoul(seed_str, NULL, 16);
+        if (seed < 2)
+          fprintf(stderr, "Randomizer seeds start at 00000002: using that instead of %08X\n", seed);
         g_config.randomizer = seed > 1 ? seed : 2;
       } else {
         bool on;
