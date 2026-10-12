@@ -1262,8 +1262,10 @@ void SpriteModule_Drown(int k) {  // 86859c
     SpriteDraw_SingleLarge(k);
     OamEnt *oam = GetOamCurPtr();
     int j = sprite_delay_main[k];
-    if (j == 1)
+    if (j == 1) {
       sprite_state[k] = 0;
+      Sprite_RecordKillOW(k);
+    }
     if (j != 0) {
       assert((j >> 1) < 11);
       oam->charnum = kSpriteDrown_Oam_Char[j >> 1];
@@ -1291,8 +1293,10 @@ void SpriteModule_Drown(int k) {  // 86859c
       sprite_delay_main[k]++;
     sprite_oam_flags[k] = 0;
     sprite_hit_timer[k] = 0;
-    if (!sprite_delay_main[k])
+    if (!sprite_delay_main[k]) {
       sprite_state[k] = 0;
+      Sprite_RecordKillOW(k);
+    }
     Sprite_DrawMultiple(k, &kSpriteDrown_Dmd[(sprite_delay_main[k] << 1 & 0xf8) >> 2], 2, NULL);
   }
 }
@@ -1359,9 +1363,10 @@ bool Sprite_ReturnIfPhasingOut(int k) {  // 86d0ed
   if (!(frame_counter & 1))
     sprite_stunned[k]--;
   uint8 a = sprite_stunned[k];
-  if (a == 0)
+  if (a == 0) {
     sprite_state[k] = 0;
-  else if (a >= 0x28 || (a & 1) != 0)
+    Sprite_RecordKillOW(k);
+  } else if (a >= 0x28 || (a & 1) != 0)
     return false;
   PrepOamCoordsRet info;
   Sprite_PrepOamCoordOrDoubleRet(k, &info);
@@ -3678,7 +3683,21 @@ void Dungeon_LoadSprites() {  // 89c290
     k = Dungeon_LoadSingleSprite(k, src) + 1;
 }
 
+// Co-op: an area sprite is gone for good (killed, fallen, drowned...), unlike
+// one Sprite_KillSelf put away for being far off-screen, which comes back
+// with the camera. Indoors the game records this itself (sprite_where_in_room).
+// A world merging into another copy of the area takes its kills along
+// (instance.c, MergeSpriteKills).
+void Sprite_RecordKillOW(int k) {
+  uint16 blk = sprite_N_word[k];
+  if (player_is_indoors || blk >= 0x1000)
+    return;
+  overworld_sprite_killed[blk >> 3] |= 0x80 >> (blk & 7);
+}
+
 void Sprite_ManuallySetDeathFlagUW(int k) {  // 89c2f5
+  if (!player_is_indoors)
+    Sprite_RecordKillOW(k);
   if (!player_is_indoors || sprite_defl_bits[k] & 1 || sign8(sprite_N[k]))
     return;
   sprite_where_in_room[dungeon_room_index2] |= 1 << sprite_N[k];
@@ -3753,6 +3772,7 @@ void Sprite_ResetAll_noDisable() {  // 89c452
     super_bomb_indicator_unk2 = 0xfe;
   memset(sprite_where_in_room, 0, 0x1000);
   memset(overworld_sprite_was_loaded, 0, 0x200);
+  memset(overworld_sprite_killed, 0, 0x200);
   memset(dungeon_room_history, 0xff, 8);
 }
 

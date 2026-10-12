@@ -1,0 +1,48 @@
+# Free roaming: an item picked in the (private) item menu is what the Y
+# button uses afterwards. P1 and P2 each pick the boomerang (hud item 2,
+# Y item 2); pressing Y must then not shoot an arrow.
+load 2
+run 30
+join 2
+run 20
+poke f377 05
+hold 2 S
+run 1
+hold 2 -
+run 40
+hold 2 R
+run 2
+hold 2 -
+run 10
+hold 2 S
+run 1
+hold 2 -
+run 60
+expect_instances 1
+expect_pram 2 202 02
+expect_pram 2 303 02
+hold 2 Y
+run 10
+hold 2 -
+run 30
+expect_ram f377 05
+hold 1 S
+run 1
+hold 1 -
+run 40
+hold 1 R
+run 2
+hold 1 -
+run 10
+hold 1 S
+run 1
+hold 1 -
+run 60
+expect_instances 1
+expect_pram 1 202 02
+expect_pram 1 303 02
+hold 1 Y
+run 10
+hold 1 -
+run 30
+expect_ram f377 05

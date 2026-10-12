@@ -599,6 +599,10 @@ void Mp_EndFrame() {
                   (g_mp.area_key == 0xffffffff && link_auxiliary_state);
     if (!in_bed && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0)
       g_mp.area_key = Mp_AreaKey();
+    // (A Link alone in its world in a co-op game picks items in a menu world
+    // of its own; the box here still shows the old one.)
+    if (g_mp_coop && (main_module_index == 7 || main_module_index == 9))
+      Hud_SyncItemBox();
     return;
   }
   Mp_SwapToLeader();
@@ -631,6 +635,10 @@ void Mp_EndFrame() {
       g_mp.leader = nl;
     }
   }
+  // The HUD's item box shows the leader's item: the other Links' control code
+  // may have drawn theirs there this frame, or the leader may have changed.
+  if (m == 7 || m == 9)
+    Hud_SyncItemBox();
 }
 
 void Mp_BeginObject() {

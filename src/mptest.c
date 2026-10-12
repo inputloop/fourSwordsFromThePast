@@ -28,6 +28,8 @@
 //   ff <0|1>            friendly fire
 //   together <0|1>      1: shared screen with group exits, 0: free roaming (default)
 //   story <0|1> / title <0|1>  the Four Swords opening story / title screen text
+//   features <hex>      turn game features on (2: switch items with L/R)
+//   pitem               print every player's items and the HUD item box
 //   hd2d <0|1> [lighting] [see through 0|1]  the 2D-HD look for screenshots
 //   view <p>            later commands without a player (shot, peek, expect_module) use p's world
 //   wander <frames> <seed>  every player walks around randomly and swings the sword
@@ -49,6 +51,7 @@
 //   expect_bg3hofs <x>  the HUD layer's horizontal scroll (after drawing)
 //   expect_hd2d <min hidden> <max hidden> <dark 0|1> [min lights]  the 2D-HD pass's see-through, darkness and lights
 //   check_area          no standing Link on the overworld is outside the area its world has loaded
+//   expect_sprite_gone <hexN> / expect_sprite_there <hexN>  the area/room sprite with that list index is dead / alive
 //   holecheck           every overworld fall hole resolves to the right entrance from any camera position
 //   reload              save and load every world the way netplay sends them; nothing may change
 //   randocheck <seed> <count> [v]  every seed gives a beatable placement (v: print spoilers)
@@ -197,8 +200,8 @@ static void PrintStatus(int frame) {
   Inst_Switch(r);
   for (int k = 0; k < 16; k++)
     if (sprite_state[k])
-      printf("  sprite %d type=%x state=%d hp=%d x=%d y=%d z=%d ai=%d floor=%d\n", k, sprite_type[k], sprite_state[k], sprite_health[k],
-             Sprite_GetX(k), Sprite_GetY(k), sprite_z[k], sprite_ai_state[k], sprite_floor[k]);
+      printf("  sprite %d type=%x state=%d hp=%d x=%d y=%d z=%d ai=%d floor=%d N=%x\n", k, sprite_type[k], sprite_state[k], sprite_health[k],
+             Sprite_GetX(k), Sprite_GetY(k), sprite_z[k], sprite_ai_state[k], sprite_floor[k], player_is_indoors ? sprite_N[k] : sprite_N_word[k]);
 }
 
 int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
@@ -780,6 +783,24 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       for (int i = 0; i < rp->count && i < 4; i++)
         printf(" [x%d y%d chr%02x fl%02x]", rp->oam[i * 2] & 0xff, rp->oam[i * 2] >> 8, rp->oam[i * 2 + 1] & 0xff, rp->oam[i * 2 + 1] >> 8);
       printf("\n");
+    } else if (!strcmp(cmd, "features")) {
+      // features <hex>: OR bits into the wanted game features (2 = switch items with L/R)
+      g_wanted_zelda_features |= strtoul(arg1, NULL, 16);
+    } else if (!strcmp(cmd, "pitem")) {
+      // pitem: print every player's item state and the HUD item box tile of the viewed world
+      int r = Inst_Current();
+      printf("[frame %d] items:", frame);
+      for (int p = 0; p < kMpMaxPlayers; p++) {
+        if (!Inst_IsJoined(p))
+          continue;
+        SwitchToPlayer(p);
+        printf(" P%d(w%d%s y=%02x cy=%02x x=%02x l=%02x r=%02x bot=%02x)", p + 1, Inst_Current(), p == g_mp.leader ? "L" : "",
+               *Mp_PlayerRam(p, 0x202), *Mp_PlayerRam(p, 0x303), *Mp_PlayerRam(p, 0x656), *Mp_PlayerRam(p, 0x657),
+               *Mp_PlayerRam(p, 0x658), *Mp_PlayerRam(p, 0xF34F));
+      }
+      Inst_Switch(r);
+      printf(" | w%d ram202=%02x hudtile=%04x %04x feat=%x mod=%d/%d\n", Inst_Current(), hud_cur_item,
+             hud_tile_indices_buffer[1 * 32 + 5], hud_tile_indices_buffer[2 * 32 + 5], enhanced_features0, main_module_index, submodule_index);
     } else if (!strcmp(cmd, "pram")) {
       // pram <p> <hexaddr> <hexval>: change a byte of player p's own state (its Link context)
       int p = PlayerArg(arg1);
@@ -1009,6 +1030,20 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       for (int y = atoi(arg2) & ~7; y <= atoi(arg4); y += 8)
         for (int x = atoi(arg1) & ~7; x <= atoi(arg3); x += 8)
           dung_bg2_attr_table[(y >> 3 & 63) * 64 + (x >> 3 & 63)] = dung_bg1_attr_table[(y >> 3 & 63) * 64 + (x >> 3 & 63)] = strtol(arg5, NULL, 16);
+    } else if (!strcmp(cmd, "expect_sprite_gone") || !strcmp(cmd, "expect_sprite_there")) {
+      // expect_sprite_gone <hexN> / expect_sprite_there <hexN>: the area/room sprite
+      // with that index (sprite_N_word outdoors, sprite_N indoors) is dead / alive
+      // in the viewed world (a prize it dropped keeps its index: not the sprite)
+      int want = strtol(arg1, NULL, 16), found = -1;
+      for (int k = 0; k < 16; k++)
+        if (sprite_state[k] && (player_is_indoors ? sprite_N[k] : sprite_N_word[k]) == want &&
+            !(sprite_type[k] >= 0xd8 && sprite_type[k] <= 0xe6))
+          found = k;
+      bool gone = !strcmp(cmd, "expect_sprite_gone");
+      if ((found >= 0) == gone) {
+        printf("FAIL: sprite N=%s is %s in world %d at frame %d\n", arg1, found >= 0 ? "alive" : "gone", Inst_Current(), frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "clearsprites")) {
       for (int k = 0; k < 16; k++)
         sprite_state[k] = 0;

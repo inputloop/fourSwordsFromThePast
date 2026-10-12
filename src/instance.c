@@ -239,7 +239,9 @@ static void Deactivate(int i) {
 
 // The fields of a player that the item menu changes (and so go back with it
 // to where its Link stands).
-static const uint16 kMenuChoices[] = { 0x202, 0x656, 0x657, 0x658, 0xF34F };
+// (0x303, current_item_y, is what the Y button uses: hud_cur_item alone only
+// changes what the box shows.)
+static const uint16 kMenuChoices[] = { 0x202, 0x303, 0x656, 0x657, 0x658, 0xF34F };
 
 // Ends a player's item menu or map world: with keep_choices, the items it
 // picked there are carried back to its Link.
@@ -466,6 +468,65 @@ static bool RunInstance(int i, const uint16 *inputs) {
   return replay;
 }
 
+// Whatever died in world |from| (another copy of the same area or room) dies
+// here too, so nobody meets an enemy a teammate already killed. Sprites far
+// off-screen that the game merely put away (Sprite_KillSelf) are not kills;
+// what's left of a kill here, a prize it dropped, stays. Dynamic spawns
+// (no place in the area's sprite list) are not matched: they are in neither
+// record. Call in world |to|, with the kills gathered by GatherSpriteKills.
+typedef struct SpriteKills {
+  uint32 key;               // the area or room the kills are of (Mp_AreaKeyPublic)
+  bool indoors;
+  uint16 room;
+  uint16 room_bits;         // sprite_where_in_room of the room (indoors)
+  uint8 area_bits[0x200];   // overworld_sprite_killed (outdoors)
+} SpriteKills;
+
+static void GatherSpriteKills(SpriteKills *sk) {
+  sk->key = Mp_AreaKeyPublic();
+  sk->indoors = player_is_indoors != 0;
+  sk->room = dungeon_room_index2;
+  sk->room_bits = sk->indoors ? sprite_where_in_room[dungeon_room_index2] : 0;
+  memcpy(sk->area_bits, overworld_sprite_killed, sizeof(sk->area_bits));
+}
+
+static bool IsPrizeSprite(int k) {
+  return sprite_type[k] >= 0xd8 && sprite_type[k] <= 0xe6;
+}
+
+static void ApplySpriteKills(const SpriteKills *sk) {
+  // (Only another copy of the same place: everybody also comes together at
+  // the title screen or a game over, from anywhere.)
+  if (sk->key != Mp_AreaKeyPublic() || sk->indoors != (player_is_indoors != 0) ||
+      (sk->indoors && sk->room != dungeon_room_index2))
+    return;
+  int killed = 0;
+  if (sk->indoors) {
+    sprite_where_in_room[sk->room] |= sk->room_bits;
+    for (int k = 0; k < 16; k++) {
+      if (!sprite_state[k] || sprite_state[k] >= 10 || sign8(sprite_N[k]) || (sprite_defl_bits[k] & 1) || IsPrizeSprite(k))
+        continue;
+      if (sk->room_bits & (1 << sprite_N[k]))
+        sprite_state[k] = 0, killed++;
+    }
+  } else {
+    for (int i = 0; i < 0x200; i++) {
+      overworld_sprite_killed[i] |= sk->area_bits[i];
+      // (Not loaded here yet: don't let the camera find it later either.)
+      overworld_sprite_was_loaded[i] |= sk->area_bits[i];
+    }
+    for (int k = 0; k < 16; k++) {
+      uint16 blk = sprite_N_word[k];
+      if (!sprite_state[k] || sprite_state[k] >= 10 || blk >= 0x1000 || IsPrizeSprite(k))
+        continue;
+      if (sk->area_bits[blk >> 3] & (0x80 >> (blk & 7)))
+        sprite_state[k] = 0, killed++;
+    }
+  }
+  if (killed)
+    TRACE("  %d sprites killed in the other world die here\n", killed);
+}
+
 static void MovePlayers(int from, int to) {
   TRACE("  move players of world %d into %d\n", from, to);
   uint8 ctx[kMpMaxPlayers][kMpCtxMaxBytes];
@@ -484,7 +545,10 @@ static void MovePlayers(int from, int to) {
     away[p] = g_mp.away[p];
     Mp_ExportPlayer(p, ctx[p]);
   }
+  SpriteKills kills;
+  GatherSpriteKills(&kills);
   Inst_Switch(to);
+  ApplySpriteKills(&kills);
   Deactivate(from);
   for (size_t k = 0; k < countof(kTransientAddrs); k++)
     g_ram[kTransientAddrs[k]] |= transient[k];

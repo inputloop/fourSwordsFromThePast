@@ -1,0 +1,41 @@
+# The HUD's item box shows the leader's Y item. With item switching on
+# (L/R), a teammate on the same screen switching its own item must not
+# change what the box shows (P1 keeps the bow: icon tiles 28ba/2849).
+load 2
+features 2
+run 30
+join 2
+run 20
+expect_pram 1 202 01
+expect_pram 2 202 01
+expect_ram c74a ba
+expect_ram c74b 28
+hold 2 r
+run 2
+hold 2 -
+run 10
+expect_pram 1 202 01
+expect_pram 2 202 02
+expect_ram c74a ba
+expect_ram c74b 28
+# P1's own switch does change the box (boomerang: 2cb8).
+hold 1 r
+run 2
+hold 1 -
+run 10
+expect_pram 1 202 02
+expect_ram c74a b8
+expect_ram c74b 2c
+# P2 switching back and forth: the box still shows P1's boomerang.
+hold 2 l
+run 2
+hold 2 -
+run 10
+hold 2 r
+run 2
+hold 2 -
+run 10
+expect_pram 1 202 02
+expect_pram 2 202 02
+expect_ram c74a b8
+expect_ram c74b 2c

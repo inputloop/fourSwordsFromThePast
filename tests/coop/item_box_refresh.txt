@@ -1,0 +1,25 @@
+# A teammate using up the last arrow (or bomb, or picking up an item) redraws
+# the HUD under its own context; the item box must still show the leader's
+# item afterwards. P1 has the boomerang (2cb8), P2 the bow (28ba).
+load 2
+features 2
+run 30
+join 2
+run 20
+hold 1 r
+run 2
+hold 1 -
+run 10
+expect_pram 1 202 02
+expect_pram 2 202 01
+expect_ram c74a b8
+expect_ram c74b 2c
+poke f377 01
+hold 2 Y
+run 3
+hold 2 -
+run 30
+expect_ram f377 00
+expect_pram 1 202 02
+expect_ram c74a b8
+expect_ram c74b 2c

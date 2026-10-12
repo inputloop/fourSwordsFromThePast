@@ -1362,6 +1362,21 @@ static void Hud_UpdateItemBox() {  // 8dfafd
     Hud_DrawItem(&hud_tile_indices_buffer[HUDXY(5, 1)], Hud_GetIconForItem(hud_cur_item));
 }
 
+// The item box belongs to the leader. Another Link's control code draws its
+// own item there (switching items with L/R, using up the last arrow or bomb,
+// receiving an item), and a new leader's item is never drawn: put the
+// resident's item back when the box shows something else.
+void Hud_SyncItemBox() {
+  if (!hud_cur_item)
+    return;
+  const ItemBoxGfx *src = Hud_GetIconForItem(hud_cur_item);
+  uint16 *dst = &hud_tile_indices_buffer[HUDXY(5, 1)];
+  if (dst[0] == src->v[0] && dst[1] == src->v[1] && dst[32] == src->v[2] && dst[33] == src->v[3])
+    return;
+  Hud_DrawItem(dst, src);
+  flag_update_hud_in_nmi++;
+}
+
 static void Hud_UpdateHearts_Inner(uint16 *dst, const uint16 *src, int n) {  // 8dfdab
   int x = 0;
   while (n > 0) {

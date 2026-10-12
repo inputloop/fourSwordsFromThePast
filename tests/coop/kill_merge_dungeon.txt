@@ -1,0 +1,39 @@
+# Co-op free roaming in a dungeon room: an enemy a teammate killed in its own
+# copy of the room (another world instance) stays dead when the worlds merge.
+load 2
+run 20
+enter 61
+run 150
+join 2
+run 10
+# P2 walks north out of P1's view in the castle's entrance hall: its own world.
+hold 2 U
+run 300
+hold 2 -
+run 30
+expect_instances 2
+expect_apart 1 2
+view 2
+# The hall's first soldier (sprite 0, N=0) next to P2, one hit away: a spin attack.
+poke d10 10
+poke d30 03
+poke d00 2c
+poke d20 0c
+poke e50 1
+hold 2 B
+run 70
+hold 2 -
+run 90
+expect_sprite_gone 0
+view 1
+expect_sprite_there 0
+# P2 walks back down to P1: the worlds merge into P1's.
+hold 2 D
+run 300
+hold 2 -
+run 60
+status
+expect_instances 1
+expect_same 1 2
+view 1
+expect_sprite_gone 0

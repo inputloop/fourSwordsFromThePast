@@ -1,0 +1,30 @@
+# Free roaming: a Link alone in its world picks the boomerang in its menu;
+# its own item box shows it afterwards (tiles 2cb8, not the bow's 28ba).
+load 2
+run 30
+join 2
+run 20
+hold 1 U
+run 300
+hold 1 -
+expect_instances 2
+view 2
+expect_ram c74a ba
+hold 2 S
+run 1
+hold 2 -
+run 40
+hold 2 R
+run 2
+hold 2 -
+run 10
+hold 2 S
+run 1
+hold 2 -
+run 60
+expect_instances 2
+view 2
+expect_pram 2 202 02
+expect_pram 2 303 02
+expect_ram c74a b8
+expect_ram c74b 2c

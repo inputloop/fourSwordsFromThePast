@@ -1,0 +1,23 @@
+# When the leader goes down, the Link that takes over the camera has its own
+# item shown in the box. P1 has the boomerang (2cb8), P2 the bow (28ba).
+load 2
+features 2
+run 30
+join 2
+run 20
+hold 1 r
+run 2
+hold 1 -
+run 10
+expect_ram c74a b8
+expect_ram c74b 2c
+down 1
+run 10
+expect_pram 2 202 01
+expect_ram c74a ba
+expect_ram c74b 28
+# P1 gets up again, P2 keeps leading, the box keeps showing P2's bow.
+revive 1
+run 10
+expect_ram c74a ba
+expect_ram c74b 28

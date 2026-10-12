@@ -1200,6 +1200,10 @@
 #define mapbak_palette ((uint16*)(g_ram+0x1DD80))
 #define sprite_where_in_room ((uint16*)(g_ram+0x1DF80))
 #define overworld_sprite_was_loaded ((uint8*)(g_ram+0x1EF80))
+// Co-op: area sprites killed since the area was loaded, a bit per sprite
+// (indexed like overworld_sprite_was_loaded), so a world merging into another
+// copy of the area takes its kills along. Unused RAM in the original game.
+#define overworld_sprite_killed ((uint8*)(g_ram+0x1F180))
 #define garnish_type ((uint8*)(g_ram+0x1F800))
 #define garnish_y_lo ((uint8*)(g_ram+0x1F81E))
 #define garnish_x_lo ((uint8*)(g_ram+0x1F83C))

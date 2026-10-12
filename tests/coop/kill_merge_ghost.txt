@@ -1,0 +1,41 @@
+# Co-op free roaming, the other way round: P1 kills the soldier in world A, then goes down; A (ghosts only)
+# merges into P2's world B, which survives: the soldier must be dead in B.
+load 2
+run 30
+join 2
+run 10
+hold 2 D
+run 260
+hold 2 -
+run 10
+expect_instances 2
+view 1
+# soldier 13 (N=701) next to P1, one hit away
+poke d1d 68
+poke d3d 0f
+poke d0d 2b
+poke d2d 06
+poke e5d 1
+hold 1 R
+run 4
+hold 1 -
+run 4
+hold 1 B
+run 2
+hold 1 -
+run 14
+hold 1 B
+run 2
+hold 1 -
+run 60
+status
+expect_sprite_gone 701
+view 2
+expect_sprite_there 701
+down 1
+run 30
+status
+expect_instances 1
+expect_same 1 2
+view 2
+expect_sprite_gone 701

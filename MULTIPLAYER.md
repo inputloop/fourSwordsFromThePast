@@ -12,8 +12,9 @@ Players can drop in and drop out at any time.
   keyboard keys and two controller buttons per SNES button (press to assign),
   which controller the player uses (or keyboard only, so two players can
   share a keyboard), left stick deadzone, and an Xbox/Nintendo face button
-  swap. A live "Pressed" line shows what the game sees. Arrows, Enter,
-  Backspace and the d-pad always work in the menu.
+  swap. A live "Pressed" line shows what the game sees. Arrows, Enter and
+  Backspace work in player 1's menu and the d-pad in anyone's; a pad that
+  belongs to another player never drives someone else's menu.
 - **Couch co-op**: the keyboard plus the first controller is player 1. Every
   other controller joins by pressing START (Back+Start opens the menu
   instead, to set the controller up first). Use *Multiplayer > Remove local
@@ -90,7 +91,8 @@ Players can drop in and drop out at any time.
   - Progress is shared between the worlds right away: items, rupees, bombs,
     arrows, keys, opened chests and doors, defeated bosses, pendants and
     crystals. Room contents (enemies, pots, switches) are per world until the
-    worlds merge.
+    worlds merge; enemies a teammate killed in its copy of the room or area
+    stay dead when the worlds merge.
   - A follower (Zelda, the old man, ...) stays with whoever was leading the
     group.
   - The sound is from the world of the first player on this computer.
@@ -234,9 +236,15 @@ frames gives the same game everywhere.
 - Every second the host sends a hash of the game state. A client that differs
   reloads a fresh snapshot automatically, and so does everyone when the host
   loads a save state.
-- Clients never write the host's world to their own save files.
-- UDP only, port 47474. LAN games are found with a broadcast; UPnP mapping is
-  in `src/upnp.c`.
+- Clients never write the host's world to their own save files, not even
+  after leaving the game (they keep playing it locally; a reset brings
+  their own files back).
+- Leaving or quitting tells the others at once; a dropped host leaves its
+  clients with "Lost connection to the host", a wrong address with "No
+  answer: check the address and port".
+- UDP only, port 47474 by default. LAN games are found with a broadcast (a
+  host on another port still answers it on 47474); UPnP mapping, with a
+  renewed two-hour lease, is in `src/upnp.c`.
 
 All players should run the same build and the same `Language` setting.
 

@@ -1,0 +1,51 @@
+# Co-op free roaming: an enemy a teammate killed in its own copy of the area
+# stays dead after the worlds merge, even when the surviving world had put
+# it away for being far off-screen (the game reloads those as the camera
+# comes back).
+load 2
+run 30
+join 2
+run 10
+hold 2 D
+run 260
+hold 2 -
+run 10
+expect_instances 2
+view 2
+# The area's soldier (sprite 13, N=701) comes at P2, who kills it.
+poke e5d 1
+hold 2 R
+run 4
+hold 2 -
+run 110
+hold 2 B
+run 2
+hold 2 -
+run 14
+hold 2 B
+run 2
+hold 2 -
+run 14
+hold 2 B
+run 2
+hold 2 -
+run 60
+expect_sprite_gone 701
+# Meanwhile P1 went far enough left for its world to put the soldier away
+# (its "loaded" bit, 0x40 of 1F060, is clear again).
+view 1
+pos 1 3600 1579
+run 120
+expect_sprite_gone 701
+expect_ram 1f060 0
+# P2 comes to P1: one world again, which knows of the kill.
+pos 2 3620 1600
+run 120
+expect_instances 1
+expect_same 1 2
+expect_ram 1f060 40
+# P1 goes back: the soldier must not be there.
+pos 1 3920 1700
+run 120
+view 1
+expect_sprite_gone 701
