@@ -75,6 +75,7 @@ bool g_inst_trace;
 static bool Inst_OtherInstanceAlive();
 static void Inst_CollapseIntoCurrent();
 static void Inst_Sync();
+static bool Inst_NeighbourCamera(uint16 *cx, uint16 *cy);
 
 static MpState *MpOf(int i) {
   return i == g_cur ? &g_mp : &g_inst[i].mp;
@@ -129,6 +130,7 @@ void Inst_Init() {
   g_cur = 0;
   g_audio_inst = 0;
   g_mp_other_instance_alive = &Inst_OtherInstanceAlive;
+  g_mp_neighbour_camera = &Inst_NeighbourCamera;
   g_mp_state_loaded_hook = &Inst_CollapseIntoCurrent;
   memcpy(g_shared, g_ram + kSharedStart, sizeof(g_shared));
 }
@@ -194,6 +196,38 @@ static bool HasAlive(int i) {
   return false;
 }
 
+
+// Another world in this same area or room whose camera has this world's
+// leader in view: its camera position, for a lone player's camera to close
+// in on, so the worlds can merge without the view jumping. (The other
+// world's memory is read directly; every machine holds all the worlds, so
+// this is the same everywhere.)
+static bool Inst_NeighbourCamera(uint16 *cx, uint16 *cy) {
+  if (!Mp_InStableGameplay() || flag_is_link_immobilized)
+    return false;
+  uint32 key = Mp_AreaKeyPublic();
+  int lx = Mp_PlayerX(g_mp.leader), ly = Mp_PlayerY(g_mp.leader);
+  for (int i = 0; i < kInstMax; i++) {
+    if (i == g_cur || !g_inst[i].active)
+      continue;
+    const uint8 *r = g_inst[i].ram;
+    const MpState *m = &g_inst[i].mp;
+    bool indoors = r[0x1B] != 0;  // player_is_indoors
+    uint32 k = indoors << 16 | (indoors ? *(uint16 *)&r[0xA0] : *(uint16 *)&r[0x40A]);  // dungeon_room_index / overworld_area_index
+    // (A world of ghosts waiting in plain gameplay counts too: the player
+    // coming to revive them closes in on it the same way.)
+    if (k != key || !((r[0x10] == 7 || r[0x10] == 9) && r[0x11] == 0) || m->area_key == 0xffffffff ||
+        r[0x2E4])  // flag_is_link_immobilized
+      continue;
+    int cam_x = *(uint16 *)&r[0xE2], cam_y = *(uint16 *)&r[0xE8];  // BG2HOFS_copy2, BG2VOFS_copy2
+    int sx = (int16)(lx - cam_x), sy = (int16)(ly - cam_y);
+    if (sx < 8 || sx > 256 - 24 || sy < 8 || sy > 224 - 24)
+      continue;
+    *cx = cam_x, *cy = cam_y;
+    return true;
+  }
+  return false;
+}
 
 // Is someone standing in another world? (A player in the item menu counts
 // where its Link is, not in the menu's world: if that Link goes down, the
@@ -564,6 +598,7 @@ static void MovePlayers(int from, int to) {
 
 typedef struct InstView {
   bool stable;
+  bool playing;  // plain gameplay: a lone player's camera can close in on this world's
   bool has_follower;
   uint32 key;
   uint16 cam_x, cam_y;
@@ -576,6 +611,7 @@ static void GetView(int i, InstView *v) {
   // out, say) is still ready to be joined.
   if (!v->stable && !HasAlive(i) && main_module_index == 14)
     v->stable = true;
+  v->playing = Mp_InStableGameplay() && !flag_is_link_immobilized;
   v->has_follower = follower_indicator != 0;
   v->key = Mp_AreaKeyPublic();
   v->cam_x = BG2HOFS_copy2;
@@ -596,8 +632,14 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
   // (A world of ghosts is paused, so its grace would never run out.)
   if ((MpOf(a)->merge_grace && HasAlive(a)) || (MpOf(b)->merge_grace && HasAlive(b)))
     return false;
-  // Only once the cameras are nearly in the same place, so nobody's view jumps.
-  if (abs((int16)(va->cam_x - vb->cam_x)) > 48 || abs((int16)(va->cam_y - vb->cam_y)) > 48)
+  // Only once the cameras are nearly in the same place, so nobody's view
+  // jumps. (A lone player's camera closes in on the group's by itself, see
+  // Inst_NeighbourCamera, so for one the jump can be kept really small.)
+  int nb = 0;
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    nb += MpOf(b)->p[p].joined && !MpOf(b)->p[p].downed && !MpOf(b)->away[p];
+  int tol = nb == 1 && va->playing ? 12 : 48;
+  if (abs((int16)(va->cam_x - vb->cam_x)) > tol || abs((int16)(va->cam_y - vb->cam_y)) > tol)
     return false;
   Inst_Switch(b);
   for (int p = 0; p < kMpMaxPlayers; p++) {

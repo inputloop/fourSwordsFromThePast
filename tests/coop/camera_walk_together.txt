@@ -1,0 +1,25 @@
+# V2 group camera, free roam: P2 80 px left of P1; both walk right, then both dash: the camera follows and nobody splits.
+load 3
+run 30
+join 2
+run 10
+pos 1 300 3800
+pos 2 300 3800
+cam 170 3688
+run 30
+clearsprites
+expect_instances 1
+pos 2 220 3800
+run 30
+hold 1 R
+hold 2 R
+run 100
+expect_same 1 2
+hold 1 RA
+hold 2 RA
+run 40
+expect_same 1 2
+hold 1 -
+hold 2 -
+run 30
+expect_same 1 2

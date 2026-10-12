@@ -1,0 +1,21 @@
+# V8c group camera, free roam: P1 walks west off the area's edge (x=3072) while P2 stands 190 px to the right, in view: the camera must reach the edge for the transition.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3110 2450
+pos 2 3110 2450
+run 300
+clearsprites
+pos 2 3300 2450
+run 60
+expect_same 1 2
+hold 1 L
+run 200
+hold 1 -
+run 100
+view 1
+expect_playing 1
+check_area
+expect_apart 1 2

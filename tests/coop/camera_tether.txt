@@ -1,0 +1,18 @@
+# V5 together mode with the group camera: P2 walks away from P1; the tether holds (104 px) and the camera follows the middle.
+load 3
+run 30
+join 2
+run 10
+pos 1 520 3800
+pos 2 520 3800
+cam 390 3688
+run 30
+clearsprites
+expect_instances 1
+together 1
+hold 2 L
+run 120
+hold 2 -
+run 10
+expect_near 1 520 3800
+expect_same 1 2

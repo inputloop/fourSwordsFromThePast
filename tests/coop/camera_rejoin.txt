@@ -1,0 +1,27 @@
+# Free roaming: a player who walked out of view (own world) and walks back
+# into the group's view rejoins it well before standing on top of anybody:
+# the lone player's camera closes in on the group's camera, so the worlds
+# merge with hardly any jump.
+load 3
+run 30
+join 2
+run 10
+pos 1 300 3800
+pos 2 300 3800
+cam 170 3688
+run 30
+clearsprites
+expect_instances 1
+hold 2 R
+run 200
+hold 2 -
+expect_apart 1 2
+run 60
+hold 2 L
+run 150
+expect_same 1 2
+# P2 is still some way from P1 when the worlds join.
+expect_near 2 375 3800
+hold 2 -
+run 60
+expect_instances 1

@@ -1,0 +1,20 @@
+# V6 group camera: no camera movement while the leader is immobilized (flag_is_link_immobilized) or a text box is up.
+load 3
+run 30
+join 2
+run 10
+pos 1 520 3800
+pos 2 520 3800
+cam 390 3688
+run 30
+clearsprites
+expect_instances 1
+pos 2 620 3800
+run 60
+poke 2e4 1
+pos 2 470 3800
+run 30
+poke 2e4 0
+run 60
+message 1
+run 30

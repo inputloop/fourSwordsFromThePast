@@ -16,6 +16,7 @@ MpState g_mp;
 MpRenderState g_mp_render;
 int16 g_mp_draw_offset[kMpMaxPlayers][2];
 bool (*g_mp_other_instance_alive)(void);
+bool (*g_mp_neighbour_camera)(uint16 *cx, uint16 *cy);
 void (*g_mp_state_loaded_hook)(void);
 bool g_mp_coop;
 
@@ -584,6 +585,8 @@ static void Mp_SyncQuadrantToLeader() {
   }
 }
 
+static void Mp_RestoreMenuLeader();
+
 void Mp_EndFrame() {
   if (g_mp.merge_grace)
     g_mp.merge_grace--;
@@ -617,6 +620,7 @@ void Mp_EndFrame() {
       }
     }
   }
+  Mp_RestoreMenuLeader();
   Mp_SyncQuadrantToLeader();
   Mp_AttributeObjects();
   if (main_module_index == 18 || main_module_index == 23)  // death / game over
@@ -651,9 +655,30 @@ void Mp_BeginObject() {
 void Mp_EndObject() {
   if (g_mp.resident != g_mp.leader &&
       (g_mp.module_snapshot[0] != main_module_index || g_mp.module_snapshot[1] != submodule_index)) {
+    // A menu or map (module 14) opened in a shared screen: the one who
+    // opened it leads while it is open (its item choices land in its own
+    // state), and the camera's player gets the lead back when it closes.
+    if (main_module_index == 14 && !g_mp.independent && !g_mp.menu_leader)
+      g_mp.menu_leader = g_mp.leader + 1;
     g_mp.leader = g_mp.resident;
   }
   Mp_SwapToLeader();
+}
+
+// Gives the lead back after a menu opened by a teammate closed (see
+// Mp_EndObject).
+static void Mp_RestoreMenuLeader() {
+  if (!g_mp.menu_leader)
+    return;
+  if (main_module_index == 14)
+    return;
+  int q = g_mp.menu_leader - 1;
+  g_mp.menu_leader = 0;
+  if ((main_module_index == 7 || main_module_index == 9) && submodule_index == 0 &&
+      Mp_IsAlive(q) && !g_mp.away[q] && q != g_mp.leader) {
+    Mp_SwapTo(q);
+    g_mp.leader = q;
+  }
 }
 
 static int Mp_NearestAlive(uint16 x, uint16 y) {
@@ -712,6 +737,9 @@ void Mp_PreSprite(int k) {
 }
 
 static OamEnt g_mp_oam_before[128];
+// The camera of a shared world follows the middle of its players instead of
+// the leader. (A setting, the same on every machine; 1 by default.)
+uint8 g_mp_group_camera = 1;
 
 void Mp_BeginLeaderOam() {
   if (g_mp_coop)
@@ -775,8 +803,99 @@ bool Mp_SuppressCamera() {
   return g_mp.in_other_update != 0;
 }
 
+// The point the camera of a shared world heads for: the middle of the
+// players playing in it (standing, not in a menu). Returns how many there
+// are; *fast says whether one of them is dashing.
+static int Mp_GroupTarget(uint16 *tx, uint16 *ty, bool *fast) {
+  int n = 0, minx = 0, maxx = 0, miny = 0, maxy = 0;
+  *fast = false;
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!Mp_IsAlive(p) || g_mp.away[p])
+      continue;
+    int x = Mp_PlayerX(p), y = Mp_PlayerY(p);
+    if (n == 0 || x < minx) minx = x;
+    if (n == 0 || x > maxx) maxx = x;
+    if (n == 0 || y < miny) miny = y;
+    if (n == 0 || y > maxy) maxy = y;
+    *fast |= *Mp_PlayerRam(p, 0x5D) == 17;  // link_player_handler_state: dashing
+    n++;
+  }
+  *tx = (minx + maxx) / 2;
+  *ty = (miny + maxy) / 2;
+  return n;
+}
+
+// Is the leader about to walk out of the overworld area (within |margin|
+// pixels of the line where the game moves on to the next area, heading
+// there)? The transition needs the camera at the area's edge, so the camera
+// then follows the leader alone.
+static bool Mp_LeaderAtAreaEdge(int margin) {
+  if (main_module_index != 9 || player_is_indoors)
+    return false;
+  int area = BYTE(overworld_area_index) & 0x3f;
+  int rb = overworld_right_bottom_bound_for_scroll;
+  int tx = (int16)(link_x_coord - kOverworld_OffsetBaseX[area]);
+  int ty = (int16)(link_y_coord - kOverworld_OffsetBaseY[area]);
+  int8 vx = link_x_vel, vy = link_y_vel;
+  return (vx < 0 && tx < 6 + margin) || (vx > 0 && tx >= rb + 4 - margin) ||
+         (vy < 0 && ty < 4 + margin) || (vy > 0 && ty >= rb - margin);
+}
+
+// How fast the camera slides toward a point |d| pixels off its centre.
+// (1 for the last few pixels, so the camera comes to rest exactly there.)
+static uint8 Mp_SlideSpeed(int d, bool fast) {
+  int a = abs(d);
+  int s = a > 64 || fast ? 4 : a > 24 ? 3 : a > 4 ? 2 : 1;
+  return d > 0 ? s : -s;
+}
+
 void Mp_CameraCatchUp(void (*scroll)(void)) {
-  if (!g_mp.independent || !g_mp_coop || g_mp.p[g_mp.leader].downed) {
+  if (!g_mp_coop || g_mp.p[g_mp.leader].downed) {
+    scroll();
+    return;
+  }
+  uint16 tx, ty;
+  bool fast;
+  int n = g_mp_group_camera ? Mp_GroupTarget(&tx, &ty, &fast) : 0;
+  // A group plays in this world: the camera keeps its middle in view, in
+  // place of the leader. (Not while the leader is held still by a cutscene
+  // or a text box, and not when it is about to leave the area: the screen
+  // transition needs the camera at the area's edge, where the leader is.)
+  if (n >= 2 && flag_is_link_immobilized) {
+    scroll();
+    return;
+  }
+  bool steer = n >= 2 && !Mp_LeaderAtAreaEdge(40);
+  // A lone player walking back into a group's view: the camera closes in on
+  // the group's camera, so the worlds can merge without the view jumping.
+  if (!steer && n == 1 && g_mp_group_camera && g_mp.independent && g_mp_neighbour_camera &&
+      !flag_is_link_immobilized && !Mp_LeaderAtAreaEdge(40)) {
+    uint16 cx, cy;
+    if (g_mp_neighbour_camera(&cx, &cy)) {
+      tx = cx + 128 - 8, ty = cy + 116 - 12;
+      fast = true;
+      steer = true;
+    }
+  }
+  if (steer) {
+    uint8 vx = link_x_vel, vy = link_y_vel;
+    uint16 lx = link_x_coord, ly = link_y_coord, lz = link_z_coord;
+    // The leader stays well inside the view (a teammate further off than
+    // that gets a world of its own soon, as before).
+    int d = (int16)(tx - lx);
+    tx = d > 104 ? lx + 104 : d < -104 ? lx - 104 : tx;
+    d = (int16)(ty - ly);
+    ty = d > 88 ? ly + 88 : d < -88 ? ly - 88 : ty;
+    int sx = (int16)(tx + 8 - BG2HOFS_copy2) - 128, sy = (int16)(ty + 12 - BG2VOFS_copy2) - 116;
+    link_x_coord = tx, link_y_coord = ty, link_z_coord = 0;
+    link_x_vel = sx ? Mp_SlideSpeed(sx, fast) : 0;
+    link_y_vel = sy ? Mp_SlideSpeed(sy, fast) : 0;
+    scroll();
+    link_x_coord = lx, link_y_coord = ly, link_z_coord = lz;
+    link_x_vel = vx, link_y_vel = vy;
+    return;
+  }
+  if (!g_mp.independent) {
     scroll();
     return;
   }

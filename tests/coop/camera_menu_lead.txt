@@ -1,0 +1,24 @@
+# Shared screen: a teammate opening the item menu leads only while it is
+# open; the lead (and so the camera and doors) goes back to who had it.
+load 3
+run 30
+join 2
+run 10
+pos 1 520 3800
+pos 2 520 3800
+run 300
+clearsprites
+expect_instances 1
+together 1
+hold 2 S
+run 2
+hold 2 -
+run 40
+expect_module 14
+expect_leader 2
+hold 2 S
+run 2
+hold 2 -
+run 40
+expect_module 9
+expect_leader 1

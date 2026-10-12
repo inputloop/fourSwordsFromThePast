@@ -1,0 +1,18 @@
+# V3 group camera, free roam: P2 walks away until it leaves the view: own world; world A re-centres on P1 within 60 frames.
+load 3
+run 30
+join 2
+run 10
+pos 1 300 3800
+pos 2 300 3800
+cam 170 3688
+run 30
+clearsprites
+expect_instances 1
+hold 2 R
+run 200
+hold 2 -
+expect_apart 1 2
+run 60
+view 1
+expect_leader 1

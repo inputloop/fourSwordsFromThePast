@@ -1,0 +1,25 @@
+# The camera of a shared world keeps the group in view instead of following
+# the leader only: P1 stands, P2 walks 120 px down, and the camera follows
+# their middle (60 px). Both stay in one world.
+load 3
+run 30
+join 2
+run 10
+pos 1 520 3800
+pos 2 520 3800
+run 100
+clearsprites
+run 100
+clearsprites
+run 100
+clearsprites
+expect_instances 1
+expect_camy 1 3696
+hold 2 D
+run 80
+hold 2 -
+run 40
+expect_near 2 520 3920
+expect_instances 1
+expect_same 1 2
+expect_camy 1 3756

@@ -33,6 +33,9 @@
 //   hd2d <0|1> [lighting] [see through 0|1]  the 2D-HD look for screenshots
 //   view <p>            later commands without a player (shot, peek, expect_module) use p's world
 //   wander <frames> <seed>  every player walks around randomly and swings the sword
+//   groupcam <0|1>      a shared world's camera follows the players' middle (1, default) or the leader (0)
+//   cam <x> <y>         put the viewed world's camera there right away
+//   camlog <n> [every]  run n frames, printing every world's camera, leader and the players' positions
 //   status              print player state
 // Checks:
 //   expect_instances <n>  the players are spread over n worlds
@@ -196,6 +199,16 @@ static void PrintStatus(int frame) {
            Mp_PlayerHealth(p), g_mp.p[p].downed, g_mp_render.p[p].count, *Mp_PlayerRam(p, 0x2F),
            *Mp_PlayerRam(p, 0x3C), *Mp_PlayerRam(p, 0x44), *Mp_PlayerRam(p, 0x5D), (int16)WORD(*Mp_PlayerRam(p, 0x24)), (int8)*Mp_PlayerRam(p, 0x28),
            *Mp_PlayerRam(p, 0x4D), *Mp_PlayerRam(p, 0x46), g_mp.carried_by[p]);
+  }
+  // What each pane on this machine shows: whose eyes, which world, its camera.
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    if (st->local_slot[i] < 0)
+      continue;
+    int w = Ui_WatchedPlayer(i), inst = Inst_ViewOfPlayer(w);
+    if (inst >= 0)
+      Inst_Switch(inst);
+    printf("  pane %d: P%d watches P%d in world %d cam=%d,%d module=%d/%d leader=P%d\n", i, st->local_slot[i] + 1, w + 1, inst,
+           BG2HOFS_copy2, BG2VOFS_copy2, main_module_index, submodule_index, g_mp.leader + 1);
   }
   Inst_Switch(r);
   for (int k = 0; k < 16; k++)
@@ -654,6 +667,43 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       WritePpm(arg1, width * 2, height, wide, width * 2);
       free(wide);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "groupcam")) {
+      // groupcam <0|1>: the camera of a shared world follows the players' middle (1) or the leader (0)
+      g_mp_group_camera = atoi(arg1);
+    } else if (!strcmp(cmd, "cam")) {
+      // cam <x> <y>: put the viewed world's camera at x,y right away (the
+      // scroll thresholds go with it, as after an area load)
+      BG2HOFS_copy2 = BG1HOFS_copy2 = atoi(arg1);
+      BG2VOFS_copy2 = BG1VOFS_copy2 = atoi(arg2);
+      camera_x_coord_scroll_hi = BG2HOFS_copy2 + 128;
+      camera_x_coord_scroll_low = camera_x_coord_scroll_hi + 2;
+      camera_y_coord_scroll_hi = BG2VOFS_copy2 + 116;
+      camera_y_coord_scroll_low = camera_y_coord_scroll_hi + 2;
+    } else if (!strcmp(cmd, "camlog")) {
+      // camlog <n> [every]: run n frames, printing every world's camera,
+      // leader and the players' positions every frame (or every k frames)
+      int n = atoi(arg1), every = arg2[0] ? atoi(arg2) : 1;
+      for (int k = 0; k < n; k++, frame++) {
+        Inst_RunFrame(held);
+        if (k % every)
+          continue;
+        int r = Inst_Current();
+        printf("camlog %d:", frame + 1);
+        for (int i = 0; i < kInstMax; i++) {
+          if (!Inst_IsActive(i))
+            continue;
+          Inst_Switch(i);
+          printf(" w%d[m%d/%d L%d cam=%d,%d]", i, main_module_index, submodule_index, g_mp.leader + 1, BG2HOFS_copy2, BG2VOFS_copy2);
+        }
+        for (int p = 0; p < kMpMaxPlayers; p++) {
+          if (!Inst_IsJoined(p))
+            continue;
+          SwitchToPlayer(p);
+          printf(" P%d(w%d %d,%d%s%s)", p + 1, Inst_Current(), Mp_PlayerX(p), Mp_PlayerY(p), g_mp.p[p].downed ? " down" : "", g_mp.away[p] ? " away" : "");
+        }
+        Inst_Switch(r);
+        printf("\n");
+      }
     } else if (!strcmp(cmd, "status")) {
       PrintStatus(frame);
     } else if (!strcmp(cmd, "down") || !strcmp(cmd, "revive")) {

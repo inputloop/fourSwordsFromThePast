@@ -96,10 +96,19 @@ Players can drop in and drop out at any time.
   - A follower (Zelda, the old man, ...) stays with whoever was leading the
     group.
   - The sound is from the world of the first player on this computer.
-- **The leader.** In a group sharing a screen, whoever opens a menu, talks
-  to someone or takes an exit becomes the leader that the camera, rooms and
-  cutscenes follow. (In a dungeon, the room's "which half is Link in" state
-  follows the new leader, or an exit could turn into a scroll.)
+- **The leader.** In a group sharing a screen, whoever talks to someone or
+  takes an exit becomes the leader that rooms, doors and cutscenes follow.
+  A teammate who opens the item menu or the map on a shared screen leads
+  only while it is open. (In a dungeon, the room's "which half is Link in"
+  state follows the new leader, or an exit could turn into a scroll.)
+- **The camera** of a shared world keeps the middle of the group in view
+  rather than one player: nobody is shoved off the edge while standing
+  still, two Links walking side by side never split, and a lone Link keeps
+  the original camera. Walking back to the group after a split, your camera
+  closes in on theirs and the worlds join on the way in, with hardly a jump.
+  Online every computer runs the same camera (it is
+  part of the game state), so each screen shows its own player's world, and
+  a Link that leaves the shared view gets a world and a camera of its own.
 - **Downed, not dead.** A Link that runs out of hearts becomes a pale ghost
   that lies where it fell. Someone has to come and stand next to it
   for 1.5 seconds to revive it with half a heart. It is game over only when

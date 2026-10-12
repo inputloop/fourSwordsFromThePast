@@ -1,0 +1,17 @@
+# V4 group camera in a dungeon (sanctuary, a 2-screen wide room): the camera stays within room_bounds (peek 600: y bounds, 608: x bounds).
+load 1
+run 30
+join 2
+run 10
+clearsprites
+peek 600 16
+hold 2 D
+run 40
+hold 2 L
+run 100
+hold 2 R
+run 200
+hold 2 -
+run 60
+peek 600 16
+expect_same 1 2

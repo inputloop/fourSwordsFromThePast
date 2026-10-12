@@ -43,7 +43,8 @@ typedef struct MpState {
   uint8 friendly_fire;
   uint8 in_other_update;
   uint8 after_death;
-  uint8 pad[3];
+  uint8 menu_leader;         // shared screen: who led (+1) before a teammate opened a menu, 0 = nobody
+  uint8 pad[2];
   uint32 area_key;
   uint8 ancilla_owner[10];
   uint8 ancilla_seen[10];
@@ -101,6 +102,8 @@ extern int16 g_mp_draw_offset[kMpMaxPlayers][2];
 // Display only: the players playing on this computer (bit per player); a
 // screen shows the HUD item of the first of them in the world it shows.
 extern uint8 g_mp_local_mask;
+// The camera of a shared world follows the middle of its players (1) or the leader (0).
+extern uint8 g_mp_group_camera;
 // Player colors (display only): 0 standard, 1 color-blind friendly.
 extern uint8 g_mp_color_scheme;
 uint32 Mp_PlayerColorRgb(int p);  // 0xRRGGBB, for the overlay
@@ -178,6 +181,9 @@ uint32 Mp_AreaKeyPublic();
 bool Mp_InStableGameplay();
 // Set by the instance code: is anyone standing in another world instance?
 extern bool (*g_mp_other_instance_alive)(void);
+// The camera of another world in this area that has this world's leader in
+// view (a lone player walking back to a group), or false.
+extern bool (*g_mp_neighbour_camera)(uint16 *cx, uint16 *cy);
 // Called when a regular save state was loaded (all players come back together).
 extern void (*g_mp_state_loaded_hook)(void);
 // True when more than one player is in the game in total (all instances).
