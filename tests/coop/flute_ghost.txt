@@ -1,0 +1,54 @@
+# Flying with the flute while a teammate lies downed here: the ghost stays
+# where it fell (as with any other way out of the area) and the one who
+# played the flute flies off alone; the ghost's world stays in the game
+# (not in the flute's map).
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+status
+pram 1 202 0d
+pram 1 303 08
+setleader 1
+hold 1 R
+run 30
+hold 1 -
+run 10
+down 2
+run 30
+pram 1 202 0d
+pram 1 303 08
+hold 1 Y
+run 4
+hold 1 -
+run 300
+expect_apart 1 2
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 9
+expect_downed 2
+expect_near 2 2232 2845
+view 2
+expect_module 9
+view 1
+expect_pram 1 4b 0
+hold 1 L
+run 60
+hold 1 -
+expect_near 1 1568 808

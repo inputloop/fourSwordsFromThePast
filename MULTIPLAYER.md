@@ -148,6 +148,10 @@ Players can drop in and drop out at any time.
     stay dead when the worlds merge.
   - A follower (Zelda, the old man, ...) stays with whoever was leading the
     group.
+  - Swimming, dashing or as a bunny, a Link moves on to the next area at its
+    edge like a walking one.
+  - The flute's bird (and the mirror) take the whole shared screen along:
+    the others are set down next to whoever played it.
   - The sound is from the world of the first player on this computer.
 - **The leader.** In a group sharing a screen, whoever talks to someone or
   takes an exit becomes the leader that rooms, doors and cutscenes follow.

@@ -158,6 +158,9 @@ uint16 Mp_PlayerY(int p);
 uint8 Mp_PlayerHealth(int p);
 uint8 Mp_PlayerMagic(int p);
 bool Mp_IsAlive(int p);
+// A Link moving about on its own: walking, swimming or as a bunny (not
+// hopping, knocked back, falling or in a cutscene). Takes link_player_handler_state.
+bool Mp_MovesFreely(uint8 handler_state);
 // The Link whose context is resident is flying from a throw (tile detection
 // then treats ledges as open ground, so it can land on top of one).
 bool Mp_ResidentIsThrown();

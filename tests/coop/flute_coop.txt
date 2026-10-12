@@ -1,0 +1,48 @@
+# Flying with the flute in co-op, from a playtest: the bird carries the
+# whole world along, and the teammates are set down next to the Link who
+# played it. They used to take on that Link's state at that moment (hidden
+# and held still while the bird sets it down) and stayed so for good:
+# invisible and unable to move. Here P1 plays it while P2 leads.
+rando 40
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+status
+pram 1 202 0d
+pram 1 303 08
+expect_leader 2
+pram 1 202 0d
+pram 1 303 08
+hold 1 Y
+run 4
+hold 1 -
+run 300
+expect_module 14
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 9
+expect_same 1 2
+expect_pram 2 4b 0
+expect_pram 2 2e4 0
+expect_pram 1 4b 0
+expect_pram 1 2e4 0
+hold 2 R
+run 60
+hold 2 -
+expect_near 2 1712 797

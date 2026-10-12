@@ -1,0 +1,67 @@
+# A bunny (the Dark World without the Moon Pearl) at an area's edge: like a
+# swimming Link, a bunny teammate was held at the edge for good, and a bunny
+# leader with company didn't move on either. West of Link's house.
+rando 40
+# (Twenty hearts, so the enemies over there don't end it early.)
+fullinv 1
+run 400
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 10
+hold 1 D
+hold 2 D
+run 150
+hold 1 L
+hold 2 L
+run 100
+hold 1 DL
+hold 2 DL
+run 60
+hold 1 L
+hold 2 L
+run 100
+hold 1 -
+hold 2 -
+clearsprites
+run 30
+setleader 1
+poke f357 0
+pram 2 56 1
+pram 2 5d 17
+run 30
+expect_pram 2 5d 17
+# The bunny teammate moves on to the next area. (There, in the Light World,
+# the game turns it back into Link.)
+hold 2 L
+run 200
+hold 2 -
+run 60
+expect_apart 1 2
+view 2
+clearsprites
+view 1
+# A bunny again; P1 follows, and with a bunny in it the worlds become one
+# again.
+pram 2 56 1
+pram 2 5d 17
+hold 1 L
+run 200
+hold 1 -
+run 300
+expect_instances 1
+# The bunny leads the way back with P1 in its world, and moves on.
+setleader 2
+pram 2 56 1
+pram 2 5d 17
+run 2
+expect_pram 2 5d 17
+hold 2 R
+run 200
+hold 2 -
+run 60
+expect_apart 1 2

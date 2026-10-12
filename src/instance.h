@@ -38,6 +38,7 @@ int Inst_OfPlayer(int p);      // where the player's Link is
 int Inst_ViewOfPlayer(int p);  // what the player sees and controls (its item menu or map, if open)
 bool Inst_PlayerInMenu(int p);
 uint8 Inst_PlayerViewModule(int p);       // main_module_index of what p sees
+uint8 Inst_PlayerViewSubmodule(int p);    // and its submodule_index
 const uint8 *Inst_PlayerWorldRam(int p);  // the memory of the world p's Link is in (read only)
 bool Inst_IsJoined(int p);
 int Inst_NumJoined();

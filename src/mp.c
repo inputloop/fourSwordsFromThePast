@@ -133,6 +133,18 @@ bool Mp_IsAlive(int p) {
   return g_mp.p[p].joined && !g_mp.p[p].downed;
 }
 
+bool Mp_MovesFreely(uint8 handler_state) {
+  return handler_state == kPlayerState_Ground || handler_state == kPlayerState_Swimming ||
+         handler_state == kPlayerState_PermaBunny || handler_state == kPlayerState_TempBunny;
+}
+
+// Would the game take this Link on to the next area at the area's edge, if
+// it led? Walking, swimming, as a bunny and dashing (17 is the dash itself):
+// not while hopping down a ledge, knocked back or flying from a throw.
+static bool Mp_MovesOnAtEdge(uint8 handler_state) {
+  return Mp_MovesFreely(handler_state) || handler_state == kPlayerState_StartDash;
+}
+
 // Assigns ownership of newly spawned ancillae and newly lifted sprites to
 // the player whose context is currently resident.
 static void Mp_AttributeObjects() {
@@ -180,8 +192,19 @@ static void Mp_RegroupPlayer(int p) {
   for (size_t i = 0; i < countof(kMpPersonalRanges); i++)
     for (int j = 0; j < kMpPersonalRanges[i].len; j++)
       *Mp_PlayerRam(p, kMpPersonalRanges[i].addr + j) = *pp++;
-  // Don't inherit whatever the leader was holding or doing.
-  static const uint16 kClear[] = { 0x301, 0x308, 0x309, 0x37A, 0x314, 0x2F4, 0x376, 0x373, 0x3C, 0x3A, 0x5D };
+  // Don't inherit whatever the leader was holding or doing: nor being
+  // hidden and held still (the bird is still setting the leader down after
+  // a flute flight, and only lets go of the leader), nor a knockback.
+  static const uint16 kClear[] = {
+    0x301, 0x308, 0x309, 0x37A, 0x314, 0x2F4, 0x376, 0x373, 0x3C, 0x3A, 0x5D,
+    0x4B,                // link_visibility_status
+    0x2E4,               // flag_is_link_immobilized
+    0x37B,               // link_disable_sprite_damage
+    0x2DA,               // link_pose_for_item
+    0x4D, 0x46, 0x2C6,   // link_auxiliary_state, link_incapacitated_timer, link_recoilmode_timer
+    0x27, 0x28, 0x29,    // link_actual_vel_y/x/z
+    0x24, 0x25,          // link_z_coord
+  };
   for (size_t i = 0; i < countof(kClear); i++)
     *Mp_PlayerRam(p, kClear[i]) = 0;
   *Mp_PlayerRam(p, 0x31F) = 0x20;  // countdown_for_blink
@@ -233,6 +256,26 @@ void Mp_NudgeSwitchPresser(int dy) {
 // Forgets what the co-op layer knows about a player who leaves this world
 // (or has just arrived): nothing carried, thrown, away or cooling down, and
 // whoever it was holding is set down where it is.
+// Hands what player p was doing in this world over to the leader, as p
+// leaves it. Not the bird p called with the flute, though: it goes too (here
+// it would pick up whoever leads now).
+static void Mp_HandOverObjects(int p) {
+  for (int i = 0; i < 10; i++) {
+    if (g_mp.ancilla_owner[i] != p)
+      continue;
+    if (ancilla_type[i] == 0x27) {  // the travel bird
+      if (ancilla_step[i])
+        tagalong_var5 = 0;  // (it had picked p up and hidden the follower)
+      ancilla_type[i] = 0;
+    } else {
+      g_mp.ancilla_owner[i] = g_mp.leader;
+    }
+  }
+  for (int i = 0; i < 16; i++)
+    if (g_mp.sprite_owner[i] == p)
+      g_mp.sprite_owner[i] = g_mp.leader;
+}
+
 static void Mp_ClearCoopState(int p) {
   g_mp.carried_by[p] = 0;
   g_mp.thrown[p] = 0;
@@ -297,12 +340,7 @@ void Mp_Leave(int p) {
     Mp_SwapTo(g_mp.leader);
   }
   g_mp.p[p].joined = 0;
-  for (int i = 0; i < 10; i++)
-    if (g_mp.ancilla_owner[i] == p)
-      g_mp.ancilla_owner[i] = g_mp.leader;
-  for (int i = 0; i < 16; i++)
-    if (g_mp.sprite_owner[i] == p)
-      g_mp.sprite_owner[i] = g_mp.leader;
+  Mp_HandOverObjects(p);
   g_mp_render.p[p].count = 0;
 }
 
@@ -1383,7 +1421,7 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
       // A teammate at the area's edge gets a world of its own, as the one
       // leading it, so its next step there takes it on to the next area.
       if (g_mp.independent && Mp_KeepInOverworldArea() && g_mp.split_request < 0 &&
-          *Mp_PlayerRam(p, 0x5D) == 0) {
+          Mp_MovesOnAtEdge(*Mp_PlayerRam(p, 0x5D))) {
         g_mp.split_request = p;
         g_mp.split_travel = 0;
       }
@@ -1422,9 +1460,9 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
     Mp_EndObject();
   }
   Mp_SwapToLeader();
-  // A leader knocked back or thrown doesn't move on to the next area either
-  // (the game checks that only while walking): keep it inside too.
-  if (g_mp.independent && link_player_handler_state != 0)
+  // A leader knocked back or thrown doesn't move on to the next area either:
+  // keep it inside too. (Swimming, as a bunny or dashing it does.)
+  if (g_mp.independent && !Mp_MovesOnAtEdge(link_player_handler_state))
     Mp_KeepInOverworldArea();
   Mp_PlaceCarried();
   Mp_HandleRevives();
@@ -1818,7 +1856,7 @@ void Mp_FinishRender(Ppu *ppu) {
 // plate, the swamp draining, the item menu?
 static bool Mp_LeavesRoom(uint8 m0, uint8 m1, uint8 s1) {
   if (m1 != m0)
-    return m1 != 14;
+    return m1 != 14 || s1 == 10;  // (module 14: menus and maps, but the flute's map flies off)
   if (m1 == 7)
     return !(s1 == 3 || s1 == 4 || s1 == 5 || (s1 >= 9 && s1 <= 0x0d) || s1 == 0x16 || s1 == 0x17);
   if (m1 == 9)
@@ -1966,12 +2004,7 @@ void Mp_RemovePlayer(int p) {
     Mp_SwapTo(g_mp.leader);
   }
   g_mp.p[p].joined = 0;
-  for (int i = 0; i < 10; i++)
-    if (g_mp.ancilla_owner[i] == p)
-      g_mp.ancilla_owner[i] = g_mp.leader;
-  for (int i = 0; i < 16; i++)
-    if (g_mp.sprite_owner[i] == p)
-      g_mp.sprite_owner[i] = g_mp.leader;
+  Mp_HandOverObjects(p);
   g_mp_render.p[p].count = 0;
 }
 

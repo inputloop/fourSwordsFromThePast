@@ -1,0 +1,46 @@
+# Swimming across an area's edge, from a playtest: a swimming teammate was
+# held at the edge for good (only one walking got a world of its own there
+# to move on), and so was a swimming leader with company in its world. The
+# channel at the north edge of the Dark World lake (save 10 has flippers).
+load 10
+run 60
+join 2
+run 30
+pos 1 3386 3112
+pos 2 3408 3112
+run 400
+expect_instances 1
+hold 1 D
+hold 2 D
+run 6
+hold 1 -
+hold 2 -
+run 60
+expect_pram 1 5d 4
+expect_pram 2 5d 4
+expect_instances 1
+# The teammate swims on to the next area.
+hold 2 U
+run 200
+hold 2 -
+run 30
+expect_apart 1 2
+expect_pram 2 5d 4
+status
+# The leader follows; swimming together in the same area, the two worlds
+# become one again.
+hold 1 U
+run 200
+hold 1 -
+run 300
+status
+expect_instances 1
+expect_same 1 2
+# Back down, the leader first with the teammate still in its world: the
+# leader moves on too.
+hold 1 D
+run 160
+hold 1 -
+run 60
+status
+expect_apart 1 2

@@ -1398,8 +1398,11 @@ static void DrawTeammateArrows() {
     InstPlace me, them;
     if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
       continue;
-    uint8 m = Inst_PlayerViewModule(view->player);
+    uint8 m = Inst_PlayerViewModule(view->player), s = Inst_PlayerViewSubmodule(view->player);
     if (m < 6 || m == 0x14 || m == 0x1a)
+      continue;
+    // (Nor over the item menu, the maps or the flute's map: they fill the screen.)
+    if (m == 14 && (s == 1 || s == 3 || s == 7 || s == 10))
       continue;
     int extra = (view->w - 256) / 2;  // widescreen: columns left of the camera
     for (int q = 0; q < kMpMaxPlayers; q++) {

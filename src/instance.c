@@ -663,7 +663,7 @@ static bool CanMerge(int a, const InstView *va, int b, const InstView *vb) {
       return false;
     if (g_mp.p[p].downed)
       continue;
-    if (*Mp_PlayerRam(p, 0x5D) != 0 ||   // link_player_handler_state: ground
+    if (!Mp_MovesFreely(*Mp_PlayerRam(p, 0x5D)) ||  // walking, swimming, a bunny
         *Mp_PlayerRam(p, 0x4D) != 0 ||   // link_auxiliary_state: recoil, falling...
         *Mp_PlayerRam(p, 0x308) != 0 ||  // carrying something
         *Mp_PlayerRam(p, 0x309) != 0 ||
@@ -1387,6 +1387,11 @@ uint8 Inst_PlayerReviveCtr(int p) {
 uint8 Inst_PlayerViewModule(int p) {
   int i = Inst_ViewOfPlayer(p);
   return i >= 0 ? g_inst[i].ram[0x10] : 0;
+}
+
+uint8 Inst_PlayerViewSubmodule(int p) {
+  int i = Inst_ViewOfPlayer(p);
+  return i >= 0 ? g_inst[i].ram[0x11] : 0;
 }
 
 const uint8 *Inst_PlayerWorldRam(int p) {
