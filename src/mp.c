@@ -705,7 +705,9 @@ void Mp_EndFrame() {
     Mp_HandlePings();
   if (g_mp.merge_grace)
     g_mp.merge_grace--;
-  if (main_module_index <= 5)
+  // (Not in module 5 itself: a mirror warp out of a dungeon and a continue
+  // after game over load through it in the middle of the game.)
+  if (main_module_index < 5)
     g_mp.at_title = 1;
   // A Link playing alone in a world keeps track of where it is, so players
   // who join this world later aren't mistaken for a group that just arrived.

@@ -14,3 +14,26 @@ run 300
 status
 expect_pram 1 f36e 80
 expect_pram 2 f36e 80
+# Only a file that really starts does that: a mirror warp out of a dungeon
+# also loads through the game's load module, and there a teammate keeps its
+# own Y item and hearts.
+load 4
+join 2
+enter c9
+run 300
+hold 1 U
+run 40
+hold 1 -
+pram 1 202 14
+pram 1 303 14
+pram 2 202 2
+pram 2 303 2
+hp 2 10
+hold 1 Y
+run 4
+hold 1 -
+run 400
+expect_module 7
+expect_pram 2 202 2
+expect_pram 2 303 2
+expect_hp 2 10
