@@ -199,6 +199,24 @@
     <ClCompile Include="src\randomizer.c">
       <Filter>Zelda</Filter>
     </ClCompile>
+    <ClCompile Include="src\archipelago.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ap_client.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ap_ws.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ap_tls.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ap_json.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\bindings.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
     <ClCompile Include="src\story.c">
       <Filter>Zelda</Filter>
     </ClCompile>
@@ -424,6 +442,21 @@
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\instance.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\archipelago.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ap_client.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ap_ws.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ap_tls.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\bindings.h">
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\randomizer.h">

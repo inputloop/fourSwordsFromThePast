@@ -1,0 +1,29 @@
+# Played by archipelago/tests/e2e.sh against a real Archipelago server.
+apconnect ws://localhost:@PORT@ E2E
+apwait connected 20
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_ram f407 41
+# The chest in Link's house: the server sends back what the multiworld put
+# there (in a one-player world, it is always ours).
+pos 1 2500 8650
+hold 1 U
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 200
+expect_ram f429 02
+apwait items 1 20
+apnotices
+# Ganon beaten: the server hears the goal (e2e.sh looks in its log).
+poke 10 19
+poke 11 0
+poke b0 0
+run 2
+tick 120

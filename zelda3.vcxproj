@@ -240,6 +240,12 @@
     <ClCompile Include="src\mp.c" />
     <ClCompile Include="src\instance.c" />
     <ClCompile Include="src\randomizer.c" />
+    <ClCompile Include="src\archipelago.c" />
+    <ClCompile Include="src\ap_client.c" />
+    <ClCompile Include="src\ap_ws.c" />
+    <ClCompile Include="src\ap_tls.c" />
+    <ClCompile Include="src\ap_json.c" />
+    <ClCompile Include="src\bindings.c" />
     <ClCompile Include="src\story.c" />
     <ClCompile Include="src\hd2d.c" />
     <ClCompile Include="src\mptest.c" />
@@ -466,6 +472,11 @@
     <ClInclude Include="src\misc.h" />
     <ClInclude Include="src\mp.h" />
     <ClInclude Include="src\instance.h" />
+    <ClInclude Include="src\archipelago.h" />
+    <ClInclude Include="src\ap_client.h" />
+    <ClInclude Include="src\ap_ws.h" />
+    <ClInclude Include="src\ap_tls.h" />
+    <ClInclude Include="src\bindings.h" />
     <ClInclude Include="src\randomizer.h" />
     <ClInclude Include="src\story.h" />
     <ClInclude Include="src\net.h" />

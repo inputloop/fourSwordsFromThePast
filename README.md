@@ -151,7 +151,8 @@ Archipelago server by itself (no extra client program).
   or [Windows](#windows).
 - On the computer that makes the multiworld: [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases)
   0.6.4 or newer (the Launcher), and `fsotp.apworld`, the Archipelago world
-  for this game. Take it from the release, or build it from these sources
+  for this game. It comes with the game's download (next to `zelda3.ini`), or
+  build it from these sources
   with `python3 archipelago/build_apworld.py` (only needs Python 3; it writes
   `archipelago/fsotp.apworld`). Players of other games don't need it.
 
@@ -279,9 +280,12 @@ remembered.
 - *Generate* says "No world found to handle game Four Swords of the Past":
   the `.apworld` isn't installed in that Archipelago (step 1), or the
   Launcher wasn't restarted.
-- The game says the slot name, password or game was refused: check the slot
-  name letter for letter (capitals count) and the password. "Wrong game"
-  means that slot belongs to another game.
+- "This room has no slot named ...": check the slot name letter for letter
+  (capitals count; the menu shows capitals only, so retype it if unsure).
+  "Slot ... doesn't play Four Swords of the Past": that slot belongs to
+  another game. "Wrong password" / "This room needs a password": fill in
+  *Password*. After fixing it, choose *Connect* again.
+- "The server needs a newer client version": update the game.
 - "This Archipelago room needs a newer version of the game" or "...was made
   with an older fsotp.apworld": the world that generated the multiworld and
   the game don't match. Use the `.apworld` that comes with your build.
@@ -302,7 +306,11 @@ the ROM and Archipelago's A Link to the Past location names. In the game,
 DeathLink) and `src/ap_client.c` the connection. IDs: item = `0x46530000` +
 the game's item code; location = `0x46530000` + chest number, special places
 `0x46530100` + 0..5. `tests/coop/archipelago*.txt` test the game side with a
-pretend room, and `archipelago/tests/` the connection against a mock server.
+pretend room; `archipelago/tests/run_client_tests.sh` tests the connection
+against a mock server. With an Archipelago source tree,
+`AP_ROOT=<it> archipelago/tests/e2e.sh` plays a generated multiworld with the
+real server (connect, open a chest, get the item back, send the goal), and the
+world's own tests run with Archipelago's `pytest` (`AP_TEST_WORLDS=fsotp`).
 
 ## 2D-HD look (beta)
 

@@ -39,6 +39,7 @@ jobs:
       run: |
         mkdir -p dist/other
         cp zelda3 zelda3.ini README.md MULTIPLAYER.md dist/
+        python3 archipelago/build_apworld.py dist/fsotp.apworld
         cp other/3x5_font.png dist/other/
         git ls-files assets | tar -cf - -T - | tar -xf - -C dist
         tar -czf ${{ matrix.artifact }}.tar.gz -C dist .
@@ -59,8 +60,28 @@ jobs:
         sudo apt install -y gcc-mingw-w64-x86-64
     - name: Build
       run: tools/build_windows_mingw.sh
+    - name: Add the Archipelago world
+      run: python3 archipelago/build_apworld.py build-windows/dist/fsotp.apworld
     - uses: actions/upload-artifact@v4
       with:
         name: zelda3-windows-${{ github.sha }}
         path: build-windows/dist/
         if-no-files-found: error
+
+  archipelago:
+    name: Archipelago client
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y libsdl2-dev
+        python3 -m pip install websockets==13.1
+    - name: Client against the mock server
+      run: archipelago/tests/run_client_tests.sh
+    - name: The APWorld packs
+      run: python3 archipelago/build_apworld.py /tmp/fsotp.apworld

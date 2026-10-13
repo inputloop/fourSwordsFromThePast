@@ -37,6 +37,14 @@ CC=clang make   # specify compiler
 ```
 </details>
 
+## Archipelago
+The Archipelago client needs no extra libraries to build. Encrypted
+connections (wss://) use the system's TLS library, loaded when the game
+first needs it: Schannel on Windows, OpenSSL (libssl.so.3 or .so.1.1) on
+Linux, Homebrew's or MacPorts' OpenSSL on macOS. cJSON (third_party/cJSON,
+MIT) is compiled in through src/ap_json.c. To make `fsotp.apworld`, the
+Archipelago world: `python3 archipelago/build_apworld.py`.
+
 ## Nintendo Switch
 
 You need [DevKitPro](https://devkitpro.org/wiki/Getting_Started) and [Atmosphere](https://github.com/Atmosphere-NX/Atmosphere) installed.

@@ -246,8 +246,9 @@ void Ap_Disconnect() {
   g_ap.started = false;
 }
 
+// (A refused connection is over: the menu offers to connect again.)
 bool Ap_IsConnecting() {
-  return g_ap.started;
+  return g_ap.started && ApClient_GetStatus(NULL, 0) != kApStatus_Failed;
 }
 
 // The room we are connected to (or the tests' one).
@@ -260,7 +261,7 @@ static bool RoomInfo(ApRoom *room) {
     snprintf(room->slot_name, sizeof(room->slot_name), "Test");
     return true;
   }
-  return g_ap.started && ApClient_GetRoom(room);
+  return Ap_IsConnecting() && ApClient_GetRoom(room);
 }
 
 static int RoomItemCount() {
