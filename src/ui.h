@@ -47,5 +47,7 @@ void Ui_SetViews(const UiView *views, int n);
 void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale);
 // Writes the settings changed through the menu to zelda3.coop.ini.
 void Ui_SaveSettings();
+// A short message at the bottom of the screen for a few seconds.
+void Ui_Toast(const char *msg);
 
 #endif  // ZELDA3_UI_H_

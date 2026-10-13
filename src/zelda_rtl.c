@@ -11,6 +11,7 @@
 #include "snes/dma.h"
 #include "spc_player.h"
 #include "util.h"
+#include "hd3d.h"
 #include "audio.h"
 #include "assets.h"
 ZeldaEnv g_zenv;
@@ -228,8 +229,12 @@ void ZeldaDrawPpuFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags) {
   }
   g_zenv.ppu->bgLayer[2] = saved_bg3;
   g_zenv.ppu->scrollPrev = saved_scroll_prev, g_zenv.ppu->scrollPrev2 = saved_scroll_prev2;
+  if (g_ppu_frame_hook)
+    g_ppu_frame_hook(g_zenv.ppu);
   Mp_FinishRender(g_zenv.ppu);
 }
+
+void (*g_ppu_frame_hook)(struct Ppu *ppu);
 
 void HdmaSetup(uint32 addr6, uint32 addr7, uint8 transfer_unit, uint8 reg6, uint8 reg7, uint8 indirect_bank) {
   Dma *dma = g_zenv.dma;
@@ -272,6 +277,7 @@ static void ClearOamBuffer() {  // 80841e
 static void ZeldaRunGameLoop() {
   frame_counter++;
   ClearOamBuffer();
+  Hd3d_TagFrameStart();
   Mp_BeginFrame();
   Mp_RunRouting(&Module_MainRouting);
   Mp_EndFrame();

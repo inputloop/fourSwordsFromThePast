@@ -8,6 +8,7 @@
 #include "variables.h"
 #include "mp.h"
 #include "snes/ppu.h"
+#include "hd3d.h"
 
 Hd2dSettings g_hd2d;  // from the config (config.c has the defaults)
 
@@ -141,12 +142,13 @@ static void WidenRows(const uint16 *src, int sw, int sh, const Taps *tx, int w, 
 // A few worker threads: each stage of the pass is split by rows or by color
 // channel. (Display only: nothing here touches the game.)
 enum { kMaxWorkers = 3 };
-typedef void JobFunc(int begin, int end);
+typedef Hd2dJob JobFunc;
 static struct {
   int workers;  // -1: not started
   SDL_Thread *thread[kMaxWorkers];
   SDL_sem *start[kMaxWorkers], *done;
   JobFunc *func;
+  void *ctx;
   int count;
 } g_pool = { -1 };
 
@@ -155,13 +157,13 @@ static int PoolWorker(void *arg) {
   for (;;) {
     SDL_SemWait(g_pool.start[id]);
     int parts = g_pool.workers + 1;
-    g_pool.func(g_pool.count * (id + 1) / parts, g_pool.count * (id + 2) / parts);
+    g_pool.func(g_pool.count * (id + 1) / parts, g_pool.count * (id + 2) / parts, g_pool.ctx);
     SDL_SemPost(g_pool.done);
   }
   return 0;
 }
 
-static void ParallelFor(int count, JobFunc *func) {
+void Hd2d_ParallelFor(int count, JobFunc *func, void *ctx) {
   if (g_pool.workers < 0) {
     g_pool.workers = 0;
     int want = SDL_GetCPUCount() - 1;
@@ -178,15 +180,15 @@ static void ParallelFor(int count, JobFunc *func) {
   }
   int workers = count < 2 ? 0 : g_pool.workers < count - 1 ? g_pool.workers : count - 1;
   if (workers == 0) {
-    func(0, count);
+    func(0, count, ctx);
     return;
   }
   // (The workers split the work as if all of them ran: the ones not needed
   // get an empty range.)
-  g_pool.func = func, g_pool.count = count;
+  g_pool.func = func, g_pool.ctx = ctx, g_pool.count = count;
   for (int i = 0; i < g_pool.workers; i++)
     SDL_SemPost(g_pool.start[i]);
-  func(0, count / (g_pool.workers + 1));
+  func(0, count / (g_pool.workers + 1), ctx);
   for (int i = 0; i < g_pool.workers; i++)
     SDL_SemWait(g_pool.done);
 }
@@ -255,20 +257,42 @@ static bool IsFireAncilla(uint8 type) {
   return false;
 }
 
+bool Hd2d_IsDarkRoom(const Ppu *ppu, float *lit) {
+  // The game darkens a dark room by subtracting a layer of darkness (BG1 on
+  // the subscreen), with a hole for the Lamp; without the Lamp, or once a
+  // torch burns, by subtracting the fixed color alone (nothing on the subscreen).
+  bool dark = player_is_indoors && (dung_want_lights_out | dung_want_lights_out_copy) &&
+              ppu->addSubscreen && ppu->subtractColor && ((ppu->screenEnabled[1] & 1) || !ppu->screenEnabled[1]);
+  if (lit)
+    *lit = (31 - ppu->fixedColorR) / 31.0f;  // 0 with no torch lit, 1 with all
+  return dark;
+}
+
+// The lit torches of the room: how many entries of dung_object_tilemap_pos
+// (from dung_index_of_torches_start) belong to it, from the torch list
+// (room, torches..., 0xffff).
+static int RoomTorchCount() {
+  for (int i = 0; i < 144;) {
+    int j = i + 1;
+    while (j < 144 && dung_torch_data[j] != 0xffff)
+      j++;
+    if (dung_torch_data[i] == dungeon_room_index)
+      return j - i - 1;
+    i = j + 1;
+  }
+  return 0;
+}
+
 // Reads where the players and the light sources are in the world being drawn.
 static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
   memset(sc, 0, sizeof(*sc));
   sc->w = w, sc->h = h;
   sc->reveal = g_hd2d.see_through && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0;
   int cam_x = BG2HOFS_copy2 - ppu->extraLeftRight, cam_y = BG2VOFS_copy2;
-  // A dark room: the game darkens it by subtracting a layer of darkness
-  // (BG1 on the subscreen), with a hole for the Lamp; without the Lamp, or
-  // once a torch burns, by subtracting the fixed color alone (nothing on the
-  // subscreen). The pass lights the room itself instead.
-  sc->dark = player_is_indoors && g_hd2d.lighting && (dung_want_lights_out | dung_want_lights_out_copy) &&
-             ppu->addSubscreen && ppu->subtractColor && ((ppu->screenEnabled[1] & 1) || !ppu->screenEnabled[1]);
+  // A dark room: the pass lights it itself instead of the game's darkness.
+  float lit = 0;
+  sc->dark = g_hd2d.lighting && Hd2d_IsDarkRoom(ppu, &lit);
   if (sc->dark) {
-    float lit = (31 - ppu->fixedColorR) / 31.0f;  // 0 with no torch lit, 1 with all
     // (Never pitch black: without the Lamp the room stays a dim room.)
     sc->ambient = 0.12f + 0.88f * lit;
   }
@@ -298,21 +322,11 @@ static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
     }
   }
   if (player_is_indoors) {
-    // Lit torches: the room's entry in the torch list (room, torches..., 0xffff)
-    // says how many there are.
-    int count = 0;
-    for (int i = 0; i < 144;) {
-      int j = i + 1;
-      while (j < 144 && dung_torch_data[j] != 0xffff)
-        j++;
-      if (dung_torch_data[i] == dungeon_room_index) {
-        count = j - i - 1;
-        break;
-      }
-      i = j + 1;
-    }
+    // Lit torches. (The room's origin from where it was loaded: rooms
+    // 0x100 and up lie below the others.)
+    int count = RoomTorchCount();
     int start = dung_index_of_torches_start >> 1;
-    int base_x = (dungeon_room_index & 0xf) << 9, base_y = (dungeon_room_index & 0xf0) << 5;
+    int base_x = dung_loade_bgoffs_h_copy & ~0x1ff, base_y = dung_loade_bgoffs_v_copy & ~0x1ff;
     for (int j = 0; j < count && start + j < 0x20; j++) {
       uint16 pos = dung_object_tilemap_pos[start + j];
       if (!(pos & 0x8000))
@@ -324,6 +338,44 @@ static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
     }
     sc->far_bg2 = dung_hdr_bg2_properties == 1 && (ppu->screenEnabled[0] & 3) == 3;
   }
+}
+
+int Hd2d_GatherLights(Hd2dLight *out, int max, bool dark) {
+  int n = 0;
+  bool have_lamp = link_item_torch != 0;
+  float flicker = 0.93f + 0.07f * sinf(frame_counter * 0.37f);
+#define ADD_LIGHT(X, Y, RADIUS, POWER, R, G, B, KIND) \
+  if (n < max) { Hd2dLight *l = &out[n++]; l->x = (X), l->y = (Y), l->radius = (RADIUS), l->power = (POWER); \
+                 l->r = (R), l->g = (G), l->b = (B), l->kind = (KIND); }
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!Mp_IsAlive(p) || !have_lamp || !(dark || *Mp_PlayerRam(p, 0x202) == 11))
+      continue;
+    static const int8 kAhead[4][2] = { {0, -12}, {0, 12}, {-12, 0}, {12, 0} };
+    int dir = (*Mp_PlayerRam(p, 0x2F) >> 1) & 3;
+    ADD_LIGHT(Mp_PlayerX(p) + 8.0f + kAhead[dir][0], Mp_PlayerY(p) + 14.0f + kAhead[dir][1], 92, 1.3f * flicker,
+              1.0f, 0.9f, 0.7f, 0);
+  }
+  for (int k = 0; k < 10; k++) {
+    if (IsFireAncilla(ancilla_type[k])) {
+      ADD_LIGHT((uint16)(ancilla_x_lo[k] | ancilla_x_hi[k] << 8) + 8.0f,
+                (uint16)(ancilla_y_lo[k] | ancilla_y_hi[k] << 8) + 8.0f, 56, 0.9f * flicker, 1.0f, 0.7f, 0.4f, 2);
+    }
+  }
+  if (player_is_indoors) {
+    int count = RoomTorchCount();
+    int start = dung_index_of_torches_start >> 1;
+    int base_x = dung_loade_bgoffs_h_copy & ~0x1ff, base_y = dung_loade_bgoffs_v_copy & ~0x1ff;
+    for (int j = 0; j < count && start + j < 0x20; j++) {
+      uint16 pos = dung_object_tilemap_pos[start + j];
+      if (!(pos & 0x8000))
+        continue;
+      int tile = (pos & 0x3fff) >> 1;
+      ADD_LIGHT(base_x + (tile & 63) * 8 + 8.0f, base_y + (tile >> 6) * 8 + 8.0f, 96, 0.95f * flicker,
+                1.0f, 0.78f, 0.5f, 1);
+    }
+  }
+#undef ADD_LIGHT
+  return n;
 }
 
 // How much light each pixel gets: 1 is unchanged. In a dark room it's the
@@ -385,10 +437,11 @@ static struct {
   int glow_k, haze_k, haze[3];
   Grade grade;
   float m7_k;  // the world map's vignette strength
+  const uint8 *blur_map;  // (Hd2d_Post) how out of focus each pixel is, 0-255; NULL: the focus band
 } A;
 
 // The frame, split into channels, with hidden Links showing through.
-static void StageSplit(int y0, int y1) {
+static void StageSplit(int y0, int y1, void *ctx) {
   for (int y = y0; y < y1; y++) {
     const uint32 *row = (const uint32 *)(A.pixels + y * A.pitch);
     const uint32 *hid = g_hidden + y * kMaxW;
@@ -407,7 +460,7 @@ static void StageSplit(int y0, int y1) {
 }
 
 // The out-of-focus picture, at half resolution.
-static void StageSoft(int c0, int c1) {
+static void StageSoft(int c0, int c1, void *ctx) {
   for (int ch = c0; ch < c1; ch++) {
     Downsample(g_src[ch], A.w, A.h, g_soft[ch], A.hw, A.hh);
     BoxBlur(g_soft[ch], A.hw, A.hh, 1, ch);
@@ -416,7 +469,7 @@ static void StageSoft(int c0, int c1) {
 }
 
 // Bloom: only the brightest parts (not the HUD), at half resolution first.
-static void StageGlowThreshold(int y0, int y1) {
+static void StageGlowThreshold(int y0, int y1, void *ctx) {
   for (int y = y0; y < y1; y++) {
     int any = 0;
     for (int x = 0; x < A.hw; x++) {
@@ -439,7 +492,7 @@ static void StageGlowThreshold(int y0, int y1) {
 }
 
 // ... then spread wide at a quarter.
-static void StageGlowBlur(int c0, int c1) {
+static void StageGlowBlur(int c0, int c1, void *ctx) {
   for (int ch = c0; ch < c1; ch++) {
     Downsample(g_glow_half[ch], A.hw, A.hh, g_glow[ch], A.qw, A.qh);
     BoxBlur(g_glow[ch], A.qw, A.qh, 1, ch);
@@ -447,7 +500,7 @@ static void StageGlowBlur(int c0, int c1) {
   }
 }
 
-static void StageWiden(int c0, int c1) {
+static void StageWiden(int c0, int c1, void *ctx) {
   for (int ch = c0; ch < c1; ch++) {
     WidenRows(g_soft[ch], A.hw, A.hh, g_taps_x[0], A.w, g_wide_soft[ch]);
     if (A.any_glow)
@@ -456,7 +509,7 @@ static void StageWiden(int c0, int c1) {
 }
 
 // Everything together, row by row.
-static void StageCompose(int y0, int y1) {
+static void StageCompose(int y0, int y1, void *ctx) {
   const Scene *sc = &g_scene;
   int w = A.w;
   for (int y = y0; y < y1; y++) {
@@ -482,7 +535,7 @@ static void StageCompose(int y0, int y1) {
       int i = y * w + x;
       // Sprites (Links, enemies, items) stay sharp; far layers are softer and hazy.
       bool far = layer == 5 || (layer == 1 && sc->far_bg2);
-      int blur = (layer == 4 || layer == 6) ? 0 : far ? blur_far : blur_row;
+      int blur = (layer == 4 || layer == 6) ? 0 : A.blur_map ? A.blur_map[y * w + x] : far ? blur_far : blur_row;
       int c[3] = { g_src[0][i], g_src[1][i], g_src[2][i] };
       if (blur) {
         for (int ch = 0; ch < 3; ch++) {
@@ -515,29 +568,29 @@ static void StageCompose(int y0, int y1) {
   }
 }
 
-static void Apply(uint8 *pixels, size_t pitch, int w, int h, int view) {
+static void Apply(uint8 *pixels, size_t pitch, int w, int h, int view, bool lit) {
   const Scene *sc = &g_scene;
   A.pixels = pixels, A.pitch = pitch, A.w = w, A.h = h;
   A.hw = w / 2, A.hh = h / 2, A.qw = A.hw / 2, A.qh = A.hh / 2;
   float bloom = g_hd2d.bloom / 100.0f;
   A.dof = g_hd2d.depth_of_field / 100.0f;
-  ParallelFor(h, StageSplit);
-  ParallelFor(3, StageSoft);
+  Hd2d_ParallelFor(h, StageSplit, NULL);
+  Hd2d_ParallelFor(3, StageSoft, NULL);
   A.any_glow = false;
   if (bloom > 0) {
-    ParallelFor(A.hh, StageGlowThreshold);
+    Hd2d_ParallelFor(A.hh, StageGlowThreshold, NULL);
     for (int y = 0; y < A.hh; y++)
       A.any_glow |= A.row_glow[y];
     if (A.any_glow)
-      ParallelFor(3, StageGlowBlur);
+      Hd2d_ParallelFor(3, StageGlowBlur, NULL);
   }
-  A.lighting = sc->dark || (g_hd2d.lighting && sc->num_lights);
+  A.lighting = !lit && (sc->dark || (g_hd2d.lighting && sc->num_lights));
   if (A.lighting)
     ComputeLight(sc, w, h);
   MakeVignette(w, h);
   MakeTaps(g_taps_x[0], w, 1, A.hw), MakeTaps(g_taps_y[0], h, 1, A.hh);
   MakeTaps(g_taps_x[1], w, 2, A.qw), MakeTaps(g_taps_y[1], h, 2, A.qh);
-  ParallelFor(3, StageWiden);
+  Hd2d_ParallelFor(3, StageWiden, NULL);
   A.grade = MakeGrade();
   A.glow_k = (int)(0.35f * bloom * 256);
   A.haze_k = (int)(0.18f * A.dof * 256);
@@ -545,17 +598,21 @@ static void Apply(uint8 *pixels, size_t pitch, int w, int h, int view) {
   for (int ch = 0; ch < 3; ch++)
     A.haze[ch] = sc->dark ? (int)(kHaze[ch] * sc->ambient) : kHaze[ch];
   FocusBand(sc, view, h, &A.top, &A.bottom);
-  ParallelFor(h, StageCompose);
+  Hd2d_ParallelFor(h, StageCompose, NULL);
 }
 
 // The HD world map (4x mode 7): just the grade and vignette, on all cores.
 static float g_m7_col[kMaxW * 4];  // (dx * dx) * 2 per column
 
-static void StageMode7Rows(int y0, int y1) {
+static void StageMode7Rows(int y0, int y1, void *ctx) {
+  const Hd2dPostIn *in = (const Hd2dPostIn *)ctx;  // (Hd2d_Post: the HUD stays as it is)
   for (int y = y0; y < y1; y++) {
     uint32 *row = (uint32 *)(A.pixels + y * A.pitch);
     float dy = (y + 0.5f) / A.h - 0.5f, dy2 = dy * dy * 2;
+    const uint8 *cls = in ? in->cls + y * in->cls_pitch : NULL;
     for (int x = 0; x < A.w; x++) {
+      if (cls && (cls[x] == 2 || cls[x] == 0xff))
+        continue;
       uint32 c = row[x];
       float d = g_m7_col[x] + dy2;
       row[x] = GradeAndPack(&A.grade, c >> 16 & 0xff, c >> 8 & 0xff, c & 0xff, (int)(255 * (1 - A.m7_k * d * d)));
@@ -563,7 +620,7 @@ static void StageMode7Rows(int y0, int y1) {
   }
 }
 
-static void ApplyLight(uint8 *pixels, size_t pitch, int w, int h) {
+static void ApplyLight(uint8 *pixels, size_t pitch, int w, int h, const Hd2dPostIn *in) {
   if (w > (int)countof(g_m7_col))
     return;
   A.pixels = pixels, A.pitch = pitch, A.w = w, A.h = h;
@@ -573,7 +630,7 @@ static void ApplyLight(uint8 *pixels, size_t pitch, int w, int h) {
     float dx = (x + 0.5f) / w - 0.5f;
     g_m7_col[x] = dx * dx * 2;
   }
-  ParallelFor(h, StageMode7Rows);
+  Hd2d_ParallelFor(h, StageMode7Rows, (void *)in);
 }
 
 int g_draw_extra_left_right = -1;
@@ -582,6 +639,13 @@ void Hd2d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int 
   // (The window's buffer is as wide as the setting says.)
   if (g_draw_extra_left_right >= 0)
     g_zenv.ppu->extraLeftRight = g_draw_extra_left_right;
+  if (Hd3d_DrawFrame(pixel_buffer, pitch, render_flags, view))
+    return;
+  Hd2d_Draw2D(pixel_buffer, pitch, render_flags, view);
+  Hd3d_After2D(pixel_buffer, pitch, render_flags, view);
+}
+
+void Hd2d_Draw2D(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int view) {
   if (!g_hd2d.enabled) {
     ZeldaDrawPpuFrame(pixel_buffer, pitch, render_flags);
     return;
@@ -607,9 +671,28 @@ void Hd2d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int 
   g_ppu_hidden_out = NULL;
   ppu->fixedColorR = fixed[0], ppu->fixedColorG = fixed[1], ppu->fixedColorB = fixed[2], ppu->screenEnabled[1] = sub;
   if (mode7)
-    ApplyLight(pixel_buffer, pitch, w * 4, h * 4);
+    ApplyLight(pixel_buffer, pitch, w * 4, h * 4, NULL);
   else if (w <= kMaxW && h <= kMaxH)
-    Apply(pixel_buffer, pitch, w, h, view);
+    Apply(pixel_buffer, pitch, w, h, view, false);
+}
+
+void Hd2d_Post(uint8 *pixels, size_t pitch, int w, int h, int view, const Hd2dPostIn *in) {
+  if (w > kMaxW || h > kMaxH)
+    return;
+  if (in->cheap) {
+    ApplyLight(pixels, pitch, w, h, in);
+    return;
+  }
+  // The 3D picture's classes stand in for the PPU's layers (the same codes).
+  for (int y = 0; y < h; y++)
+    memcpy(g_layer + y * kMaxW, in->cls + y * in->cls_pitch, w);
+  for (int y = 0; y < h; y++)
+    memset(g_hidden + y * kMaxW, 0, w * sizeof(uint32));
+  memset(&g_scene, 0, sizeof(g_scene));
+  g_scene.w = w, g_scene.h = h;
+  A.blur_map = in->blur;
+  Apply(pixels, pitch, w, h, view, in->lit);
+  A.blur_map = NULL;
 }
 
 int Hd2d_HiddenPixels(void) {

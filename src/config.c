@@ -40,6 +40,10 @@ static const uint16 kDefaultKbdControls[kKeys_Total] = {
   _(SDLK_w), _(SDLK_o), S(SDLK_w), C(SDLK_e),
   // ClearKeyLog, StopReplay, Fullscreen, Reset, Pause, PauseDimmed, Turbo, ReplayTurbo, WindowBigger, WindowSmaller, DisplayPerf, ToggleRenderer
   _(SDLK_k), _(SDLK_l), A(SDLK_RETURN), C(SDLK_r), S(SDLK_p), _(SDLK_p), _(SDLK_TAB), _(SDLK_t), N, N, _(SDLK_f), _(SDLK_r),
+  // VolumeUp, VolumeDown
+  N, N,
+  // View3d, View3dTurnLeft, View3dTurnRight, View3dTiltUp, View3dTiltDown, View3dReset
+  _(SDLK_F11), _(SDLK_DELETE), _(SDLK_PAGEDOWN), _(SDLK_HOME), _(SDLK_END), _(SDLK_PAGEUP),
 };
 #undef _
 #undef A
@@ -60,6 +64,7 @@ static const KeyNameId kKeyNameId[] = {
   S(CheatLife), S(CheatKeys), S(CheatEquipment), S(CheatWalkThroughWalls),
   S(ClearKeyLog), S(StopReplay), S(Fullscreen), S(Reset),
   S(Pause), S(PauseDimmed), S(Turbo), S(ReplayTurbo), S(WindowBigger), S(WindowSmaller), S(VolumeUp), S(VolumeDown), S(DisplayPerf), S(ToggleRenderer),
+  S(View3d), S(View3dTurnLeft), S(View3dTurnRight), S(View3dTiltUp), S(View3dTiltDown), S(View3dReset),
 };
 #undef S
 #undef M
@@ -396,6 +401,30 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     } else if (StringEqualsNoCase(key, "Hd2dLighting")) {
       g_config.hd2d_lighting = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
       return true;
+    } else if (StringEqualsNoCase(key, "Hd3d")) {
+      return ParseBool(value, &g_config.hd3d);
+    } else if (StringEqualsNoCase(key, "Hd3dCameraReturns")) {
+      return ParseBool(value, &g_config.hd3d_camera_returns);
+    } else if (StringEqualsNoCase(key, "Hd3dTurnControls")) {
+      return ParseBool(value, &g_config.hd3d_turn_controls);
+    } else if (StringEqualsNoCase(key, "Hd3dMouseLook")) {
+      return ParseBool(value, &g_config.hd3d_mouse_look);
+    } else if (StringEqualsNoCase(key, "Hd3dFadeScenery")) {
+      return ParseBool(value, &g_config.hd3d_fade_scenery);
+    } else if (StringEqualsNoCase(key, "Hd3dInvertY")) {
+      return ParseBool(value, &g_config.hd3d_invert_y);
+    } else if (StringEqualsNoCase(key, "Hd3dStickSpeed")) {
+      g_config.hd3d_stick_speed = (uint8)(atoi(value) > 200 ? 200 : atoi(value) < 25 ? 25 : atoi(value));
+      return true;
+    } else if (StringEqualsNoCase(key, "Hd3dMouseSpeed")) {
+      g_config.hd3d_mouse_speed = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
+      return true;
+    } else if (StringEqualsNoCase(key, "Hd3dFov")) {
+      g_config.hd3d_fov = (uint8)(atoi(value) > 90 ? 90 : atoi(value) < 50 ? 50 : atoi(value));
+      return true;
+    } else if (StringEqualsNoCase(key, "Hd3dPerspective")) {
+      g_config.hd3d_perspective = (uint8)(atoi(value) > 100 ? 100 : atoi(value) < 0 ? 0 : atoi(value));
+      return true;
     } else if (StringEqualsNoCase(key, "LinkGraphics")) {
       g_config.link_graphics = value;
       return true;
@@ -635,6 +664,14 @@ void ParseConfigFile(const char *filename) {
   g_config.hd2d_vignette = 45;
   g_config.hd2d_grade = 50;
   g_config.hd2d_lighting = 70;
+  g_config.hd3d_camera_returns = true;
+  g_config.hd3d_turn_controls = true;
+  g_config.hd3d_mouse_look = true;
+  g_config.hd3d_fade_scenery = true;
+  g_config.hd3d_stick_speed = 100;
+  g_config.hd3d_mouse_speed = 50;
+  g_config.hd3d_fov = 65;
+  g_config.hd3d_perspective = 50;
 
   if (filename != NULL || !ParseOneConfigFile("zelda3.user.ini", 0)) {
     if (filename == NULL)

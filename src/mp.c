@@ -1885,6 +1885,9 @@ static void Mp_ShowViewersItem() {
   g_mp_hud_swapped = true;
 }
 
+int8 g_mp_extra_set_player[kPpuMaxExtraSpriteSets];
+uint8 g_mp_extra_set_link_count[kPpuMaxExtraSpriteSets];
+
 void Mp_PrepareRender(Ppu *ppu) {
   ppu->numExtraSpriteSets = 0;
   if (!Mp_Active() && !g_mp_coop)
@@ -1918,6 +1921,8 @@ void Mp_PrepareRender(Ppu *ppu) {
     }
     memcpy(set->tiles, rp->tiles, sizeof(set->tiles));
     Mp_MakePlayerPalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, p, g_mp.p[p].downed);
+    g_mp_extra_set_player[n] = p;
+    g_mp_extra_set_link_count[n] = rp->count;
     n++;
   }
   // Links of other worlds in this same room or area, so players approaching
@@ -1945,6 +1950,8 @@ void Mp_PrepareRender(Ppu *ppu) {
       continue;
     memcpy(set->tiles, rl[k].tiles, sizeof(set->tiles));
     Mp_MakePlayerPalette(ppu->extraPalettes[n + 1], g_mp_saved_cgram, rl[k].player, rl[k].downed);
+    g_mp_extra_set_player[n] = rl[k].player;
+    g_mp_extra_set_link_count[n] = set->count;
     n++;
   }
   ppu->numExtraSpriteSets = n;

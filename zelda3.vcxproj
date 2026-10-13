@@ -248,6 +248,12 @@
     <ClCompile Include="src\bindings.c" />
     <ClCompile Include="src\story.c" />
     <ClCompile Include="src\hd2d.c" />
+    <ClCompile Include="src\r3d.c" />
+    <ClCompile Include="src\cam3d.c" />
+    <ClCompile Include="src\hd3d.c" />
+    <ClCompile Include="src\hd3d_input.c" />
+    <ClCompile Include="src\hd3d_world.c" />
+    <ClCompile Include="src\hd3d_sprites.c" />
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\session.c" />
@@ -471,6 +477,10 @@
     <ClInclude Include="src\messaging.h" />
     <ClInclude Include="src\misc.h" />
     <ClInclude Include="src\mp.h" />
+    <ClInclude Include="src\r3d.h" />
+    <ClInclude Include="src\cam3d.h" />
+    <ClInclude Include="src\hd3d.h" />
+    <ClInclude Include="src\hd3d_internal.h" />
     <ClInclude Include="src\instance.h" />
     <ClInclude Include="src\archipelago.h" />
     <ClInclude Include="src\ap_client.h" />

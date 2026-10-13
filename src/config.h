@@ -34,6 +34,14 @@ enum {
   kKeys_ToggleRenderer,
   kKeys_VolumeUp,
   kKeys_VolumeDown,
+  // The 3D view (display only, so they work online too): on/off, turn,
+  // tilt, back to the classic view. Handled on press and release.
+  kKeys_View3d,
+  kKeys_View3dTurnLeft,
+  kKeys_View3dTurnRight,
+  kKeys_View3dTiltUp,
+  kKeys_View3dTiltDown,
+  kKeys_View3dReset,
   kKeys_Total,
 };
 
@@ -65,6 +73,9 @@ typedef struct Config {
   bool hd2d;                   // the 2D-HD look (hd2d.c)
   uint8 hd2d_depth_of_field, hd2d_bloom, hd2d_vignette, hd2d_grade, hd2d_lighting;
   bool hd2d_see_through;
+  bool hd3d;                   // the 3D view (hd3d.c)
+  bool hd3d_camera_returns, hd3d_turn_controls, hd3d_mouse_look, hd3d_fade_scenery, hd3d_invert_y;
+  uint8 hd3d_stick_speed, hd3d_mouse_speed, hd3d_fov, hd3d_perspective;
   bool display_perf_title;
   uint8 enable_msu;
   bool resume_msu;

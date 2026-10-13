@@ -30,6 +30,7 @@
 #include "upnp.h"
 #include "ui.h"
 #include "hd2d.h"
+#include "hd3d.h"
 #include "bindings.h"
 #include "instance.h"
 #include "archipelago.h"
@@ -456,6 +457,17 @@ int main(int argc, char** argv) {
   g_hd2d.grade = g_config.hd2d_grade;
   g_hd2d.lighting = g_config.hd2d_lighting;
   g_hd2d.see_through = g_config.hd2d_see_through;
+  // The 3D view as configured.
+  g_hd3d.enabled = g_config.hd3d;
+  g_hd3d.camera_returns = g_config.hd3d_camera_returns;
+  g_hd3d.turn_controls = g_config.hd3d_turn_controls;
+  g_hd3d.mouse_look = g_config.hd3d_mouse_look;
+  g_hd3d.fade_scenery = g_config.hd3d_fade_scenery;
+  g_hd3d.invert_y = g_config.hd3d_invert_y;
+  g_hd3d.stick_speed = g_config.hd3d_stick_speed;
+  g_hd3d.mouse_speed = g_config.hd3d_mouse_speed;
+  g_hd3d.fov = g_config.hd3d_fov;
+  g_hd3d.perspective = g_config.hd3d_perspective;
 
   if (argc >= 2 && strcmp(argv[0], "--mptest") == 0) {
     int RunMpTest(const char *script, int width, int height, uint32 render_flags);
@@ -794,6 +806,10 @@ static void HandleCommand(uint32 j, bool pressed) {
     return;
   if (j == kKeys_Turbo) {
     g_turbo = pressed;
+    return;
+  }
+  if (j >= kKeys_View3d && j <= kKeys_View3dReset) {
+    Hd3d_OnKeyCommand(j, pressed);  // (display only: allowed online)
     return;
   }
 

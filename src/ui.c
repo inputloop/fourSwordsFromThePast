@@ -11,6 +11,7 @@
 #include "snes/ppu.h"
 #include "randomizer.h"
 #include "hd2d.h"
+#include "hd3d.h"
 #include "session.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -432,6 +433,14 @@ static void LocationName(int p, char *buf, size_t size) {
 static void Toast(const char *msg) {
   snprintf(g_ui.toast, sizeof(g_ui.toast), "%s", msg);
   g_ui.toast_time = SDL_GetTicks();
+}
+
+void Ui_Toast(const char *msg) {
+  Toast(msg);
+}
+
+void Hd3d_Toast(const char *msg) {
+  Toast(msg);
 }
 
 // Our own save file: is file 1-3 in use? (Read when the menu shows it.)

@@ -245,6 +245,11 @@ extern bool g_mp_coop;
 
 typedef struct Ppu Ppu;
 void Mp_PrepareRender(Ppu *ppu);
+// (Display only, set by Mp_PrepareRender) the player each extra sprite set
+// of the PPU shows, and how many of its first entries are that Link (the
+// rest are its projectiles).
+extern int8 g_mp_extra_set_player[3];  // (kPpuMaxExtraSpriteSets)
+extern uint8 g_mp_extra_set_link_count[3];
 void Mp_FinishRender(Ppu *ppu);
 
 #endif  // ZELDA3_MP_H_

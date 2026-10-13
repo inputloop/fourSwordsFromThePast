@@ -223,6 +223,24 @@
     <ClCompile Include="src\hd2d.c">
       <Filter>Zelda</Filter>
     </ClCompile>
+    <ClCompile Include="src\r3d.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\cam3d.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hd3d.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hd3d_input.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hd3d_world.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\hd3d_sprites.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
     <ClCompile Include="src\mptest.c">
       <Filter>Zelda</Filter>
     </ClCompile>
@@ -439,6 +457,18 @@
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\mp.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\r3d.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\cam3d.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\hd3d.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\hd3d_internal.h">
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\instance.h">

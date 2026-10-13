@@ -149,6 +149,7 @@
 #include "archipelago.h"
 #include "ap_client.h"
 #include "hd2d.h"
+#include "hd3d.h"
 #include "tile_detect.h"
 #include "story.h"
 #include "config.h"
@@ -416,6 +417,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   int view = 0;
   Session_Init("Tester");
   Ui_Init(NULL);
+  // (A 3D setting saved from the menu must not change the tests.)
+  Hd3d_ResetForTests();
   uint32 *pixels = calloc(width * height * 4 * 16, 1);
   char line[256];
   int frame = 0;
