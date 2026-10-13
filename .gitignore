@@ -48,3 +48,6 @@ __pycache__
 *.d
 *.orig
 *.rej
+
+# Built by archipelago/build_apworld.py
+/archipelago/*.apworld

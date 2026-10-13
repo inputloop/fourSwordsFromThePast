@@ -1,0 +1,30 @@
+# Example player options for Four Swords of the Past. Put a copy in
+# Archipelago's Players folder (or upload it to the website) and change the
+# name. A co-op team is one player here: one file for the whole team.
+
+# Your slot name, which you enter in the game to connect (16 characters at
+# most). {number} becomes 1, 2, ... for several players of the same name.
+name: Player{number}
+
+description: Four Swords of the Past example options
+
+game: Four Swords of the Past
+
+requires:
+  version: 0.6.4
+  game:
+    Four Swords of the Past: 1.0.0
+
+Four Swords of the Past:
+  # How early your items are placed to keep everyone moving: 0 (off) to 99.
+  progression_balancing: 50
+
+  # full: every location can be reached.
+  # minimal: only what is needed to beat the game is guaranteed.
+  accessibility: full
+
+  # What finishes your game. ganon is the only goal for now.
+  goal: ganon
+
+  # When anyone with death link on dies, everyone with it on dies too.
+  death_link: false
