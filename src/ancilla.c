@@ -6040,6 +6040,8 @@ int AncillaAdd_FallingPrize(uint8 a, uint8 item_idx, uint8 yv) {  // 898bc1
 void AncillaAdd_ChargedSpinAttackSparkle() {  // 898cb1
   for (int k = 9; k >= 0; k--) {
     if (ancilla_type[k] == 0 || ancilla_type[k] == 0x3c) {
+      if (ancilla_type[k])
+        Mp_AncillaSlotTaken(k);  // (a teammate's charge sparkle)
       ancilla_type[k] = 13;
       ancilla_floor[k] = link_is_on_lower_level;
       ancilla_timer[k] = 6;

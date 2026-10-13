@@ -90,6 +90,7 @@
 //   runcheckdraw <p> <n>  run n frames; player p (not its world's leader) must never be drawn with shrunken body pieces
 //   runcheckseen <a> <b> <n>  run n frames; on every one, a and b are drawn on each other's screen (same world or not)
 //                       where they really are, and can have a name tag or arrow
+//   runcheckobjowner <n> <hextype> <p>  run up to n frames: the first new object of that type in p's world belongs to p
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart)
@@ -1755,6 +1756,38 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           g_failures++;
           break;
         }
+      }
+    } else if (!strcmp(cmd, "runcheckobjowner")) {
+      // runcheckobjowner <n> <hextype> <p>: runs until an object (ancilla) of
+      // that type appears in p's world and has been given an owner (at most n
+      // frames); it must belong to player p.
+      int type = strtol(arg2, NULL, 16), p = PlayerArg(arg3), home = Inst_Current();
+      bool old[10], found = false;
+      SwitchToPlayer(p);
+      for (int i = 0; i < 10; i++)
+        old[i] = ancilla_type[i] == type;
+      Inst_Switch(home);
+      for (int n = atoi(arg1); n > 0 && !found; n--, frame++) {
+        Inst_RunFrame(held);
+        home = Inst_Current();
+        SwitchToPlayer(p);
+        for (int i = 0; i < 10 && !found; i++) {
+          bool owned = ancilla_type[i] == type && g_mp.ancilla_seen[i] == type;
+          if (owned && !old[i]) {
+            found = true;
+            if (g_mp.ancilla_owner[i] != p) {
+              printf("FAIL: object %02x in slot %d belongs to P%d, not P%d, at frame %d\n", type, i,
+                     g_mp.ancilla_owner[i] + 1, p + 1, frame);
+              g_failures++;
+            }
+          }
+          old[i] = owned;
+        }
+        Inst_Switch(home);
+      }
+      if (!found) {
+        printf("FAIL: no new object %02x in P%d's world\n", type, p + 1);
+        g_failures++;
       }
     } else if (!strcmp(cmd, "runcheckseen")) {
       // runcheckseen <a> <b> <n>: runs n frames; on every one, players a and b see

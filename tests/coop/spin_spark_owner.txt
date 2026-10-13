@@ -1,0 +1,17 @@
+# Two Links charge a spin attack, a few frames apart. The "fully charged"
+# spark of the first takes over a slot that holds a charge sparkle of the
+# other, and must still be its own (it used to run as the other Link's
+# object: the twinkle showed on the wrong Link).
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3860 1675
+pos 2 3900 1675
+run 2
+hold 2 B
+run 5
+hold 1 B
+hold 2 B
+runcheckobjowner 80 0d 2
