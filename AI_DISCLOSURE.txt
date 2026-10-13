@@ -10,9 +10,10 @@ were written by the AI, following the requests of the project's human
 maintainers, who decided what to build, played the game, reported bugs and
 decided what to keep.
 
-Every commit in this repository's history was made by the AI assistant
-(author "Claude <noreply@anthropic.com>", 102 commits from October 10 to
-October 13, 2026). Commits carry a "Co-Authored-By" line naming the AI.
+Every commit in this repository's history, from the first one on
+October 10, 2026, was made by the AI assistant (author "Claude
+<noreply@anthropic.com>"), and each carries a "Co-Authored-By" line naming
+the AI.
 
 
 WHAT THE AI WROTE
