@@ -308,8 +308,16 @@ static void CloseMenu(int p, bool keep_choices) {
 static void CloseFinishedMenus() {
   for (int p = 0; p < kMpMaxPlayers; p++) {
     int menu = FindPlayer(p, false), body = FindPlayer(p, true);
+    if (menu < 0 || body < 0)
+      continue;
+    uint8 m = g_inst[menu].ram[0x10];  // main_module_index
+    // Save and quit (Select in the item menu) fades out and goes to the
+    // title screen from the menu's world: not closed, everybody comes along
+    // there (MergeAndCleanUp).
+    if (m == 23 || m < 6)
+      continue;
     // (Also when its Link went down meanwhile: the player sees the ghost.)
-    if (menu < 0 || body < 0 || (g_inst[menu].ram[0x10] == 14 && !MpOf(body)->p[p].downed))  // main_module_index: still in it
+    if (m == 14 && !MpOf(body)->p[p].downed)  // still in it
       continue;
     TRACE("  P%d closed its menu in world %d\n", p + 1, menu);
     CloseMenu(p, true);
@@ -449,7 +457,9 @@ static bool RunInstance(int i, const uint16 *inputs) {
       // The menu continues in the new world; here the frame is played again
       // without it, with this Link standing still until the menu closes.
       TRACE("  P%d opens a menu in world %d (from %d)\n", p + 1, j, i);
-      SplitOff(j, p, false, -1);
+      // (With the follower: it is part of the picture behind the menu, and
+      // of what save and quit saves from there.)
+      SplitOff(j, p, true, -1);
       MpOf(j)->away[p] = 0;
       RestoreSnapshot();
       g_mp.away[p] = 1;

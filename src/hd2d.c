@@ -262,10 +262,11 @@ static void GatherScene(Scene *sc, Ppu *ppu, int w, int h) {
   sc->reveal = g_hd2d.see_through && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0;
   int cam_x = BG2HOFS_copy2 - ppu->extraLeftRight, cam_y = BG2VOFS_copy2;
   // A dark room: the game darkens it by subtracting a layer of darkness
-  // (BG1 on the subscreen), with a hole for the Lamp. The pass lights the
-  // room itself instead.
+  // (BG1 on the subscreen), with a hole for the Lamp; without the Lamp, or
+  // once a torch burns, by subtracting the fixed color alone (nothing on the
+  // subscreen). The pass lights the room itself instead.
   sc->dark = player_is_indoors && g_hd2d.lighting && (dung_want_lights_out | dung_want_lights_out_copy) &&
-             ppu->addSubscreen && ppu->subtractColor && (ppu->screenEnabled[1] & 1);
+             ppu->addSubscreen && ppu->subtractColor && ((ppu->screenEnabled[1] & 1) || !ppu->screenEnabled[1]);
   if (sc->dark) {
     float lit = (31 - ppu->fixedColorR) / 31.0f;  // 0 with no torch lit, 1 with all
     // (Never pitch black: without the Lamp the room stays a dim room.)

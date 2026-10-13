@@ -1,0 +1,126 @@
+# Save and quit in co-op, from the item menu: Start, then Select opens the
+# game's "continue / save and quit" box. In co-op the item menu runs in a
+# world of its own, and that world was dropped as a closed menu as soon as
+# it left the menus for the save-and-quit fade, so choosing "save and quit"
+# did nothing. Played where it was reported: the lost old man's dark cave on
+# the way to Death Mountain, without the Lamp, with the old man following.
+# Loading the file again starts in that cave with the old man, as alone.
+rando 40
+run 200
+newgame
+run 400
+# "Start from Link's house"
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+# An item, so Start opens the item menu (with none it closes again).
+poke f342 1
+join 2
+run 10
+expect_ram f34a 0
+enter f0
+run 200
+expect_ram a0 f0
+# Through the dark to the old man, side by side.
+hold 1 U
+hold 2 U
+run 150
+hold 1 R
+hold 2 R
+run 100
+hold 1 DR
+hold 2 DR
+run 30
+hold 1 R
+hold 2 R
+run 90
+hold 1 U
+hold 2 U
+run 55
+hold 1 R
+hold 2 R
+run 60
+hold 1 -
+hold 2 -
+run 60
+# His plea, closed with B.
+hold 1 B
+run 2
+hold 1 -
+run 20
+hold 1 B
+run 2
+hold 1 -
+run 20
+hold 1 B
+run 2
+hold 1 -
+run 20
+hold 1 B
+run 2
+hold 1 -
+run 20
+hold 1 B
+run 2
+hold 1 -
+run 20
+hold 1 B
+run 2
+hold 1 -
+run 20
+hold 1 B
+run 2
+hold 1 -
+run 20
+hold 1 B
+run 2
+hold 1 -
+run 60
+expect_module 7
+expect_ram f3cc 4
+expect_ram f3c8 5
+# P1: Start (the item menu, in a world of its own), Select (the save box),
+# Down to "save and quit", A.
+hold 1 S
+run 2
+hold 1 -
+run 60
+expect_instances 2
+# The menu's world has the old man too (he used to vanish behind the menu,
+# and a save from there lost him).
+expect_ram f3cc 4
+hold 1 s
+run 2
+hold 1 -
+run 80
+expect_module 14
+hold 1 D
+run 2
+hold 1 -
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 300
+# Everybody goes to the title screen, as with Select during play.
+expect_instances 1
+expect_module 0
+# Loading the file again: the cave, where the old man was found, with him.
+loadslot
+run 300
+expect_module 7
+expect_playing 1
+expect_ram a0 f0
+expect_ram f3cc 4
+expect_near 1 424 7928
+expect_same 1 2
+# And walks on (at the old man's pace).
+hold 1 L
+hold 2 L
+run 30
+hold 1 -
+hold 2 -
+run 10
+expect_near 1 386 7928

@@ -1,0 +1,30 @@
+# The 2D-HD look in a dark cave without the Lamp (the lost old man's cave on
+# the way to Death Mountain). Without the Lamp the game darkens the room with
+# the fixed color alone (no darkness layer on the subscreen), and the pass
+# only took over a dark room when it found that layer: the room stayed pitch
+# black, Links and all. The pass does the darkness itself there too, so the
+# room stays a dim room with the Links visible; no light without the Lamp.
+load 2
+run 30
+poke f34a 0
+join 2
+run 20
+enter f0
+run 200
+expect_ram f34a 0
+hd2d 1
+expect_hd2d 0 999 1 0
+# Walking in the dark, both of them.
+hold 1 U
+hold 2 U
+run 60
+hold 1 -
+hold 2 -
+run 10
+expect_hd2d 0 999 1 0
+# With the Lamp it lights the cave as before, a light around the Links.
+poke f34a 1
+enter f0
+run 200
+expect_hd2d 0 999 1 1
+hd2d 0
