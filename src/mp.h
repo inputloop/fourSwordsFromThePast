@@ -222,6 +222,10 @@ void Mp_NudgeSwitchPresser(int dy);
 // The teammate carrier holds over its head, or -1.
 int Mp_CarriedBy(int carrier);
 void Mp_SetLeader(int p);
+// The resident Link (a teammate) starts something its world follows, like
+// stairs: it leads from now on, and the room's quadrant (which half of the
+// room the game thinks Link is in) is put in line with it right away.
+void Mp_TakeLead();
 uint32 Mp_AreaKeyPublic();
 bool Mp_InStableGameplay();
 // Set by the instance code: is anyone standing in another world instance?

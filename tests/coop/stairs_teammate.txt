@@ -1,0 +1,89 @@
+# A teammate who isn't leading takes the stairs. The game looks for stairs
+# under Link only in the room tag code, which runs for the leader alone, so
+# a teammate walked right over them (or stood in a spiral staircase for
+# good) and never got to the room below.
+
+# Spiral stairs in a Death Mountain cave (room ea): P2 walks up into them
+# while P1 leads, both in view. P2 goes on to room fa in a world of its own.
+load 2
+run 20
+enter ea
+run 120
+join 2
+run 30
+pos 1 5200 7290
+pos 2 5244 7260
+run 120
+setleader 1
+run 30
+expect_same 1 2
+expect_leader 1
+hold 2 U
+run 100
+status
+expect_apart 1 2
+view 2
+expect_ram a0 fa
+view 1
+expect_ram a0 ea
+expect_leader 1
+hold 2 -
+
+# The same, dashing into them.
+load 2
+run 20
+enter ea
+run 120
+poke f355 1
+poke f379 fc
+join 2
+run 30
+pos 1 5200 7262
+pos 2 5244 7262
+run 120
+setleader 1
+run 30
+expect_same 1 2
+expect_leader 1
+hold 2 U
+run 2
+hold 2 A
+run 120
+status
+expect_apart 1 2
+view 2
+expect_ram a0 fa
+hold 2 -
+view 1
+
+# Straight stairs down in Hyrule Castle (room 51 to 61), on a shared screen
+# (everybody holds down, so the group may go). P2 stands in the left half of
+# the room and P1 leads from the right half: the room's quadrant, which the
+# stairs read to find the next room, is put in line with P2 first.
+together 1
+load 2
+run 20
+enter 51
+run 120
+clearsprites
+join 2
+run 30
+clearsprites
+pos 1 792 2980
+pos 2 760 2980
+run 60
+setleader 1
+run 30
+expect_leader 1
+hold 1 D
+hold 2 D
+run 50
+hold 1 -
+hold 2 -
+run 150
+status
+expect_same 1 2
+expect_module 7
+expect_ram a0 61
+expect_ram a9 00
+expect_leader 2

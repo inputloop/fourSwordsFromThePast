@@ -747,6 +747,14 @@ static void Mp_SyncQuadrantToLeader() {
   }
 }
 
+void Mp_TakeLead() {
+  g_mp.leader = g_mp.resident;
+  // (Only with the room's difference known: learning it now would take the
+  // old leader's quadrant for this Link's.)
+  if (g_mp.quad_valid && g_mp.quad_room == dungeon_room_index)
+    Mp_SyncQuadrantToLeader();
+}
+
 static void Mp_RestoreMenuLeader();
 
 // The Ping button: a tap marks "look here" a little ahead of the Link, held

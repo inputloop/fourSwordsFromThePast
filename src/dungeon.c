@@ -4302,10 +4302,11 @@ void Dungeon_HandleRoomTags() {  // 81c2fd
 void Dung_TagRoutine_0x00(int k) {  // 81c328
 }
 
-void Dungeon_DetectStaircase() {  // 81c329
+// The staircase Link walks into (its tile behavior), or 0.
+static uint8 Dungeon_StaircaseAhead(int *pos_out) {
   int k = link_direction & 12;
   if (!k)
-    return;
+    return 0;
 
   static const int8 kBuggyLookup[] = { 7, 24, 8, 8, 0, 0, -1, 17 };
   int pos = ((link_y_coord + kBuggyLookup[k >> 1]) & 0x1f8) << 3;
@@ -4314,11 +4315,21 @@ void Dungeon_DetectStaircase() {  // 81c329
 
   uint8 at = dung_bg2_attr_table[pos + (k == 4 ? 0x80 : 0)];
   if (!(at == 0x26 || at == 0x38 || at == 0x39 || at == 0x5e || at == 0x5f))
-    return;
+    return 0;
 
   uint8 attr2 = dung_bg2_attr_table[pos + XY(0, 1)];
   if ((attr2 & 0xf8) != 0x30)
+    return 0;
+  *pos_out = pos;
+  return at;
+}
+
+void Dungeon_DetectStaircase() {  // 81c329
+  int pos;
+  uint8 at = Dungeon_StaircaseAhead(&pos);
+  if (!at)
     return;
+  uint8 attr2 = dung_bg2_attr_table[pos + XY(0, 1)];
 
   if (link_state_bits & 0x80) {
     link_y_coord = link_y_coord_prev;
@@ -6614,10 +6625,27 @@ void Dungeon_HandleEdgeTransitionMovement(int dir) {  // 8288c5
 
 static void Dungeon_PlayerControlCore();
 
+// Player control for the non-leader Links in co-op. The game looks for
+// stairs under Link in the room tag code, which runs for the leader alone,
+// so a teammate walked right over them. A teammate walking into stairs takes
+// them and leads its world there (the room's quadrant is put in line with
+// it first: the stairs read it to find the next room).
+static void Dungeon_OtherPlayerControl() {
+  Dungeon_PlayerControlCore();
+  int pos;
+  if (main_module_index != 7 || submodule_index != 0 || flag_skip_call_tag_routines ||
+      !Dungeon_StaircaseAhead(&pos))
+    return;
+  // (Carrying something it is only pushed back, as the leader is.)
+  if (!(link_state_bits & 0x80))
+    Mp_TakeLead();
+  Dungeon_DetectStaircase();
+}
+
 void Module07_00_PlayerControl() {  // 8288de
   Dungeon_PlayerControlCore();
   Rando_GiveStartItems();
-  Mp_RunOtherPlayers(&Dungeon_PlayerControlCore);
+  Mp_RunOtherPlayers(&Dungeon_OtherPlayerControl);
 }
 
 static void Dungeon_PlayerControlCore() {
