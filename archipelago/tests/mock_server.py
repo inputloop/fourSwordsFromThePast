@@ -12,12 +12,22 @@ steps of a scenario.
 
 Prints "READY <port>" once it listens. Needs websockets 13 (the version
 Archipelago uses).
+
+Some scenarios put a TCP front on the port the client connects to, which
+passes the bytes on to servers behind it: "slowtls" holds back the end of a
+TLS record for a while; "downgrade" (with --bad-tls) plays someone in the
+middle once the first encrypted connection is over: a certificate the client
+doesn't trust, and a plain ws:// server that takes whatever comes.
+"hostile" sends what no real server would (the request path picks what).
 """
 import argparse
 import asyncio
+import base64
 import json
+import os
 import ssl
 import sys
+import time
 
 import websockets
 from websockets.extensions.permessage_deflate import PerMessageDeflate, ServerPerMessageDeflateFactory
@@ -75,6 +85,8 @@ class Room:
         self.uuid = None
         self.datapackage_requests = 0
         self.goal_count = 0
+        self.hold = False  # slowtls: the front holds back the end of the next big read
+        self.phase = 1     # downgrade: 2 once the first encrypted connection is over
 
     def room_info(self):
         games = sorted(set(g for (_, g, _, _) in self.slots.values()))
@@ -87,14 +99,16 @@ class Room:
 
 
 class Client:
-    def __init__(self, room, ws):
+    def __init__(self, room, ws, tls=False):
         self.room = room
         self.ws = ws
+        self.tls = tls
         self.tags = []
         self.slot = None
         self.number = room.connections
         self.after_resend = set()
         self.goal_again = False
+        self.path = getattr(ws, "path", "/")
 
     async def send(self, *msgs):
         await self.ws.send(json.dumps(list(msgs)))
@@ -108,7 +122,11 @@ class Client:
 
     async def run(self):
         room = self.room
-        await self.send(room.room_info())
+        info = room.room_info()
+        if room.scenario == "hostile" and self.path == "/roominfo":
+            # Tens of thousands of games (no data package for any of them).
+            info["games"] = ["x"] * 50000 + info["games"]
+        await self.send(info)
         async for data in self.ws:
             try:
                 msgs = json.loads(data)
@@ -133,7 +151,11 @@ class Client:
                 return
             if room.scenario == "reconnect" and self.number > 1:
                 await self.error("data package fetched again although the checksums didn't change")
-            await self.send({"cmd": "DataPackage", "data": {"games": {g: room.games[g] for g in wanted}}})
+            games = {g: room.games[g] for g in wanted}
+            if room.scenario == "hostile" and self.path == "/datapackage":
+                # Tens of thousands of games nobody asked for, before the one asked for.
+                games = dict({f"junk game {i}": {} for i in range(30000)}, **games)
+            await self.send({"cmd": "DataPackage", "data": {"games": games}})
         elif cmd == "Connect":
             await self.connect(msg)
         elif self.slot is None:
@@ -216,6 +238,12 @@ class Client:
         if self.slot != 1:
             await self.error("only Link can play here")
             return
+        if room.scenario == "downgrade" and not self.tls:
+            await self.error("Connect over plain ws:// after wss:// had worked: the password went out in clear text")
+        # dlswitch: the room has DeathLink on the first time, then off.
+        death_link = room.scenario == "deathlink" or (room.scenario == "dlswitch" and self.number == 1)
+        if room.scenario == "dlswitch" and self.number > 1 and "DeathLink" in self.tags:
+            await self.error(f"Connect with the DeathLink tag, which the game has off: {self.tags}")
         players = [{"team": 0, "slot": s, "alias": n, "name": n, "class": "NetworkPlayer"}
                    for s, (n, _, t, _) in room.slots.items() if t == 1]
         slot_info = {str(s): {"name": n, "game": g, "type": t, "group_members": m, "class": "NetworkSlot"}
@@ -223,7 +251,7 @@ class Client:
         connected = {"cmd": "Connected", "team": 0, "slot": 1, "players": players,
                      "missing_locations": sorted(set(room.placement) - room.checked),
                      "checked_locations": sorted(room.checked), "slot_info": slot_info, "hint_points": 0,
-                     "slot_data": {"version": 1, "death_link": 1 if room.scenario == "deathlink" else 0, "goal": 0}}
+                     "slot_data": {"version": 1, "death_link": 1 if death_link else 0, "goal": 0}}
         if room.scenario == "reconnect" and self.number > 1:
             room.items.append(net_item(BASE + 0x09, 2001, 3, USEFUL))  # Bob found Link's Hammer meanwhile
         reply = [connected]
@@ -263,7 +291,13 @@ class Client:
                 {"cmd": "PrintJSON", "type": "Chat", "team": 0, "slot": 2, "message": "hello",
                  "data": [{"text": "Alice: hello"}]},
                 {"cmd": "PrintJSON", "type": "Join", "data": [{"text": "Link (Team #1) playing ... has joined."}]},
-                {"cmd": "PrintJSON", "type": "Tutorial", "data": [{"text": "Now that you are connected ..."}]})
+                {"cmd": "PrintJSON", "type": "Tutorial", "data": [{"text": "Now that you are connected ..."}]},
+                # The cheat console: the server tells every team. Only the first is ours.
+                {"cmd": "PrintJSON", "type": "ItemCheat", "team": 0, "receiving": 1,
+                 "item": net_item(BASE + 0x0B, -1, 0, PROG), "data": [{"text": "Cheat console: sending Bow to Link"}]},
+                {"cmd": "PrintJSON", "type": "ItemCheat", "team": 1, "receiving": 1,
+                 "item": net_item(BASE + 0x09, -1, 0, USEFUL),
+                 "data": [{"text": "Cheat console: sending Hammer to Link"}]})
             await self.chat("MOCK OK texts")
         elif sc == "gap":
             await self.send({"cmd": "ReceivedItems", "index": 5, "items": [net_item(BASE + 0x0B, 2001, 2, PROG)]})
@@ -280,6 +314,35 @@ class Client:
         elif sc == "ping":
             await asyncio.sleep(5)
             await self.chat("MOCK OK pings answered")
+        elif sc == "slowtls":
+            # A message the client ignores, big enough for a full TLS record;
+            # the front holds back the record's last bytes for a few seconds.
+            room.hold = True
+            filler = base64.b64encode(os.urandom(9000)).decode()
+            await self.send({"cmd": "PrintJSON", "type": "Tutorial", "data": [{"text": filler}]})
+            await self.chat("MOCK OK held")
+        elif sc == "downgrade" and self.tls:
+            # The connection breaks; whoever answers next is someone else.
+            await asyncio.sleep(0.3)
+            room.phase = 2
+            self.ws.transport.abort()
+        elif sc == "dlswitch":
+            await self.chat(f"MOCK OK dlswitch {self.number}")
+        elif sc == "hostile" and self.path == "/numbers":
+            # 14 MiB of JSON, millions of values: slow to read whole.
+            await self.chat("MOCK OK numbers")
+            await self.ws.send("[" + "0," * (7 << 20) + "0]")
+        elif sc == "hostile" and self.path == "/frames":
+            # Empty frames of a message that never ends, as fast as they go.
+            await self.chat("MOCK OK frames")
+            await asyncio.sleep(0.1)
+            transport = self.ws.transport
+            transport.write(b"\x01\x00")  # a text frame without FIN
+            chunk = b"\x00\x00" * (1 << 19)
+            end = time.monotonic() + 6
+            while time.monotonic() < end and not transport.is_closing():
+                transport.write(chunk)
+                await self.ws.drain()
 
     async def location_checks(self, msg):
         room = self.room
@@ -344,24 +407,72 @@ class Client:
         await self.chat("MOCK OK death " + data["cause"])
 
 
+async def front(room, host, port, pick):
+    """A TCP front: each connection goes on to the port pick(its first bytes) names."""
+    async def pipe(reader, writer, from_server):
+        try:
+            while True:
+                data = await reader.read(65536)
+                if not data:
+                    break
+                if from_server and room.hold and len(data) >= 1000:
+                    # The end of a TLS record arrives seconds after the rest.
+                    room.hold = False
+                    writer.write(data[:-20])
+                    await writer.drain()
+                    await asyncio.sleep(3)
+                    data = data[-20:]
+                writer.write(data)
+                await writer.drain()
+        except (ConnectionError, OSError):
+            pass
+        writer.close()
+
+    async def handle(reader, writer):
+        first = await reader.read(65536)
+        if not first:
+            writer.close()
+            return
+        server_reader, server_writer = await asyncio.open_connection("127.0.0.1", pick(first))
+        server_writer.write(first)
+        await asyncio.gather(pipe(reader, server_writer, False), pipe(server_reader, writer, True))
+
+    return await asyncio.start_server(handle, host, port)
+
+
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scenario", default="basic")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--tls", nargs=2, metavar=("CERT", "KEY"))
+    parser.add_argument("--bad-tls", nargs=2, metavar=("CERT", "KEY"))
     parser.add_argument("--no-compress", action="store_true")
     parser.add_argument("--password")
     args = parser.parse_args()
     room = Room(args)
 
-    async def handler(ws, path=None):
+    async def handler(ws, tls):
         room.connections += 1
-        client = Client(room, ws)
+        client = Client(room, ws, tls)
         try:
             await client.run()
         except websockets.ConnectionClosed:
             pass
+
+    async def serve(tls_files, host, port):
+        ssl_context = None
+        if tls_files:
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(tls_files[0], tls_files[1])
+        kwargs = {"compression": None} if args.no_compress else {"extensions": [ServerPerMessageDeflateFactory(
+            server_max_window_bits=11, client_max_window_bits=11, compress_settings={"memLevel": 4})]}
+        ping = 1 if args.scenario == "ping" else 20
+        return await websockets.serve(lambda ws: handler(ws, ssl_context is not None), host, port, ssl=ssl_context,
+                                      max_size=1 << 20, ping_interval=ping, ping_timeout=ping, **kwargs)
+
+    def port_of(server):
+        return server.sockets[0].getsockname()[1]
 
     if args.scenario == "hang":
         # Takes the TCP connection and then says nothing at all.
@@ -372,17 +483,19 @@ async def main():
             await reader.read()
 
         server = await asyncio.start_server(silent, args.host, args.port)
+    elif args.scenario == "slowtls":
+        tls_port = port_of(await serve(args.tls, "127.0.0.1", 0))
+        server = await front(room, args.host, args.port, lambda first: tls_port)
+    elif args.scenario == "downgrade":
+        good = port_of(await serve(args.tls, "127.0.0.1", 0))
+        bad = port_of(await serve(args.bad_tls, "127.0.0.1", 0))
+        plain = port_of(await serve(None, "127.0.0.1", 0))
+        # First a server that only speaks TLS; then someone in the middle.
+        server = await front(room, args.host, args.port,
+                             lambda first: good if room.phase == 1 else bad if first[:1] == b"\x16" else plain)
     else:
-        ssl_context = None
-        if args.tls:
-            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-            ssl_context.load_cert_chain(args.tls[0], args.tls[1])
-        kwargs = {"compression": None} if args.no_compress else {"extensions": [ServerPerMessageDeflateFactory(
-            server_max_window_bits=11, client_max_window_bits=11, compress_settings={"memLevel": 4})]}
-        ping = 1 if args.scenario == "ping" else 20
-        server = await websockets.serve(handler, args.host, args.port, ssl=ssl_context, max_size=1 << 20,
-                                        ping_interval=ping, ping_timeout=ping, **kwargs)
-    port = server.sockets[0].getsockname()[1]
+        server = await serve(args.tls, args.host, args.port)
+    port = port_of(server)
     print(f"READY {port}", flush=True)
     await asyncio.Future()
 

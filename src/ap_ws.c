@@ -812,17 +812,19 @@ int ApWs_Poll(ApWs *ws, int timeout_ms, char **msg, size_t *len) {
   if (ws->broken)
     return -1;
   uint32_t start = SDL_GetTicks();
-  for (;;) {
+  for (bool last = false;; ) {
     int r;
     while ((r = ParseFrame(ws, msg, len)) == 2) {}
-    if (r)
+    if (r || last)
       return r;
     int left = timeout_ms - (int)(SDL_GetTicks() - start);
     r = Fill(ws, left > 0 ? left : 0);
     if (r < 0)
       return -1;
-    if (r == 0 && (int)(SDL_GetTicks() - start) >= timeout_ms)
-      return 0;
+    // Once the time is up, what was just read is looked at and that's it,
+    // even while more keeps coming (frames that never end a message mustn't
+    // keep the caller from its other work, or from stopping).
+    last = (int)(SDL_GetTicks() - start) >= timeout_ms;
   }
 }
 

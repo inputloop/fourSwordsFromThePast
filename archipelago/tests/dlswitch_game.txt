@@ -1,0 +1,12 @@
+# Played by archipelago/tests/run_client_tests.sh (scenario dlswitch) against
+# mock_server.py --scenario dlswitch: DeathLink is on in the room the first
+# time (the game turns the tag on), then off when the game connects again.
+# The second Connect must not carry the tag from before.
+apconnect ws://127.0.0.1:@PORT@ Link
+apwait connected 10
+tick 60
+apnotices
+apconnect ws://127.0.0.1:@PORT@ Link
+apwait connected 10
+tick 60
+apnotices

@@ -24,6 +24,11 @@ enum {
   kFirstRetryMs = 2000,
   kMaxRetryMs = 30000,
   kItemsHandling = 7,           // every item comes from the server, our own finds too
+  // Far more than a real room has. A server that sends more (games in a
+  // room, names in a game) doesn't get them all read: lists that long would
+  // keep the network thread busy for minutes.
+  kMaxGames = 2048,
+  kMaxNames = 1 << 18,
 };
 
 typedef struct ApItemEntry {
@@ -108,6 +113,8 @@ typedef struct Conn {
   bool tls;
   int phase;
   int pending_packages;
+  char **wanted;  // the games whose names we asked for
+  int num_wanted, wanted_cap;
   char seed_name[64];
   int team, slot;
   ApItemEntry *items;  // what the server sent on this connection
@@ -122,7 +129,7 @@ typedef struct Conn {
 // Network thread only; lives from ApClient_Start to ApClient_Stop.
 static struct {
   ApGameData *games;
-  int num_games;
+  int num_games, games_cap;
   int preferred_tls;      // -1: unknown, else what worked last time
   double sent_deaths[4];  // time values of our recent DeathLinks, to spot their echo
   int sent_death_next;
@@ -366,7 +373,7 @@ static void FreeGames(void) {
     FreeGame(&g_t.games[i]);
   free(g_t.games);
   g_t.games = NULL;
-  g_t.num_games = 0;
+  g_t.num_games = g_t.games_cap = 0;
 }
 
 static ApGameData *FindGame(const char *game) {
@@ -382,6 +389,8 @@ static ApName *ReadNames(const cJSON *name_to_id, int *count, char **pool) {
   int n = 0;
   const cJSON *e;
   cJSON_ArrayForEach(e, name_to_id) {
+    if (n == kMaxNames)
+      break;
     if (cJSON_IsNumber(e) && e->string)
       chars += strlen(e->string) + 1, n++;
   }
@@ -389,6 +398,8 @@ static ApName *ReadNames(const cJSON *name_to_id, int *count, char **pool) {
   char *p = *pool = malloc(chars ? chars : 1);
   n = 0;
   cJSON_ArrayForEach(e, name_to_id) {
+    if (n == kMaxNames)
+      break;
     if (cJSON_IsNumber(e) && e->string) {
       size_t len = strlen(e->string) + 1;
       memcpy(p, e->string, len);
@@ -407,7 +418,7 @@ static void StoreGame(const char *game, const cJSON *data) {
   if (g) {
     FreeGame(g);
   } else {
-    g_t.games = realloc(g_t.games, sizeof(ApGameData) * (g_t.num_games + 1));
+    g_t.games = Grow(g_t.games, &g_t.games_cap, g_t.num_games + 1, sizeof(ApGameData));
     g = &g_t.games[g_t.num_games++];
   }
   memset(g, 0, sizeof(*g));
@@ -503,6 +514,9 @@ static void FreeConn(Conn *c) {
   free(c->slots);
   free(c->players);
   free(c->items);
+  for (int i = 0; i < c->num_wanted; i++)
+    free(c->wanted[i]);
+  free(c->wanted);
   memset(c, 0, sizeof(*c));
 }
 
@@ -624,6 +638,38 @@ static bool HaveGame(const char *game, const char *checksum) {
   return g && checksum && g->checksum && !strcmp(g->checksum, checksum);
 }
 
+static bool Wanted(Conn *c, const char *game) {
+  for (int i = 0; i < c->num_wanted; i++)
+    if (!strcmp(c->wanted[i], game))
+      return true;
+  return false;
+}
+
+// Asks for the names of a game, unless we have them, asked already, or it
+// has no data package (no checksum; the list is read up to kMaxGames).
+static void AskForNames(Conn *c, Buf *b, const char *game, const cJSON *checksums) {
+  if (c->num_wanted == kMaxGames || Wanted(c, game))
+    return;
+  const cJSON *sum = NULL, *e;
+  int seen = 0;
+  cJSON_ArrayForEach(e, checksums) {
+    if (++seen > kMaxGames)
+      break;
+    if (e->string && !strcmp(e->string, game)) {
+      sum = e;
+      break;
+    }
+  }
+  if (!sum || HaveGame(game, cJSON_IsString(sum) ? sum->valuestring : NULL))
+    return;
+  BufAdd(b, c->num_wanted ? "," : "[", 1);
+  BufLit(b, "{\"cmd\":\"GetDataPackage\",\"games\":[");
+  BufStr(b, game);
+  BufLit(b, "]}");
+  c->wanted = Grow(c->wanted, &c->wanted_cap, c->num_wanted + 1, sizeof(char *));
+  c->wanted[c->num_wanted++] = DupStr(game);
+}
+
 static int OnRoomInfo(Conn *c, const cJSON *cmd) {
   if (c->phase != kPhase_RoomInfo)
     return 0;
@@ -635,29 +681,21 @@ static int OnRoomInfo(Conn *c, const cJSON *cmd) {
   // "Archipelago"). Ask for each game alone, so that one message never has
   // to hold the names of a huge multiworld.
   Buf b = { 0 };
-  int n = 0;
-  for (int i = -1; i < cJSON_GetArraySize(games); i++) {
-    const cJSON *g = i < 0 ? NULL : cJSON_GetArrayItem(games, i);
-    const char *game = i < 0 ? "Archipelago" : cJSON_IsString(g) ? g->valuestring : NULL;
-    if (!game || (i >= 0 && !strcmp(game, "Archipelago")))
-      continue;
-    const cJSON *sum = cJSON_GetObjectItemCaseSensitive(checksums, game);
-    if (!sum)
-      continue;  // a game without a data package
-    if (HaveGame(game, cJSON_IsString(sum) ? sum->valuestring : NULL))
-      continue;
-    BufAdd(&b, n ? "," : "[", 1);
-    BufLit(&b, "{\"cmd\":\"GetDataPackage\",\"games\":[");
-    BufStr(&b, game);
-    BufLit(&b, "]}");
-    n++;
+  AskForNames(c, &b, "Archipelago", checksums);
+  const cJSON *g;
+  int seen = 0;
+  cJSON_ArrayForEach(g, games) {
+    if (++seen > kMaxGames)
+      break;
+    if (cJSON_IsString(g))
+      AskForNames(c, &b, g->valuestring, checksums);
   }
-  if (!n) {
+  if (!c->num_wanted) {
     SendConnect(c);
     return 0;
   }
   BufLit(&b, "]");
-  c->pending_packages = n;
+  c->pending_packages = c->num_wanted;
   c->phase = kPhase_DataPackage;
   SendBuf(c, &b);
   return 0;
@@ -667,8 +705,11 @@ static int OnDataPackage(Conn *c, const cJSON *cmd) {
   const cJSON *data = cJSON_GetObjectItemCaseSensitive(cmd, "data");
   const cJSON *games = cJSON_GetObjectItemCaseSensitive(data, "games");
   const cJSON *g;
+  int seen = 0;
   cJSON_ArrayForEach(g, games) {
-    if (g->string && cJSON_IsObject(g))
+    if (++seen > kMaxGames)  // more than we can have asked for
+      break;
+    if (g->string && cJSON_IsObject(g) && Wanted(c, g->string))
       StoreGame(g->string, g);
   }
   if (c->phase == kPhase_DataPackage && --c->pending_packages <= 0)
@@ -887,7 +928,8 @@ static int OnPrintJson(Conn *c, const cJSON *cmd) {
     else if (from_us)
       AddText(kind, "Sent %s to %s", ItemName(c, id, receiving, a, sizeof(a)), PlayerName(c, receiving, b, sizeof(b)));
   } else if (!strcmp(type, "ItemCheat")) {
-    if (ConcernsUs(c, receiving))
+    // Told to every team; slot numbers only mean us within ours.
+    if (GetNum(cmd, "team", c->team) == c->team && ConcernsUs(c, receiving))
       AddText(kind, "Received %s (cheat)", ItemName(c, id, receiving, a, sizeof(a)));
   } else if (!strcmp(type, "Hint")) {
     if (ConcernsUs(c, receiving) || ConcernsUs(c, finder)) {
@@ -934,6 +976,13 @@ static int OnBounced(Conn *c, const cJSON *cmd) {
   return 0;
 }
 
+// cJSON allocates every value of a message while reading it. Once the client
+// is told to stop that fails, so even a message of millions of values is
+// given up at once.
+static void *CJSON_CDECL JsonAlloc(size_t size) {
+  return SDL_AtomicGet(&g_ap.stop) ? NULL : malloc(size);
+}
+
 static int HandleMessage(Conn *c, const char *msg, size_t len) {
   Dbg("<< %.300s", msg);
   cJSON *root = cJSON_ParseWithLength(msg, len);
@@ -945,6 +994,8 @@ static int HandleMessage(Conn *c, const char *msg, size_t len) {
   int r = 0;
   const cJSON *cmd;
   cJSON_ArrayForEach(cmd, root) {
+    if (SDL_AtomicGet(&g_ap.stop))  // one message can hold any number of commands
+      break;
     const char *name = GetStr(cmd, "cmd");
     if (!name)
       continue;
@@ -980,19 +1031,22 @@ static bool IsArchipelagoGg(const char *host) {
   return !SDL_strcasecmp(host, "archipelago.gg") || (n > 15 && !SDL_strcasecmp(host + n - 15, ".archipelago.gg"));
 }
 
-// Opens the WebSocket. Without a scheme in the address both are tried, the
-// one that worked before first. *fatal: trying again won't help.
+// Opens the WebSocket. Without a scheme in the address: ws:// and then
+// wss:// (a server that answers with TLS); only wss:// for archipelago.gg,
+// which serves nothing else, and once wss:// has worked. Never the other way
+// round: falling back to plain ws:// when TLS fails (a certificate that isn't
+// trusted, a broken handshake) is what someone in between would want.
+// *fatal: trying again won't help.
 static ApWs *OpenConnection(bool *used_tls, bool *fatal, char *err, size_t err_size) {
   const ApAddr *a = &g_ap.addr;
   bool order[2];
   int n = 1;
   if (a->scheme == kScheme_Ws) {
     order[0] = false;
-  } else if (a->scheme == kScheme_Wss) {
+  } else if (a->scheme == kScheme_Wss || IsArchipelagoGg(a->host) || g_t.preferred_tls == 1) {
     order[0] = true;
   } else {
-    order[0] = g_t.preferred_tls >= 0 ? g_t.preferred_tls : IsArchipelagoGg(a->host);
-    order[1] = !order[0];
+    order[0] = false, order[1] = true;
     n = 2;
   }
   char errs[2][256];
@@ -1050,6 +1104,8 @@ static int RunSession(Conn *c, char *err, size_t err_size) {
       free(msg);
       if (h < 0)
         return kSession_Fatal;
+      if (SDL_AtomicGet(&g_ap.stop))
+        return kSession_Stopped;
       r = ApWs_Poll(c->ws, 0, &msg, &len);
     }
     if (r < 0) {
@@ -1131,14 +1187,18 @@ static int SDLCALL ApThread(void *arg) {
 
 static bool ParseAddress(const char *in, ApAddr *a, char *err, size_t err_size) {
   memset(a, 0, sizeof(*a));
+  // What gets pasted: the room page's line "/connect host:port" (in quotes,
+  // and the menu drops its space), with spaces or line breaks around it. An
+  // address has none of these characters.
   char buf[512];
-  while (*in == ' ' || *in == '\t')
-    in++;
-  snprintf(buf, sizeof(buf), "%s", in);
-  size_t len = strlen(buf);
-  while (len && (buf[len - 1] == ' ' || buf[len - 1] == '\t' || buf[len - 1] == '\r' || buf[len - 1] == '\n'))
-    buf[--len] = 0;
+  size_t len = 0;
+  for (; *in && len < sizeof(buf) - 1; in++)
+    if (!strchr(" \t\r\n'\"`", *in))
+      buf[len++] = *in;
+  buf[len] = 0;
   const char *p = buf;
+  if (!SDL_strncasecmp(p, "/connect", 8))
+    p += 8;
   a->scheme = kScheme_Either;
   if (!SDL_strncasecmp(p, "wss://", 6))
     a->scheme = kScheme_Wss, p += 6;
@@ -1146,7 +1206,10 @@ static bool ParseAddress(const char *in, ApAddr *a, char *err, size_t err_size) 
     a->scheme = kScheme_Ws, p += 5;
   else if (!SDL_strncasecmp(p, "archipelago://", 14))
     p += 14;
-  else if (strstr(p, "://")) {
+  else if (!SDL_strncasecmp(p, "http://", 7) || !SDL_strncasecmp(p, "https://", 8)) {
+    snprintf(err, err_size, "Enter the address the room page shows, not its link");
+    return false;
+  } else if (strstr(p, "://")) {
     snprintf(err, err_size, "Unknown kind of address (use ws:// or wss://)");
     return false;
   }
@@ -1229,6 +1292,8 @@ static void MakeUuid(char *out, size_t size) {
 
 void ApClient_Start(const ApConfig *cfg) {
   ApClient_Stop();
+  static cJSON_Hooks hooks = { JsonAlloc, free };
+  cJSON_InitHooks(&hooks);  // only this file uses cJSON
   const char *debug = getenv("ZELDA3_AP_DEBUG");
   Lock();
   g_ap.debug = debug && *debug && strcmp(debug, "0");

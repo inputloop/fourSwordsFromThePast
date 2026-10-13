@@ -9,6 +9,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>  // GetProcessTimes
+#undef FORCEINLINE    // src/types.h has its own
+#else
+#include <sys/resource.h>
+#endif
 #include <SDL.h>
 #include "src/ap_client.h"
 
@@ -171,6 +178,22 @@ static void Pump(int ms) {
   }
 }
 
+// CPU time this process has used, in seconds.
+static double CpuSeconds(void) {
+#ifdef _WIN32
+  FILETIME created, exited, kernel, user;
+  if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))
+    return 0;
+  uint64 k = (uint64)kernel.dwHighDateTime << 32 | kernel.dwLowDateTime;
+  uint64 u = (uint64)user.dwHighDateTime << 32 | user.dwLowDateTime;
+  return (double)(k + u) / 1e7;
+#else
+  struct rusage r;
+  getrusage(RUSAGE_SELF, &r);
+  return r.ru_utime.tv_sec + r.ru_utime.tv_usec / 1e6 + r.ru_stime.tv_sec + r.ru_stime.tv_usec / 1e6;
+#endif
+}
+
 static uint32 Fnv(const char *s) {
   uint32 h = 2166136261u;
   for (; *s; s++)
@@ -234,9 +257,11 @@ static void Basic(const char *addr, const char *scheme) {
   ExpectText("[Server]: Gr??e ?", kApText_Normal);
   ExpectText("Alice: hello", kApText_Normal);
   ExpectText("Found your own Lamp", kApText_Progression);
+  ExpectText("Received Bow (cheat)", kApText_Progression);
   ExpectNoText("Lamp to Bob");
   ExpectNoText("has joined");
   ExpectNoText("Now that you are");
+  ExpectNoText("Hammer (cheat)");  // to slot 1 of another team
   int64 more[2] = { BASE + 2, BASE + 3 };
   ApClient_CheckLocations(more, 2);
   WaitText("Sent Rubber Duck to Alice", 5000);
@@ -461,8 +486,103 @@ static void NoServer(const char *port) {
   StopTimed(300);
 }
 
+// The end of a TLS record arrives seconds after the rest: the network thread
+// has to wait for it, not spin.
+static void SlowTls(const char *port, const char *ca_file) {
+  char addr[128];
+  SetEnv("ZELDA3_AP_CAFILE", ca_file);
+  snprintf(addr, sizeof(addr), "wss://localhost:%s", port);
+  StartAs(addr, "Link", NULL, NULL);
+  if (!WaitStatus(kApStatus_Connected, 10000))
+    return;
+  double cpu = CpuSeconds();
+  uint32_t t0 = SDL_GetTicks();
+  if (WaitText("MOCK OK held", 15000)) {
+    uint32_t wall = SDL_GetTicks() - t0;
+    double used = CpuSeconds() - cpu;
+    Note("%u ms for the held-back record, %.2f s of CPU time", wall, used);
+    EXPECT(wall >= 2000, "the record wasn't held back (%u ms)", wall);
+    EXPECT(used < wall / 1000.0 * 0.25, "%.2f s of CPU time in %u ms: the network thread spins", used, wall);
+  }
+  StopTimed(500);
+}
+
+// No scheme in the address: ws:// fails, wss:// works. When the connection
+// breaks, someone in the middle shows a certificate we don't trust and
+// offers plain ws://: the client must not take it.
+static void Downgrade(const char *port, const char *ca_file) {
+  char addr[128], text[256];
+  SetEnv("ZELDA3_AP_CAFILE", ca_file);
+  snprintf(addr, sizeof(addr), "localhost:%s", port);
+  StartAs(addr, "Link", "secretpw", NULL);
+  if (!WaitStatus(kApStatus_Connected, 10000))
+    return;
+  ExpectStatusText("(wss)");
+  if (!WaitStatus(kApStatus_Retrying, 5000))
+    return;
+  // The next attempt (2 s later) meets the impostor: no connection again.
+  uint32_t end = SDL_GetTicks() + 5000;
+  bool cert = false;
+  while ((int32_t)(end - SDL_GetTicks()) > 0) {
+    Drain();
+    ApStatus s = ApClient_GetStatus(text, sizeof(text));
+    if (s == kApStatus_Connected) {
+      Fail("connected again: %s", text);
+      break;
+    }
+    cert |= strstr(text, "certificate") != NULL;
+    SDL_Delay(10);
+  }
+  EXPECT(cert, "the status never named the certificate (\"%s\")", text);
+  StopTimed(500);
+}
+
+// What no real server sends: a lot of games, a lot of data package, a
+// message of millions of values, frames that never end. The client must
+// stay quick to stop (and get through the first two).
+static void Hostile(const char *port) {
+  static const char *const kCases[] = { "roominfo", "datapackage", "numbers", "frames" };
+  for (int i = 0; i < 4; i++) {
+    char addr[128], ok[64];
+    snprintf(addr, sizeof(addr), "ws://127.0.0.1:%s/%s", port, kCases[i]);
+    Note("%s", kCases[i]);
+    uint32_t t0 = SDL_GetTicks();
+    StartAs(addr, "Link", NULL, NULL);
+    if (WaitStatus(kApStatus_Connected, i < 2 ? 3000 : 10000))
+      Note("connected after %u ms", SDL_GetTicks() - t0);
+    if (i >= 2) {
+      snprintf(ok, sizeof(ok), "MOCK OK %s", kCases[i]);
+      WaitText(ok, 5000);
+      Pump(300);  // the client is busy with it now
+    }
+    StopTimed(300);
+  }
+}
+
 static void Addresses(void) {
+  // What players paste: the room page's "/connect" line (the menu drops the
+  // spaces), quotes, spaces and line breaks around it.
+  static const char *const kPasted[][2] = {
+    { "/connect archipelago.gg:38281", "archipelago.gg:38281" },
+    { "'/connect archipelago.gg:38281'", "archipelago.gg:38281" },
+    { "/connectarchipelago.gg:38281", "archipelago.gg:38281" },
+    { "/Connect wss://localhost:1234", "localhost:1234" },
+    { " archipelago.gg:12345 ", "archipelago.gg:12345" },
+    { "\narchipelago.gg:12345\r\n", "archipelago.gg:12345" },
+    { "archipelago.gg : 12345", "archipelago.gg:12345" },
+    { "\"localhost:38281\"", "localhost:38281" },
+  };
+  for (size_t i = 0; i < sizeof(kPasted) / sizeof(kPasted[0]); i++) {
+    char text[256], want[300];
+    StartAs(kPasted[i][0], "Link", NULL, NULL);
+    ApStatus s = ApClient_GetStatus(text, sizeof(text));
+    snprintf(want, sizeof(want), "Connecting to %s...", kPasted[i][1]);
+    EXPECT(s == kApStatus_Connecting && !strcmp(text, want), "\"%s\": status %d \"%s\", not \"%s\"", kPasted[i][0],
+           s, text, want);
+    ApClient_Stop();
+  }
   static const char *const kCases[][3] = {
+    { "https://archipelago.gg/room/abc", "Link", "room page" },
     { "ws://example.com:99999", "Link", "Bad port" },
     { "example.com:", "Link", "Bad port" },
     { "ftp://example.com", "Link", "Unknown kind of address" },
@@ -595,7 +715,7 @@ int main(int argc, char **argv) {
     fprintf(stderr,
             "usage: ap_client_test SCENARIO ARGS\n"
             "  basic|nocompress|gap|reconnect|refused|password|bigdp|deathlink|ping|flood ADDRESS\n"
-            "  tls PORT CAFILE | hang PORT | noserver PORT | addresses\n"
+            "  tls|slowtls|downgrade PORT CAFILE | hang|noserver|hostile PORT | addresses\n"
             "  real-checks ADDRESS SLOT GAME LOCATION...\n"
             "  real-items ADDRESS SLOT GAME MIN_ITEMS\n"
             "  real-death-send ADDRESS SLOT GAME\n"
@@ -630,6 +750,12 @@ int main(int argc, char **argv) {
     Hang(a);
   else if (!strcmp(sc, "noserver"))
     NoServer(a);
+  else if (!strcmp(sc, "slowtls") && argc > 3)
+    SlowTls(a, argv[3]);
+  else if (!strcmp(sc, "downgrade") && argc > 3)
+    Downgrade(a, argv[3]);
+  else if (!strcmp(sc, "hostile"))
+    Hostile(a);
   else if (!strcmp(sc, "addresses"))
     Addresses();
   else if (!strcmp(sc, "real-checks") && argc > 4)

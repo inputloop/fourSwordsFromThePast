@@ -45,6 +45,9 @@ openssl req -newkey rsa:2048 -nodes -subj "/CN=localhost" -keyout "$OUT/leaf.key
 printf "subjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n" > "$OUT/leaf.ext"
 openssl x509 -req -in "$OUT/leaf.csr" -CA "$OUT/ca.pem" -CAkey "$OUT/ca.key" -CAcreateserial -days 2 \
   -extfile "$OUT/leaf.ext" -out "$OUT/leaf.pem" 2>/dev/null || exit 1
+# And one for "localhost" that nobody vouches for (someone in the middle).
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost" \
+  -keyout "$OUT/bad.key" -out "$OUT/bad.pem" 2>/dev/null || exit 1
 
 # Starts the mock server; sets PORT.
 start_mock() {
@@ -93,6 +96,38 @@ FAIL $name ($runner)"
   grep -E '^(PASS|FAIL) ' "$OUT/run.log" | sed "s/^/  [$runner] /"
 }
 
+# The game's side, headless (./zelda3 --mptest SCRIPT, @PORT@ filled in):
+# the script must pass, each MOCK OK line given must show up, and the mock
+# must not complain.
+game_test() {  # game_test NAME "MOCK ARGS" SCRIPT "MOCK OK LINE"...
+  name=$1; mock_args=$2; script=$3; shift 3
+  if [ ! -x ./zelda3 ] || [ ! -f zelda3_assets.dat ]; then
+    RESULTS="$RESULTS
+SKIP $name (needs ./zelda3 and zelda3_assets.dat)"
+    return
+  fi
+  # shellcheck disable=SC2086
+  start_mock $mock_args || { FAILED=$((FAILED + 1)); return; }
+  sed "s/@PORT@/$PORT/g" "$script" > "$OUT/game.txt"
+  ./zelda3 --mptest "$OUT/game.txt" > "$OUT/run.log" 2>&1
+  ok=$?
+  for line in "$@"; do
+    grep -q "$line" "$OUT/run.log" || { echo "no \"$line\""; ok=1; }
+  done
+  grep -q "MOCK ERROR" "$OUT/run.log" "$OUT/mock.err" && ok=1
+  stop_mock
+  if [ $ok -eq 0 ]; then
+    RESULTS="$RESULTS
+PASS $name (game)"
+  else
+    grep -E "FAIL|MOCK|apwait" "$OUT/run.log"
+    cat "$OUT/mock.err"
+    RESULTS="$RESULTS
+FAIL $name (game)"
+    FAILED=$((FAILED + 1))
+  fi
+}
+
 with_mock() {  # with_mock RUNNER NAME "MOCK ARGS" DRIVER-ARGS... (PORT is filled in)
   runner=$1; name=$2; mock_args=$3; shift 3
   # shellcheck disable=SC2086
@@ -103,7 +138,8 @@ with_mock() {  # with_mock RUNNER NAME "MOCK ARGS" DRIVER-ARGS... (PORT is fille
   stop_mock
 }
 
-ALL="addresses basic nocompress tls gap reconnect refused password bigdp bigdp-raw deathlink ping flood hang noserver"
+ALL="addresses basic nocompress tls gap reconnect refused password bigdp bigdp-raw deathlink ping flood hang noserver
+slowtls downgrade hostile dlswitch"
 SELECTED=${*:-$ALL}
 
 for runner in $RUNNERS; do
@@ -126,6 +162,13 @@ for runner in $RUNNERS; do
       flood) with_mock "$runner" flood "--scenario flood" flood ws://127.0.0.1:PORT ;;
       hang) with_mock "$runner" hang "--scenario hang" hang PORT ;;
       noserver) run "$runner" noserver noserver "$(free_port)" ;;
+      slowtls) with_mock "$runner" slowtls "--scenario slowtls --tls $OUT/leaf.pem $OUT/leaf.key" slowtls PORT "$ca" ;;
+      downgrade) with_mock "$runner" downgrade \
+        "--scenario downgrade --tls $OUT/leaf.pem $OUT/leaf.key --bad-tls $OUT/bad.pem $OUT/bad.key" downgrade PORT "$ca" ;;
+      hostile) with_mock "$runner" hostile "--scenario hostile" hostile PORT ;;
+      # The game's side: the DeathLink tag follows the room in every connection.
+      dlswitch) [ "$runner" = linux ] && game_test dlswitch "--scenario dlswitch" \
+        archipelago/tests/dlswitch_game.txt "MOCK OK tags AP,DeathLink" "MOCK OK dlswitch 2" ;;
       *) echo "unknown scenario $s"; FAILED=$((FAILED + 1)) ;;
     esac
   done

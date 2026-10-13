@@ -307,6 +307,10 @@ void Ap_Connect() {
   c.server = g_ap_settings.server;
   c.slot = g_ap_settings.slot;
   c.password = g_ap_settings.password;
+  // DeathLink starts off in the client too (an earlier room may have turned
+  // it on), until this room's slot_data says otherwise: else the tag would
+  // go out with Connect and Ap_Tick, thinking it off, would never take it back.
+  ApClient_SetDeathLink(false);
   ApClient_Start(&c);
   g_ap.started = true;
   g_ap.deathlink_on = false;

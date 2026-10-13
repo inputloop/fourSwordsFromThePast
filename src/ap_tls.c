@@ -640,7 +640,6 @@ static struct {
   int (*SSL_read)(void *ssl, void *buf, int num);
   int (*SSL_write)(void *ssl, const void *buf, int num);
   int (*SSL_pending)(const void *ssl);
-  int (*SSL_has_pending)(const void *ssl);  // 1.1.0+, may be missing in look-alikes
   int (*SSL_get_error)(const void *ssl, int ret);
   int (*SSL_shutdown)(void *ssl);
   long (*SSL_get_verify_result)(const void *ssl);
@@ -676,8 +675,6 @@ static bool LoadSymbols(void *ssl, void *crypto) {
   L(X509_verify_cert_error_string) L(X509_VERIFY_PARAM_set1_ip_asc)
   L(ERR_clear_error) L(ERR_get_error) L(ERR_error_string_n)
 #undef L
-  void *p = Sym(ssl, crypto, "SSL_has_pending");
-  memcpy(&o.SSL_has_pending, &p, sizeof(p));
   return true;
 }
 
@@ -816,8 +813,12 @@ int ApTls_Recv(ApTls *t, void *data, int len) {
   return e == kSslErrorWantRead || e == kSslErrorWantWrite ? 0 : -1;
 }
 
+// Decrypted bytes only. SSL_has_pending is also true for the first part of a
+// record, which can't be read before the rest arrives: then the caller has to
+// wait for the socket, not try again at once (that spins). Without read_ahead
+// OpenSSL never holds more than the record it is reading.
 bool ApTls_Pending(ApTls *t) {
-  return o.SSL_has_pending ? o.SSL_has_pending(t->ssl) > 0 : o.SSL_pending(t->ssl) > 0;
+  return o.SSL_pending(t->ssl) > 0;
 }
 
 void ApTls_Close(ApTls *t) {

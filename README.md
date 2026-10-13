@@ -224,7 +224,8 @@ happens locally (everything else can still be on the website):
 1. Start the game and open the menu: `Esc`, or Back+Start on a controller.
 2. Go to *Multiplayer > Archipelago*.
 3. *Server*: the room's address, e.g. `archipelago.gg:38281` (type it, or
-   paste it with Ctrl+V). *Slot name*: as in your YAML. *Password*: only if
+   paste it with Ctrl+V; the room page's whole `/connect archipelago.gg:38281`
+   line works too). *Slot name*: as in your YAML. *Password*: only if
    the room has one. (The menu shows everything in capitals; what you type
    keeps its case.)
 4. Choose *Connect*. The first line of the screen changes to "Connected to
@@ -290,8 +291,12 @@ who has DeathLink on:
   nothing.
 
 **Secure connections.** The game connects over plain WebSocket (`ws://`) or
-encrypted (`wss://`). Write the scheme in front of the address to choose;
-without one, both are tried (encrypted first for archipelago.gg). For
+encrypted (`wss://`). Write the scheme in front of the address to choose.
+Without one, the game tries `ws://` and then `wss://`; archipelago.gg, and a
+server that answered encrypted since you chose *Connect*, only get `wss://`.
+The game never falls back from encrypted to plain: when a certificate is
+rejected or the encryption fails, it says so and tries again later (that is
+what someone listening in between would cause). For
 `wss://` the game uses the system's TLS library: on Windows the one built
 into Windows; on Linux OpenSSL (`libssl.so.3` or `libssl.so.1.1`, installed
 on practically every distribution); on macOS OpenSSL from Homebrew
