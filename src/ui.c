@@ -738,8 +738,22 @@ static void ScreenArchipelago() {
       Goto(kScreen_Multiplayer);
     return;
   }
+  // The status on up to two lines (the menu is narrow).
   Ap_StatusLine(buf, sizeof(buf));
-  Label(buf);
+  char *cut = strlen(buf) > 30 ? strrchr(buf, ' ') : NULL;
+  while (cut && cut - buf > 30) {
+    *cut = 0;
+    char *prev = strrchr(buf, ' ');
+    *cut = ' ';
+    cut = prev;
+  }
+  if (cut) {
+    *cut = 0;
+    Label(buf);
+    Label(cut + 1);
+  } else {
+    Label(buf);
+  }
   bool busy = Ap_IsConnecting();
   static const char *const kFields[3] = { "Server", "Slot name", "Password" };
   for (int i = 0; i < 3; i++) {
@@ -2086,12 +2100,30 @@ static void DrawApNotices() {
   for (int i = 0; i < 4; i++) {
     if (!g_ui.ap_lines[i].text[0] || now - g_ui.ap_lines[i].time > 7000)
       continue;
-    const char *t = g_ui.ap_lines[i].text;
-    int w = IntMin(TextWidth(t) + 8, g_cv.width - 8);
-    int x = (g_cv.width - w) / 2;
-    ShadeRect(x, y, w, 12);
-    DrawTextFit(x + 4, y + 3, t, kColors[g_ui.ap_lines[i].kind % 5], w - 8);
-    y -= 13;
+    // A line too wide for the screen goes on two, broken at a space.
+    char rows[2][96];
+    int nrows = 1, maxw = g_cv.width - 16;
+    snprintf(rows[0], sizeof(rows[0]), "%s", g_ui.ap_lines[i].text);
+    if (TextWidth(rows[0]) > maxw) {
+      for (char *sp = strrchr(rows[0], ' '); sp; sp = strrchr(rows[0], ' ')) {
+        *sp = 0;
+        if (TextWidth(rows[0]) <= maxw) {
+          snprintf(rows[1], sizeof(rows[1]), "%s", g_ui.ap_lines[i].text + (sp - rows[0]) + 1);
+          nrows = 2;
+          break;
+        }
+      }
+      if (nrows == 1)
+        snprintf(rows[0], sizeof(rows[0]), "%s", g_ui.ap_lines[i].text);
+    }
+    for (int r = nrows - 1; r >= 0; r--) {
+      int w = IntMin(TextWidth(rows[r]) + 8, g_cv.width - 8);
+      int x = (g_cv.width - w) / 2;
+      ShadeRect(x, y, w, 12);
+      DrawTextFit(x + 4, y + 3, rows[r], kColors[g_ui.ap_lines[i].kind % 5], w - 8);
+      y -= 12;
+    }
+    y -= 1;
   }
 }
 

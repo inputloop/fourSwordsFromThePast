@@ -6,6 +6,11 @@ Players can drop in and drop out at any time.
 
 ## Playing
 
+<p align="center">
+  <img src="docs/screenshots/menu-multiplayer.png" width="45%" alt="The Multiplayer screen while hosting, with the room code to give to friends">
+  <img src="docs/screenshots/split-three.png" width="45%" alt="Three players in three places: three panes and the team panel">
+</p>
+
 - **Menu**: press `Esc`, the controller's Guide button, or Back+Start.
   The menu has the Multiplayer, Video/HD and Gameplay screens.
 - **Controls**: *Pause menu > Controls* sets up each player (P1-P4): two

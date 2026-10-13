@@ -39,8 +39,15 @@ server, linked in the upstream section below.
   <img src="docs/screenshots/opening-story.png" width="32%" alt="The retold opening legend: the Four Sword split a knight into four heroes in green, red, blue and purple">
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/teamwork.png" width="58%" alt="Co-op outside a palace: P1 carries P2 over its head, P3 has pinged for help (a ring with a P3 HELP label), an arrow at the screen edge points to P4 in another part of the world, and each player's hearts and item sit in their own corner">
+  <img src="docs/screenshots/split-three.png" width="38%" alt="Three players in three different places on one screen: three panes and, in the fourth quarter, the team panel with Light and Dark World maps and each player's hearts and location">
+</p>
+
 *Four Links in widescreen on the Pyramid of Power and at the Eastern Palace;
-free roaming with split screen; the retold opening legend.*
+free roaming with split screen; the retold opening legend; carrying a
+teammate, a ping for help and an arrow to a teammate elsewhere; three players
+in three places with the team panel.*
 
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 See **[docs/HOW_THE_MOD_WORKS.md](docs/HOW_THE_MOD_WORKS.md)** for a plain-language guide to how the whole mod works.
@@ -141,6 +148,20 @@ one *multiworld*: your chests can hold another player's items (in their own
 game, maybe a different one) and theirs can hold yours. This game has its
 own Archipelago world, **Four Swords of the Past**, and connects to an
 Archipelago server by itself (no extra client program).
+
+<p align="center">
+  <img src="docs/screenshots/archipelago-menu.png" width="49%" alt="The Archipelago screen of the in-game menu: connected to the server as Link, with the server, slot name, password and DeathLink settings">
+  <img src="docs/screenshots/archipelago-file-select.png" width="49%" alt="The file select screen saying New files: Archipelago (this room)">
+</p>
+<p align="center">
+  <img src="docs/screenshots/archipelago-sent.png" width="49%" alt="Link opens the chest in his house: a white crystal, the Archipelago item, rises from it and the screen says Sent Bow to Marin">
+  <img src="docs/screenshots/archipelago-received.png" width="49%" alt="Link holds up the Cane of Somaria; the screen says Received Cane of Somaria from Marin (Link's House)">
+</p>
+
+*Connected to a room from the menu, new files become files of that room.
+The chest in Link's house held Marin's Bow, so Link gets the white crystal
+and the Bow goes to Marin; the Cane of Somaria in Marin's game was Link's,
+and arrives a moment later. (Two players on a local Archipelago server.)*
 
 <details open>
 <summary><b>Step by step</b></summary>
@@ -314,6 +335,10 @@ world's own tests run with Archipelago's `pytest` (`AP_TEST_WORLDS=fsotp`).
 
 ## 2D-HD look (beta)
 
+<p align="center"><img src="docs/screenshots/hd2d-compare.png" width="100%" alt="The same scene twice: on the left the original look, on the right the 2D-HD look with warmer colors, a soft glow, a darker edge and the background slightly out of focus"></p>
+
+*The same moment without (left) and with the 2D-HD look (right).*
+
 *Pause menu > Video > 2D-HD look* (or `Hd2d = 1` in `zelda3.ini`) puts a
 lens-and-light pass over the pixel art, in the style of Octopath Traveler.
 *Video > 2D-HD settings* sets the strength of each part (0-100, also
@@ -364,6 +389,8 @@ Studio (`Zelda3.sln`), or `tools/build_windows_mingw.sh` from Linux.
 The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 
 ## Controls
+
+<p align="center"><img src="docs/screenshots/menu-multiplayer.png" width="384" alt="The Multiplayer screen of the in-game menu while hosting: the room code to give to friends, players, Archipelago, input delay, local players, friendly fire, name tags and player colors"></p>
 
 - Keyboard: arrows, X = A, Z = B, S = X, A = Y, Enter = Start, Right Shift = Select.
 - `Esc` (or the controller's Guide button, or Back+Start) opens the menu:
