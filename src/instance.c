@@ -576,12 +576,29 @@ static void ApplySpriteKills(const SpriteKills *sk) {
     TRACE("  %d sprites killed in the other world die here\n", killed);
 }
 
+// The state of the dungeon room a world is in (doors unlocked, keys and
+// chests taken) is kept in RAM until the world leaves the room; only then
+// does the game write it to the room's saved flags. Written there as it
+// happens, it reaches the other worlds (Inst_Sync): one that loads the room
+// meanwhile finds it the same, and one that has it loaded opens the doors
+// too (Dungeon_OpenDoorsOpenedElsewhere). Returns the room, or -1.
+static int SaveRoomState() {
+  if (main_module_index != 7 || submodule_index != 0)
+    return -1;
+  save_dung_info[dungeon_room_index] |= (dung_savegame_state_bits >> 4) | (dung_door_opened & 0xf000) | dung_quadrants_visited;
+  return dungeon_room_index;
+}
+
 static void MovePlayers(int from, int to) {
   TRACE("  move players of world %d into %d\n", from, to);
   uint8 ctx[kMpMaxPlayers][kMpCtxMaxBytes];
   uint8 joined[kMpMaxPlayers] = { 0 }, downed[kMpMaxPlayers], ctr[kMpMaxPlayers], away[kMpMaxPlayers];
   uint8 transient[countof(kTransientAddrs)];
   Inst_Switch(from);
+  // The room as the players leave it (a door unlocked this very frame) goes
+  // to the world they join.
+  int room = SaveRoomState();
+  uint16 room_flags = room >= 0 ? save_dung_info[room] : 0;
   // Whoever drained the swamp keeps it drained when met by a teammate.
   for (size_t k = 0; k < countof(kTransientAddrs); k++)
     transient[k] = g_ram[kTransientAddrs[k]] & TransientBits(kTransientAddrs[k]);
@@ -598,6 +615,8 @@ static void MovePlayers(int from, int to) {
   GatherSpriteKills(&kills);
   Inst_Switch(to);
   ApplySpriteKills(&kills);
+  if (room >= 0)
+    save_dung_info[room] |= room_flags;
   Deactivate(from);
   for (size_t k = 0; k < countof(kTransientAddrs); k++)
     g_ram[kTransientAddrs[k]] |= transient[k];
@@ -819,6 +838,7 @@ static void Inst_Sync() {
     int ks = KeySlot();
     if (ks >= 0)
       g_ram[ks] = link_num_keys;
+    SaveRoomState();
     // A world split off this frame is mostly a copy of one that reports the
     // same changes, so it doesn't report counters (they would count twice).
     // Its flag bits are still welcome (OR-ing them twice changes nothing):

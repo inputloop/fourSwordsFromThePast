@@ -3746,19 +3746,23 @@ void Dungeon_LoadHeader() {  // 81b564
     Dungeon_CheckAdjacentRoomsForOpenDoors(0, dungeon_room_index + 16);
 }
 
+// Door positions in the wall of the room next door (kLookup) and where each
+// one comes out in this room (kLookup2); idx 0: the room below, 6: above,
+// 12: to the right, 18: to the left.
+static const uint16 kLookup[] = {
+  0x00, 0x10, 0x20, 0x30, 0x40, 0x50,
+  0x61, 0x71, 0x81, 0x91, 0xa1, 0xb1,
+  0x02, 0x12, 0x22, 0x32, 0x42, 0x52,
+  0x63, 0x73, 0x83, 0x93, 0xa3, 0xb3,
+};
+static const uint16 kLookup2[] = {
+  0x61, 0x71, 0x81, 0x91, 0xa1, 0xb1,
+  0x0, 0x10, 0x20, 0x30, 0x40, 0x50,
+  0x63, 0x73, 0x83, 0x93, 0xa3, 0xb3,
+  0x02, 0x12, 0x22, 0x32, 0x42, 0x52,
+};
+
 void Dungeon_CheckAdjacentRoomsForOpenDoors(int idx, int room) {  // 81b759
-  static const uint16 kLookup[] = {
-    0x00, 0x10, 0x20, 0x30, 0x40, 0x50,
-    0x61, 0x71, 0x81, 0x91, 0xa1, 0xb1,
-    0x02, 0x12, 0x22, 0x32, 0x42, 0x52,
-    0x63, 0x73, 0x83, 0x93, 0xa3, 0xb3,
-  };
-  static const uint16 kLookup2[] = {
-    0x61, 0x71, 0x81, 0x91, 0xa1, 0xb1,
-    0x0, 0x10, 0x20, 0x30, 0x40, 0x50,
-    0x63, 0x73, 0x83, 0x93, 0xa3, 0xb3,
-    0x02, 0x12, 0x22, 0x32, 0x42, 0x52,
-  };
   Dungeon_LoadAdjacentRoomDoors(room);
   int i, j;
   uint16 a;
@@ -3800,6 +3804,78 @@ void Dungeon_LoadAdjacentRoomDoors(int room) {  // 81b7ef
       break;
     if ((a & 0xff00) == 0x4000 || (a & 0xff00) < 0x200)
       adjacent_doors_flags |= kUpperBitmasks[i];
+  }
+}
+
+// This room's doors (slots 0-3) whose other side, in the room next door, is
+// open by that room's saved flags (as Dungeon_CheckAdjacentRoomsForOpenDoors
+// finds them when this room is loaded).
+static uint16 Dungeon_DoorsOpenFromNextRoom(int idx, int room) {
+  const uint16 *here = GetRoomDoorInfo(dungeon_room_index), *there = GetRoomDoorInfo(room);
+  uint16 r = 0;
+  for (int i = 0; i != 4 && there[i] != 0xffff; i++) {
+    if (!(save_dung_info[room] & kUpperBitmasks[i]))
+      continue;
+    for (int j = idx; j != idx + 6; j++) {
+      if ((uint8)there[i] != kLookup[j])
+        continue;
+      for (int k = 0; k != 8 && here[k] != 0xffff; k++) {
+        if ((uint8)here[k] == kLookup2[j]) {
+          if (k < 4)
+            r |= kUpperBitmasks[k];
+          break;
+        }
+      }
+      break;
+    }
+  }
+  return r;
+}
+
+// Co-op: a key door or cracked wall a teammate opened in another world (in
+// its copy of this room, or from the room behind it) is open by the saved
+// room flags, which every world shares. It opens here too, right away and
+// without a key: otherwise it would wait here for a second key, and lock
+// again if the worlds merge into this one.
+static void Dungeon_OpenDoorsOpenedElsewhere() {
+  int room = dungeon_room_index;
+  // (Not on the other floor of an in-room staircase: the doors drawn are
+  // still those of the room that was loaded.)
+  if ((uint8)room != (uint8)dungeon_room_index2)
+    return;
+  uint16 open = save_dung_info[room] & 0xf000;
+  if (((room - 1) & 0xf) != 0xf)
+    open |= Dungeon_DoorsOpenFromNextRoom(18, room - 1);
+  if (((room + 1) & 0xf) != 0)
+    open |= Dungeon_DoorsOpenFromNextRoom(12, room + 1);
+  if (room - 16 >= 0)
+    open |= Dungeon_DoorsOpenFromNextRoom(6, room - 16);
+  if (room + 16 < 0x140)
+    open |= Dungeon_DoorsOpenFromNextRoom(0, room + 16);
+  open &= ~dung_door_opened;
+  if (!open)
+    return;
+  // (Queued after the tiles already waiting for the screen this frame.)
+  int dma_ptr = 0;
+  if (nmi_copy_packets_flag)
+    while (vram_upload_tile_buf[dma_ptr] != 0xffff)
+      dma_ptr += 2 + (vram_upload_tile_buf[dma_ptr + 1] >> 9);
+  for (int k = 0; k != 4; k++) {
+    uint8 t = door_type_and_slot[k] & 0xfe;
+    // What Dungeon_OpeningLockedDoor_Combined opens: key doors, cracked walls.
+    if (!(open & kUpperBitmasks[k]) || !dung_door_tilemap_address[k] ||
+        !((t >= kDoorType_SmallKeyDoor && t <= kDoorType_BreakableWall) || t == 0x2a || t == 0x2e))
+      continue;
+    dung_door_opened_incl_adjacent |= kUpperBitmasks[k];
+    dung_door_opened |= kUpperBitmasks[k];
+    door_open_closed_counter = 4;
+    dma_ptr = DrawDoorOpening_Step1(k, dma_ptr);
+    dma_ptr = Dungeon_PrepOverlayDma_nextPrep(dma_ptr, dung_door_tilemap_address[k]);
+    Dungeon_LoadToggleDoorAttr_OtherEntry(k);
+    if (t >= kDoorType_StairMaskLocked0 && t <= kDoorType_StairMaskLocked3)
+      DrawCompletelyOpenDoor();
+    nmi_copy_packets_flag = 1;
+    sound_effect_2 = 21;
   }
 }
 
@@ -6550,6 +6626,7 @@ void Module07_Dungeon() {  // 8287a2
   if (submodule_index) goto skip;
   Dungeon_HandleRoomTags();
   if (submodule_index) goto skip;
+  Dungeon_OpenDoorsOpenedElsewhere();  // (before a key goes into one)
   Dungeon_ProcessTorchesAndDoors();
   if (dung_unk_blast_walls_2)
     Dungeon_ClearAwayExplodingWall();

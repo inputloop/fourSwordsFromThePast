@@ -1,0 +1,55 @@
+# Co-op free roaming: a key door a teammate unlocks from one room opens on
+# the other side too, in a world that already has the room behind it
+# loaded, so nobody spends a second key on the same door.
+load 2
+run 30
+# Skull Woods: the big chest room; its south wall has a small key door
+# (door slot 2) down to room 68 (its door slot 1, in the north wall).
+enter 58
+run 200
+clearsprites
+join 2
+run 20
+poke f36f 02
+run 2
+# P2 goes through the middle door into the room's right half: its own world.
+pos 2 4280 2944
+run 2
+hold 2 R
+run 100
+hold 2 -
+run 20
+expect_instances 2
+expect_apart 1 2
+# P1's world goes to the room below, where the door is still locked.
+view 1
+enter 68
+run 200
+clearsprites
+expect_ram a0 68
+expect_ram 401 00
+# P2 unlocks the door from above, and stays in its room.
+pos 2 4472 2960
+hold 2 D
+run 60
+hold 2 U
+run 12
+hold 2 -
+run 20
+view 2
+expect_ram a0 58
+expect_ram 401 20
+expect_ram f36f 01
+# Below, the same door is open now, without a key.
+view 1
+run 2
+expect_ram 401 40
+# P1 walks up through it, and the team still has its other key.
+pos 1 4472 3136
+hold 1 U
+run 120
+hold 1 -
+run 60
+view 1
+expect_ram a0 58
+expect_ram f36f 01

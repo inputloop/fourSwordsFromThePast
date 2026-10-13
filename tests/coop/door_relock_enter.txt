@@ -1,0 +1,60 @@
+# Co-op free roaming: a teammate's world that loads a room while the player
+# who unlocked a key door there is still inside (the room's saved flags are
+# normally written only when it is left) finds the door open, and it stays
+# open when the worlds merge.
+load 2
+run 30
+# Skull Woods: the big chest room; its south wall has a small key door
+# (door slot 2) down to the room below.
+enter 58
+run 200
+clearsprites
+join 2
+run 20
+poke f36f 01
+run 2
+# P2 goes through the middle door into the room's right half: its own world.
+pos 2 4280 2944
+run 2
+hold 2 R
+run 100
+hold 2 -
+run 20
+expect_instances 2
+expect_apart 1 2
+# P2 unlocks the key door with the team's only key, and steps back.
+pos 2 4472 2960
+hold 2 D
+run 60
+hold 2 U
+run 12
+hold 2 -
+run 20
+view 2
+expect_ram f36f 00
+expect_ram 401 20
+# P1's world comes into the room again from outside: it loads the room.
+view 1
+enter 58
+run 200
+expect_ram a0 58
+expect_ram 401 20
+# P1 walks over to P2: the worlds merge into P1's.
+pos 1 4280 2944
+hold 1 R
+run 100
+hold 1 -
+run 60
+expect_instances 1
+expect_same 1 2
+view 1
+expect_ram 401 20
+expect_ram_not 12eef f2
+# P2 walks through the door to the room below without another key.
+hold 2 D
+run 120
+hold 2 -
+run 60
+view 2
+expect_ram a0 68
+expect_ram f36f 00
