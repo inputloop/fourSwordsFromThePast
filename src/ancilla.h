@@ -265,6 +265,7 @@ bool Ancilla_AddRupees(int k);
 void DashDust_Motive(int k);
 uint8 Ancilla_CalculateSfxPan(int k);
 int Ancilla_AllocInit(uint8 type, uint8 y);
+bool Ancilla_CanAlloc(uint8 type, uint8 limit);
 void AddSwordBeam(uint8 y);
 void AncillaSpawn_SwordChargeSparkle();
 int DashTremor_TwiddleOffset(int k);

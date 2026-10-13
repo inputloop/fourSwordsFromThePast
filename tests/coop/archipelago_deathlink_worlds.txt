@@ -1,0 +1,41 @@
+# Archipelago DeathLink with the team in two worlds and a fairy in a
+# bottle. P1 (in the house) goes down, P2 (outside, in a world of its own)
+# is the last and falls; the fairy brings P2 back, and as after any game
+# over the team plays on together, P1 back on its feet. The DeathLink still
+# to hand out is a save byte: it was set in the world that happened to be
+# current between frames (P1's here, and on P1's computer; P2's on P2's) and
+# cleared in another, so it stayed set here and took the team down a second
+# time (and online, the two computers went out of sync).
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+run 100
+hold 2 D
+run 200
+hold 2 -
+run 100
+expect_apart 1 2
+poke f35c 6
+srun 10
+apdeathlink
+srun 3
+expect_downed 1
+view 2
+expect_module 18
+expect_ram f412 0
+srun 600
+expect_instances 1
+expect_alive 1
+expect_alive 2
+expect_module 9
+expect_ram f35c 2
+expect_ram f412 0
+expect_running 2 300
+expect_alive 1
+expect_alive 2

@@ -28,7 +28,8 @@ unset ZELDA3_NETSIM
 # netsim command): the worlds stay in sync, nobody's own buttons are guessed,
 # and killed enemies stay dead (at most a few undone by rollbacks). Then a
 # client that loses its connection, restarts and is removed (net_reconnect).
-for pair in net_combat net_combat_slow net_reconnect net_ap; do
+# Archipelago items and DeathLinks over netplay (net_ap, net_ap_worlds).
+for pair in net_combat net_combat_slow net_reconnect net_ap net_ap_worlds; do
   ./zelda3 --mptest tests/coop/${pair}_host.txt > tests/out/${pair}_host.log 2>&1 &
   host=$!
   sleep 1

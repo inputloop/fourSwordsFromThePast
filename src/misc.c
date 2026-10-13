@@ -726,6 +726,14 @@ void TriforceRoom_LinkApproachTriforce() {  // 87f49c
   }
 }
 
+// Is the pedestal handing over its sword right now (MasterSword_Main, step 4)?
+static bool PedestalIsGiving() {
+  for (int k = 0; k < 16; k++)
+    if (sprite_state[k] && sprite_type[k] == 0x62 && sprite_subtype2[k] == 0 && sprite_ai_state[k] == 4)
+      return true;
+  return false;
+}
+
 void AncillaAdd_ItemReceipt(uint8 ain, uint8 yin, int chest_pos) {  // 8985e8
   int ancilla = Ancilla_AddAncilla(ain, yin);
   if (ancilla < 0)
@@ -821,7 +829,15 @@ void AncillaAdd_ItemReceipt(uint8 ain, uint8 yin, int chest_pos) {  // 8985e8
   ancilla_item_to_link[ancilla] = j;
   ancilla_arr1[ancilla] = 0;
 
-  if (j == 1 && item_receipt_method != 2) {
+  // The Master Sword's ceremony (the flash of light, Sahasrahla's call, the
+  // music) belongs to the pedestal. The randomizer's and Archipelago's
+  // progressive swords make item 1 anywhere: it is held up like any other
+  // item (indoors the ceremony has no submodule to run in and the game
+  // locks up; outdoors it would replace the follower). ancilla_U, cleared
+  // for every new object and unused by this one, tells Ancilla22_ItemReceipt.
+  bool ceremony = j == 1 && item_receipt_method != 2 && PedestalIsGiving();
+  ancilla_U[ancilla] = ceremony;
+  if (ceremony) {
     ancilla_timer[ancilla] = 160;
     submodule_index = 43;
     BYTE(palette_filter_countdown) = 0;
@@ -847,7 +863,7 @@ void AncillaAdd_ItemReceipt(uint8 ain, uint8 yin, int chest_pos) {  // 8985e8
     y += kReceiveItem_Tab2[j];
     x += kReceiveItem_Tab3[j];
   } else {
-    if (ancilla_step[ancilla] == 0 && j == 1) {
+    if (ancilla_step[ancilla] == 0 && ceremony) {
       sound_effect_1 = Link_CalculateSfxPan() | 0x2c;
     } else if (j == 0x20 || j == 0x37 || j == 0x38 || j == 0x39) {
       music_control = Link_CalculateSfxPan() | 0x13;

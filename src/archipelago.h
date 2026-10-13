@@ -20,7 +20,7 @@ enum {
   kApSave_Bind = 0x408,       // 4 bytes: the room the file belongs to (ApRoom.bind_hash)
   kApSave_ItemCount = 0x410,  // 2 bytes: how many of the server's items were received
   kApSave_State = 0x412,      // kApState_* bits
-  kApSave_Deaths = 0x413,     // game overs so far (for DeathLink)
+  kApSave_Deaths = 0x413,     // game overs since the file was loaded (for DeathLink)
   kApSave_Checked = 0x418,    // 32 bytes: a bit per location (synced as flags between worlds)
   kApSave_CheckedSize = 32,
   kApMarker = 0x41,
@@ -54,7 +54,8 @@ uint32 Ap_FileBind();
 // A chest or special place was used (randomizer.c and dungeon.c).
 void Ap_OnChestOpened(int chest);
 void Ap_OnSpecialPlace(int which);
-// The game is over / the Triforce was reached.
+// The last Link fell (counted unless a bottled fairy will bring it back) /
+// the Triforce was reached.
 void Ap_OnGameOver();
 void Ap_OnGoal();
 // The events of a netplay frame, before the frame is run.
@@ -85,6 +86,8 @@ void Ap_Tick();
 bool Ap_NextEvent(uint8 ev[4]);
 // The bind hash new files get (0 while not connected to a room we can play).
 uint32 Ap_HostBind();
+// The host loaded a saved state (or reset the game) by itself.
+void Ap_OnStateLoaded();
 // One line about the connection for the menu.
 void Ap_StatusLine(char *buf, size_t size);
 // Lines to show on the screen, oldest first (kind: ApTextKind).

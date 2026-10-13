@@ -1,0 +1,81 @@
+# Archipelago over netplay, the host (run together with
+# net_ap_worlds_client.txt): an item that has to wait, a DeathLink with the
+# team in two worlds, and the host's game restarted.
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+# A fairy in a bottle. (Before the client is there: a change by hand now
+# would be a change outside the frames.)
+poke f35c 6
+host 47474
+waitplayers 2
+tick 300
+# 1. Two items: the first one's text box stays open for a while, and the
+#    second waits meanwhile. It isn't put into every frame (the client
+#    would play every frame again): see the client.
+apitem 28
+apitem 28
+tick 700
+expect_apcount 1
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+tick 100
+expect_apcount 2
+expect_ram f343 6
+expect_module 7
+# 2. The client's Link walks out of the house, into a world of its own.
+#    Then a DeathLink: ours goes down, the client's is the last one and
+#    falls, and the fairy brings the team back. The DeathLink still to hand
+#    out was set in a different world on each computer (each one's own
+#    player's), and that stale byte took the client out of sync.
+tick 500
+expect_apart 1 2
+apdeathlink
+tick 900
+expect_alive 1
+expect_alive 2
+expect_ram f35c 2
+expect_ram f412 0
+expect_apdeaths 0
+expect_resyncs 0
+# (The DeathLink's line goes to the client too.)
+apnotices
+tick 900
+# 3. Our game is restarted (gone without a word, then hosting again): the
+#    client comes back, and gets our new lines, numbered from 1 again.
+netblackout 1
+disconnect
+netblackout 0
+host 47474
+tick 900
+aproom 87654321 1
+tick 10
+apnotices
+tick 900

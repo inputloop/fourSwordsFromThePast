@@ -1,0 +1,493 @@
+# Item randomizer: the second sword found in a chest is the Master Sword
+# level, held up like any other item. The pedestal's ceremony (only there)
+# made the house's submodule 43 run past the end of the dungeon's table:
+# the game locked up in the text box for good. (Seed 50 has a sword in
+# the chest in Link's house; Link already has the Fighter's Sword.)
+rando 50
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+poke f359 1
+run 2
+pos 1 2500 8650
+hold 1 U
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 3
+expect_ram f359 2
+expect_ram_not 11 2b
+run 200
+# (Sahasrahla's long message comes with it: A, again and again.)
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+run 100
+expect_ram f359 2
+expect_module 7
+expect_playing 1
+hold 1 D
+expect_ram_counts 20 30 1
+hold 1 -
+# The pedestal itself still holds its ceremony. (Its sword sprite, put
+# next to Link and sent to its last step: handing over the sword.)
+load 2
+run 30
+clearsprites
+poke f3cc 0
+poke f359 1
+spawn 62 1 0
+run 2
+poke d8f 4
+poke dff 0
+run 1
+expect_ram f359 2
+expect_ram 11 2b
+run 230
+expect_ram f3cc e
+expect_module 14
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+run 60
+expect_module 9
+expect_playing 1

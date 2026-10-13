@@ -1,5 +1,8 @@
 # Archipelago DeathLink: our own game over is sent to the room (once), but
-# only when the room has DeathLink on.
+# only when the room has DeathLink on, and only a new one: the save counts
+# the game overs since the file was loaded, and the count going down (a file
+# loaded again, another file of the room) or a game over from while we
+# weren't connected isn't a death of anybody.
 aproom 12345678 1
 srun 2
 newgame
@@ -19,3 +22,32 @@ srun 10
 expect_apdeaths 1
 srun 100
 expect_apdeaths 1
+# The file loaded again (its game over wasn't saved): nothing is sent.
+loadslot
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 300
+srun 10
+expect_module 7
+expect_apdeaths 1
+# A new file of the same room: nothing either.
+newgame
+srun 400
+hold 1 A
+srun 4
+hold 1 -
+srun 300
+expect_apdeaths 1
+# A game over while not connected isn't sent when we are back.
+aproom off
+srun 2
+hp 1 4
+pram 1 373 10
+srun 10
+expect_module 18
+srun 600
+aproom 12345678 1
+srun 5
+expect_apdeaths 0

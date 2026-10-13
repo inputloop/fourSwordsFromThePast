@@ -1,0 +1,76 @@
+# Archipelago DeathLink while Link holds up an item from the room. Some
+# items are only added when the hold-up ends (a Heart Container, the fourth
+# Piece of Heart, rupees), but the save already counts the item as
+# received: a game over in the middle lost it for good. The DeathLink waits
+# for the hold-up, like for a text box.
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_ram f36c 18
+apitem 3f
+srun 2
+apdeathlink
+srun 20
+expect_apcount 1
+expect_module 7
+expect_pram 1 5d 15
+srun 100
+expect_module 14
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+expect_module 18
+expect_ram f36c 20
+# Save and Continue.
+srun 400
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+srun 100
+expect_module 7
+expect_ram f36c 20
+expect_apcount 1
+# The same with 20 rupees: they count up after the hold-up.
+expect_ram f360 0
+apitem 36
+srun 2
+apdeathlink
+srun 20
+expect_module 7
+srun 100
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+srun 100
+expect_module 18
+expect_ram f360 14
+expect_apcount 2
+expect_apdeaths 0

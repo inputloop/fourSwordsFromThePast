@@ -1,0 +1,39 @@
+# Archipelago DeathLink that comes in during a game over of ours: we are
+# down already, so it is over with it. (It waited for the game over to end
+# and took Link down again right after Continue.)
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+srun 2
+hp 1 4
+pram 1 373 10
+srun 10
+expect_module 18
+apdeathlink
+srun 10
+expect_ram f412 0
+# Save and Continue.
+srun 400
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+srun 100
+expect_module 7
+expect_running 1 300
+expect_module 7
+expect_alive 1
+expect_apdeaths 1

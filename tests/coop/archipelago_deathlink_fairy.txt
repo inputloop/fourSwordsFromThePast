@@ -1,0 +1,45 @@
+# Archipelago DeathLink with a fairy in a bottle, as in the original game:
+# the fairy brings the last Link back, so the game isn't over. Our own fatal
+# hit is then not sent to the room. A DeathLink that comes in takes the Link
+# down the same way, and the fairy saves it too (nothing is left to do).
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+poke f35c 6
+srun 2
+expect_apdeaths 0
+# A fatal hit: the fairy saves Link, no DeathLink goes out.
+hp 1 4
+pram 1 373 10
+srun 10
+expect_module 18
+srun 600
+expect_module 7
+expect_alive 1
+expect_ram f35c 2
+expect_apdeaths 0
+# A DeathLink comes in: another fairy saves Link again.
+poke f35c 6
+srun 2
+apdeathlink
+srun 10
+expect_module 18
+srun 600
+expect_module 7
+expect_alive 1
+expect_ram f35c 2
+expect_ram f412 0
+expect_running 1 300
+expect_apdeaths 0
+# Without a fairy, a fatal hit is a game over, and it is sent.
+hp 1 4
+pram 1 373 10
+srun 10
+expect_module 18
+srun 10
+expect_apdeaths 1

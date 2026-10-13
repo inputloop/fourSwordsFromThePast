@@ -1,0 +1,488 @@
+# Archipelago: the second Progressive Sword (the Master Sword level) from
+# the room is held up like any other item. Only the pedestal has the
+# ceremony (the flash of light, Sahasrahla's call, the music): indoors it
+# locked the game up for good, outdoors it replaced the follower.
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+apitem 49
+apitem 49
+srun 150
+# (Sahasrahla's long message comes with it: A, again and again.)
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+srun 100
+expect_apcount 2
+expect_ram f359 2
+expect_module 7
+expect_playing 1
+hold 1 D
+expect_ram_counts 20 30 1
+hold 1 -
+# Outdoors, with the old man following: he stays. (A fresh room, and the
+# reference save made a file of it.)
+aproom 12345678
+load 2
+run 30
+poke f407 41
+poke f408 78
+poke f409 56
+poke f40a 34
+poke f40b 12
+poke f4f0 52
+poke f4f1 01
+poke f3cc 4
+run 2
+expect_ram f359 1
+apitem 49
+srun 150
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+hold 1 A
+srun 2
+hold 1 -
+srun 22
+srun 100
+expect_apcount 1
+expect_ram f359 2
+expect_ram f3cc 4
+expect_module 9
+expect_playing 1

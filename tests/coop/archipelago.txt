@@ -76,7 +76,8 @@ srun 60
 expect_module 7
 expect_ram f34a 1
 expect_apcount 4
-# Swords are progressive: two of them make the Master Sword level.
+# Swords are progressive: the first one is the Fighter's Sword (the second,
+# the Master Sword level, is in archipelago_master_sword.txt).
 apitem 49
 srun 150
 hold 1 A

@@ -78,6 +78,7 @@
 //   apconnect <server> <slot> [password]  connect from the Archipelago screen
 //   apwait <connected|items n> [seconds]  run in real time until connected / n items received (default 20 s)
 //   apnotices           print the lines the game would show
+//   expect_apnotices <n>  print them: there must be n (a netplay client: the host's)
 // Pictures:
 //   shot <file.ppm>     render the current frame
 //   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
@@ -120,6 +121,7 @@
 //   localjoin <i> / localleave <i>
 //   resetcounters       zero the netplay statistics (resyncs, rollbacks, own corrections)
 //   expect_players <n> / expect_resyncs <n> / expect_own_corrections <n>
+//   expect_rollbacks <n>  at most n rollbacks since resetcounters
 //   expect_resurrections <n>  at most n sprites of the viewed world came back from the dead in a rollback (trackkills)
 //   corrupt             flip a byte of RAM (to test desync recovery)
 //   lan [n]             search for LAN games (and expect n)
@@ -1079,6 +1081,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         uint16 in[kMpMaxPlayers];
         memcpy(in, held, sizeof(in));
         Ui_Update(in, 0);
+        // As in the game's loop: the world of our first player is heard, and
+        // is the current one between frames (so it differs between computers).
+        Inst_SetAudioPlayer(Ui_WatchedPlayer(0));
         if (!Ui_PausesGame())
           frame += Session_Tick(in, g_wanted_zelda_features);
         Ap_Tick();
@@ -1207,11 +1212,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       printf("apwait %s: %s (%s)\n", arg1, done ? "done" : "timed out", status);
       if (!done)
         g_failures++;
-    } else if (!strcmp(cmd, "apnotices")) {
+    } else if (!strcmp(cmd, "apnotices") || !strcmp(cmd, "expect_apnotices")) {
       char text[96];
-      int kind;
+      int kind, n = 0;
       while (Ap_PollNotice(text, sizeof(text), &kind))
-        printf("[ap %d] %s\n", kind, text);
+        printf("[ap %d] %s\n", kind, text), n++;
+      if (!strcmp(cmd, "expect_apnotices") && n != atoi(arg1)) {
+        printf("FAIL: %d Archipelago lines, expected %s at frame %d\n", n, arg1, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "expect_apcount")) {
       int n = g_ram[0xF000 + kApSave_ItemCount] | g_ram[0xF000 + kApSave_ItemCount + 1] << 8;
       if (n != atoi(arg1)) {
@@ -1429,6 +1438,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "expect_own_corrections")) {
       if (Session_GetStatus()->own_corrections > atoi(arg1)) {
         printf("FAIL: %d own corrections (rubber banding), at most %s expected\n", Session_GetStatus()->own_corrections, arg1);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_rollbacks")) {
+      // expect_rollbacks <n>: at most n rollbacks since resetcounters
+      if (Session_GetStatus()->rollbacks > atoi(arg1)) {
+        printf("FAIL: %d rollbacks, at most %s expected at frame %d\n", Session_GetStatus()->rollbacks, arg1, frame);
         g_failures++;
       }
     } else if (!strcmp(cmd, "inputdelay")) {

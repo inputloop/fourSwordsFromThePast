@@ -77,17 +77,233 @@ run 4
 hold 1 -
 run 60
 expect_module 7
+# (The Master Sword away from the pedestal: held up like any item, without
+# the pedestal's ceremony, then Sahasrahla's long message.)
 receive 1
-run 900
+run 200
 hold 1 A
-run 4
+run 2
 hold 1 -
-run 60
+run 22
 hold 1 A
-run 4
+run 2
 hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
+hold 1 A
+run 2
+hold 1 -
+run 22
 run 60
 expect_module 7
+expect_playing 1
 receive b
 run 200
 hold 1 A

@@ -1,0 +1,31 @@
+# Archipelago over netplay, the client (see net_ap_worlds_host.txt).
+connect 127.0.0.1:47474
+waitplay
+expect_players 2
+view 2
+tick 400
+# 1. The host's text box is open and its second item waits: frames with an
+#    event are always played again, so one in every frame would mean a
+#    rollback in every frame.
+resetcounters
+tick 400
+netstats
+expect_rollbacks 100
+tick 700
+expect_apcount 2
+# 2. Out of the house (P2 has a world of its own), then the DeathLink. (The
+#    host checks that the team is back on its feet; here it may have met
+#    the soldiers outside since.)
+hold 1 D
+tick 200
+hold 1 -
+tick 1600
+expect_ram f35c 2
+expect_ram f412 0
+expect_resyncs 0
+expect_apnotices 1
+# 3. The host is restarted: back in its new game, its lines still come.
+waitclientstate 4
+waitplay
+tick 800
+expect_apnotices 1

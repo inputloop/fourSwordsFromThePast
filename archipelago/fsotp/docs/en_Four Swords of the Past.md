@@ -81,4 +81,6 @@ is for everyone, and a location any Link checks is checked for the team.
 Yes, as the `death_link` option (the game's menu can also turn it on or off
 for itself). When it is on, your deaths are sent to the others who have it
 on, and theirs come to you. In co-op a death is the whole team being down
-(the game over), and a death that comes in takes down every Link at once.
+(the game over: not when a fairy in a bottle brings the last Link back), and
+a death that comes in takes down every Link; as in the original game, a fairy
+in a bottle brings the last one back.

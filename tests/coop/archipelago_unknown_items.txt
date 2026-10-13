@@ -1,0 +1,42 @@
+# Archipelago: only the item codes of the world's pool (ITEMS in
+# archipelago/fsotp/items.py) are handed out. Anything else the server sends
+# is skipped and counted: the Crystal (0x20) would start its sequence and end
+# with the exit of a boss room (a crash anywhere else), a pendant (0x37) or a
+# big key (0x32) belong to their own places too, and the Master Sword (0x01)
+# only comes as a Progressive Sword.
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_apcount 0
+apitem 20
+apitem 37
+apitem 32
+apitem 01
+srun 400
+expect_apcount 4
+expect_ram f37a 0
+expect_ram f374 0
+expect_ram f359 0
+expect_module 7
+expect_playing 1
+expect_running 1 300
+# An item of the pool after them still arrives, with its text box.
+apitem 28
+srun 150
+expect_module 14
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+expect_apcount 5
+expect_ram f343 3
+expect_playing 1

@@ -3375,6 +3375,11 @@ void Ancilla35_MasterSwordReceipt(int k) {  // 88c25f
   }
 }
 
+// The pedestal's Master Sword, with its ceremony (see AncillaAdd_ItemReceipt).
+static bool ItemReceipt_IsSwordCeremony(int k) {
+  return ancilla_item_to_link[k] == 1 && ancilla_step[k] != 2 && ancilla_U[k];
+}
+
 void Ancilla22_ItemReceipt(int k) {  // 88c38a
   uint8 a;
 
@@ -3401,7 +3406,7 @@ void Ancilla22_ItemReceipt(int k) {  // 88c38a
     goto label_b;
   }
 
-  if (ancilla_item_to_link[k] == 1 && ancilla_step[k] != 2) {
+  if (ItemReceipt_IsSwordCeremony(k)) {
     if (ancilla_timer[k] == 0)
       goto label_a;
     if (ancilla_timer[k] != 17)
@@ -3422,7 +3427,7 @@ void Ancilla22_ItemReceipt(int k) {  // 88c38a
   goto endif_1;
 
 label_a:
-  if (ancilla_item_to_link[k] == 1 && !ancilla_step[k]) {
+  if (ItemReceipt_IsSwordCeremony(k) && !ancilla_step[k]) {
     sound_effect_ambient = 5;
     music_control = 2;
   }
@@ -3519,7 +3524,7 @@ endif_1:
     }
   } else if (ancilla_item_to_link[k] == 0x1) {
     ancilla_arr4[k] = kReceiveItem_Tab0[0];
-    if (ancilla_step[k] != 2) {
+    if (ItemReceipt_IsSwordCeremony(k)) {
       if (ancilla_timer[k] < 16) {
         a = 0;
       } else {
@@ -7021,6 +7026,28 @@ int Ancilla_AllocInit(uint8 type, uint8 limit) {  // 8ff577
   } while (k != 0);
   ancilla_alloc_rotate = 0;
   return -1;
+}
+
+// Would Ancilla_AllocInit find a slot now? (The same search, taking nothing.)
+bool Ancilla_CanAlloc(uint8 type, uint8 limit) {
+  int n = 0;
+  for (int i = 0; i < 5; i++)
+    n += ancilla_type[i] == type;
+  if (limit + 1 == n)
+    return false;
+  for (int j = (type == 7 || type == 8) ? limit : 4; j >= 0; j--) {
+    if (ancilla_type[j] == 0)
+      return true;
+  }
+  int k = ancilla_alloc_rotate;
+  do {
+    if (--k < 0)
+      k = limit;
+    uint8 old_type = ancilla_type[k];
+    if (old_type == 0x3c || old_type == 0x13 || old_type == 0xa)
+      return true;
+  } while (k != 0);
+  return false;
 }
 
 void AddSwordBeam(uint8 y) {  // 8ff67b

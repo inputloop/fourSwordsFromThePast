@@ -1,0 +1,53 @@
+# Archipelago: the item Link holds up needs one of the five low object
+# slots (Ancilla_AllocInit). While all of them are busy (bombs, arrows, a
+# boomerang... of up to four Links), an item from the room waits: given
+# without a slot it would be counted but never added, and Link would stand
+# frozen holding up nothing for good.
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+srun 2
+poke c4a 3
+poke c4b 3
+poke c4c 3
+poke c4d 3
+poke c4e 3
+apitem 12
+srun 60
+expect_apcount 0
+expect_ram f34a 0
+expect_pram 1 5d 0
+# A slot is free again: the Lamp comes, with its text box.
+poke c4a 0
+poke c4b 0
+poke c4c 0
+poke c4d 0
+poke c4e 0
+srun 150
+expect_apcount 1
+expect_ram f34a 1
+expect_module 14
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+expect_module 7
+expect_pram 1 5d 0
+expect_playing 1

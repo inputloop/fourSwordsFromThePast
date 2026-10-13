@@ -1463,6 +1463,10 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     uint32 token = Rd32(r);
     if (!r->err && (g_s.st.client_state == 1 || g_s.st.client_state == 4)) {
       SetMessage(g_s.st.client_state == 4 ? "Back in: downloading the game again..." : "Downloading the host's game...");
+      // A new token: a host that was restarted, which numbers its
+      // Archipelago lines from 1 again.
+      if (token != g_s.token)
+        g_s.notice_seq = 0;
       g_s.st.my_id = id;
       g_s.token = token;
       g_s.st.client_state = 2;

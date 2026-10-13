@@ -107,7 +107,9 @@ randomizer for save files created from then on (or set `Randomizer` in the
   is the Power Glove, the second the Titan's Mitt.
 - The seed is stored in the save file, so a file stays randomized the same
   way. *Gameplay > This game* shows the seed; choosing "on, seed ..." makes
-  new files with that same seed, to race a friend or replay it.
+  new files with that same seed, to race a friend or replay it. (A new file
+  always gets the newest placement of its seed, while a file made with an
+  older build keeps the one it had: to race on a seed, use the same build.)
   *Gameplay > Enter a seed* takes a friend's 8-digit seed (type it, or
   change each digit with Left/Right), and the file select screen shows the
   seed new files will get. *Gameplay > Write spoiler log* writes
@@ -276,9 +278,16 @@ default follows the YAML), deaths travel between everyone in the multiworld
 who has DeathLink on:
 
 - A death of yours is sent when the game is over, that is when the last Link
-  standing falls. In co-op one Link going down isn't a death.
-- When a death comes in, every standing Link goes down at once (no fairy
-  helps), so the game is over. That game over isn't sent back.
+  standing falls and no fairy in a bottle brings it back. In co-op one Link
+  going down isn't a death. It is sent while connected, as it happens: a
+  game over from while the game wasn't connected isn't sent later.
+- When a death comes in, every standing Link goes down (one in a menu, a
+  text box or a transition, or holding up an item, as soon as it is free
+  again). The last one falls as if hit: as in the original game, a fairy in
+  a bottle brings it back and the team plays on, the others back on their
+  feet; without one the game is over. That game over isn't sent back, and a
+  death that comes in while your own game over is on the screen changes
+  nothing.
 
 **Secure connections.** The game connects over plain WebSocket (`ws://`) or
 encrypted (`wss://`). Write the scheme in front of the address to choose;

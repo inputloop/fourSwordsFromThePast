@@ -827,6 +827,9 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
   bool resync = Session_IsNetplay() &&
                 ((j <= kKeys_ReplayRef_Last && !(j >= kKeys_Save && j <= kKeys_Save_Last)) || j == kKeys_Reset ||
                  (j >= kKeys_CheatLife && j <= kKeys_CheatWalkThroughWalls));
+  // (Archipelago: the game overs of a loaded state aren't new ones.)
+  if ((j <= kKeys_ReplayRef_Last && !(j >= kKeys_Save && j <= kKeys_Save_Last)) || j == kKeys_Reset)
+    Ap_OnStateLoaded();
   if (j <= kKeys_Load_Last) {
     SaveLoadSlot(kSaveLoad_Load, j - kKeys_Load);
   } else if (j <= kKeys_Save_Last) {
