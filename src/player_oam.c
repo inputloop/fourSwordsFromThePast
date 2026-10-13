@@ -5,6 +5,7 @@
 #include "snes/snes_regs.h"
 #include "player.h"
 #include "misc.h"
+#include "hd3d.h"
 
 static const int8 kPlayerOam_StairsOffsY[] = {
   0, -2, -3, 0, -2, -3, 0, 0, 0, 0, 0, 0, 0, -2, -3, 0,
@@ -762,7 +763,9 @@ void CalculateSwordHitBox() {  // 879e63
 
 void LinkOam_Main() {
   Mp_BeginLeaderOam();
+  Hd3d_TagBegin(kHd3dTag_Link, g_mp.leader);
   LinkOam_MainOne();
+  Hd3d_TagEnd();
   Mp_EndLeaderOam();
   Mp_DrawOtherPlayers();
 }

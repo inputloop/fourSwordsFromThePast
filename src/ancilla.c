@@ -12,6 +12,7 @@
 #include "dungeon.h"
 #include "sprite_main.h"
 #include "assets.h"
+#include "hd3d.h"
 
 static const uint8 kAncilla_Pflags[68] = {
   0,    8,  0xc, 0x10, 0x10,    4, 0x10, 0x18,    8,    8,    8,    0, 0x14, 0, 0x10, 0x28,
@@ -663,8 +664,11 @@ void Ancilla_ExecuteAll() {  // 88832b
   for (int i = 9; i >= 0; i--) {
     cur_object_index = i;
     if (ancilla_type[i]) {
-      if (Mp_PreAncilla(i))
+      if (Mp_PreAncilla(i)) {
+        Hd3d_TagBegin(kHd3dTag_Ancilla, i);
         Ancilla_ExecuteOne(ancilla_type[i], i);
+        Hd3d_TagEnd();
+      }
       if (Mp_Active()) {
         Mp_PostAncilla(i);
         Mp_EndObject();

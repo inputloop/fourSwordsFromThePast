@@ -8,6 +8,7 @@
 #include "archipelago.h"
 #include "nmi.h"
 #include "hud.h"
+#include "hd3d.h"
 #include "load_gfx.h"
 #include "overworld.h"
 #include "sprite.h"
@@ -6651,7 +6652,9 @@ skip:
     BG1VOFS_copy2 = BG1VOFS_copy = bg1y = BG2VOFS_copy2 + dung_floor_y_offs;
   }
 
+  Hd3d_TagBegin(kHd3dTag_PushBlock, 0);
   Sprite_Dungeon_DrawAllPushBlocks();
+  Hd3d_TagEnd();
   Sprite_Main();
 
   BG2HOFS_copy2 = bg2x;

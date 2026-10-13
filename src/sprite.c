@@ -14,6 +14,7 @@
 #include "tile_detect.h"
 #include "sprite_main.h"
 #include "assets.h"
+#include "hd3d.h"
 static const uint16 kOamGetBufferPos_Tab0[6] = {0x171, 0x201, 0x31, 0xc1, 0x141, 0x1d1};
 static const uint16 kOamGetBufferPos_Tab1[48] = {
    0x30,  0x50,  0x80,  0xb0,  0xe0, 0x110, 0x140, 0x170, 0x1d0, 0x1d4, 0x1dc, 0x1e0, 0x1e4, 0x1ec, 0x1f0, 0x1f8,
@@ -1122,7 +1123,9 @@ void Sprite_Main() {  // 868328
     drag_player_x = drag_player_y = 0;
   Oam_ResetRegionBases();
   Garnish_ExecuteUpperSlots();
+  Hd3d_TagBegin(kHd3dTag_Follower, 0);
   Follower_Main();
+  Hd3d_TagEnd();
   byte_7E0FB2 = flag_is_sprite_to_pick_up;
   flag_is_sprite_to_pick_up = 0;
   Mp_ClearPerFrameSpriteFlags();
@@ -1143,7 +1146,9 @@ void Sprite_Main() {  // 868328
   for (int i = 15; i >= 0; i--) {
     cur_object_index = i;
     Mp_PreSprite(i);
+    Hd3d_TagBegin(kHd3dTag_Sprite, i);
     Sprite_ExecuteSingle(i);
+    Hd3d_TagEnd();
     if (Mp_Active())
       Mp_EndObject();
   }
@@ -3315,15 +3320,21 @@ void Garnish_ExecuteUpperSlots() {  // 89b08c
   HandleScreenFlash();
 
   if (garnish_active) {
-    for (int i = 29; i >= 15; i--)
+    for (int i = 29; i >= 15; i--) {
+      Hd3d_TagBegin(kHd3dTag_Garnish, i);
       Garnish_ExecuteSingle(i);
+      Hd3d_TagEnd();
+    }
   }
 }
 
 void Garnish_ExecuteLowerSlots() {  // 89b097
   if (garnish_active) {
-    for (int i = 14; i >= 0; i--)
+    for (int i = 14; i >= 0; i--) {
+      Hd3d_TagBegin(kHd3dTag_Garnish, i);
       Garnish_ExecuteSingle(i);
+      Hd3d_TagEnd();
+    }
   }
 }
 
