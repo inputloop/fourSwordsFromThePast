@@ -38,7 +38,7 @@ jobs:
     - name: Package
       run: |
         mkdir -p dist/other
-        cp zelda3 zelda3.ini README.md MULTIPLAYER.md dist/
+        cp zelda3 zelda3.ini README.md MULTIPLAYER.md AI_DISCLOSURE.txt dist/
         python3 archipelago/build_apworld.py dist/fsotp.apworld
         cp other/3x5_font.png dist/other/
         git ls-files assets | tar -cf - -T - | tar -xf - -C dist

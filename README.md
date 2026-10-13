@@ -498,3 +498,9 @@ Additionally, the following commands are available:
 ## License
 
 This project is licensed under the MIT license. See 'LICENSE.txt' for details.
+
+## AI use
+
+This project was made with an AI coding assistant. See
+[AI_DISCLOSURE.txt](AI_DISCLOSURE.txt) for what was written with AI, what
+wasn't, and how the work was checked.

@@ -1,0 +1,78 @@
+AI USE DISCLOSURE
+fourSwordsFromThePast (Four Swords of the Past)
+Last updated: October 13, 2026
+
+SUMMARY
+
+This project was made with an AI coding assistant: Claude Code, made by
+Anthropic. Almost all of this project's own code, tests and documentation
+were written by the AI, following the requests of the project's human
+maintainers, who decided what to build, played the game, reported bugs and
+decided what to keep.
+
+Every commit in this repository's history was made by the AI assistant
+(author "Claude <noreply@anthropic.com>", 102 commits from October 10 to
+October 13, 2026). Commits carry a "Co-Authored-By" line naming the AI.
+
+
+WHAT THE AI WROTE
+
+- The co-op and netplay work: up to four Links, drop-in/drop-out, free
+  roaming with separate world copies that split and merge, split screen,
+  online play with rollback, room codes, reconnecting, and the related
+  game changes (src/mp.c, src/instance.c, src/session.c, src/net.c,
+  src/upnp.c and changes throughout the game code in src/).
+- The menus and on-screen displays (src/ui.c), controls (src/bindings.c),
+  the 2D-HD look (src/hd2d.c), the Four Swords story and title
+  (src/story.c), the item randomizer (src/randomizer.c) and the full
+  inventory option.
+- Archipelago support: the game side (src/archipelago.c), the network
+  client (src/ap_client.c, src/ap_ws.c, src/ap_tls.c, src/ap_json.c), the
+  Archipelago world written in Python (archipelago/fsotp) and its tools and
+  tests (archipelago/).
+- The automated tests (tests/, archipelago/tests/), the build and CI
+  scripts, and the documentation: README.md, MULTIPLAYER.md,
+  docs/HOW_THE_MOD_WORKS.md, BUILDING.md additions, zelda3.ini comments and
+  the Archipelago setup guides.
+- The screenshots in docs/screenshots/. They are not AI-generated images:
+  the AI ran the game with a test program and saved what the game drew.
+
+
+WHAT THE AI DID NOT WRITE
+
+- The zelda3 C reimplementation of A Link to the Past that this project is
+  built on (https://github.com/snesrev/zelda3, MIT license), imported from
+  its commit 45a149d8. It was written by that project's authors, not as
+  part of this project. The AI only changed it where this project needed.
+- Third-party libraries included in the repository, written by their own
+  authors under their own licenses: cJSON (third_party/cJSON), the Opus
+  decoder, the OpenGL loader and the stb libraries (third_party/), see
+  LICENSE.txt.
+- The game's graphics, sound and text. They are not in this repository:
+  every player extracts them from their own copy of the original game.
+- The project's direction: the maintainers chose what to build (some
+  features were suggested by the AI, all were decided by the maintainers)
+  and reported the bugs they found playing the game.
+
+
+HOW THE WORK WAS CHECKED
+
+- More than a hundred automated test scripts play the game without a window
+  and check the results. They need the game's data, so they run on a
+  computer that has the game, not on GitHub.
+- Every change is built for Linux, macOS and Windows on GitHub Actions,
+  which also tests the Archipelago client against a pretend server.
+- Changes were also reviewed by separate AI review passes, which looked for
+  bugs and tried to reproduce them before they were fixed.
+- The maintainers played the game and reported problems, which were then
+  fixed with new tests.
+
+AI-written code can contain mistakes that tests and reviews did not catch.
+If you find a bug, please report it in the project's issue tracker or on
+its Discord (see README.md).
+
+
+QUESTIONS
+
+Questions about this disclosure can go to the maintainers through the
+repository's issue tracker or the project's Discord (see README.md).

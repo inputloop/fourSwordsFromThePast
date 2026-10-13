@@ -30,7 +30,7 @@ cp zelda3.ini $OUT/
 DIST=$OUT/dist
 rm -rf $DIST
 mkdir -p $DIST/other
-cp $OUT/zelda3.exe $OUT/SDL2.dll zelda3.ini extract_assets.bat README.md MULTIPLAYER.md $DIST/
+cp $OUT/zelda3.exe $OUT/SDL2.dll zelda3.ini extract_assets.bat README.md MULTIPLAYER.md AI_DISCLOSURE.txt $DIST/
 cp other/3x5_font.png $DIST/other/
 git ls-files assets | tar -cf - -T - | tar -xf - -C $DIST
 cat > $DIST/HOW_TO_PLAY.txt <<'TXT'
