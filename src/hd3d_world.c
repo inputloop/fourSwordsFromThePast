@@ -1275,6 +1275,7 @@ void Hd3dScene_GetInfo(const Hd3dScene *s, Hd3dSceneInfo *out) {
   out->bg1_role = s->bg1_role;
   out->origin_x = s->origin_x, out->origin_y = s->origin_y, out->size = s->size;
   out->wall_height = s->wall_height;
+  out->void_index = s->void_index;
 }
 
 int Hd3dScene_WalkZ(const Hd3dScene *s, int layer) {
@@ -1432,8 +1433,9 @@ static void EmitFace(EmitCtx *x, int L, int c, int r, int dir, int zlo, int zhi)
     SetVertex(&q->v[2], x1, y, zl, x1, y - zl);
     SetVertex(&q->v[3], x0, y, zl, x0, y - zl);
   } else {
-    // (u one texel inside the higher cell)
-    float px = dir == kDir_E ? x1 : x0, u = dir == kDir_E ? x1 - 0.5f : x0 + 0.5f;
+    // (u from a column a few texels inside the higher cell: the edge column
+    // is usually the art's dark outline, which made side faces near black)
+    float px = dir == kDir_E ? x1 : x0, u = dir == kDir_E ? x1 - 3.5f : x0 + 3.5f;
     SetVertex(&q->v[0], px, y0, zh, u, y0 - zh);
     SetVertex(&q->v[1], px, y1, zh, u, y1 - zh);
     SetVertex(&q->v[2], px, y1, zl, u, y1 - zl);

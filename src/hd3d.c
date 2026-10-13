@@ -424,7 +424,9 @@ static void ReadLight(Pane *p, Ppu *ppu, int player_z) {
     p->subtract_lights = true;
     p->subtract_cards = p->sf->obj_math;
   }
-  uint32 c0 = p->bg_lut[0];
+  // Around a room the picture shows its filler (black in most rooms), not the backdrop.
+  uint32 around = p->info.indoors && p->info.void_index ? p->bg_lut[p->info.void_index & 255] : p->bg_lut[0];
+  uint32 c0 = around;
   if (dark && by_hd2d) {
     c0 = ScaleRgb(c0, (int)(p->ambient * 256.0f), 256);
   } else if (dark) {
@@ -435,7 +437,7 @@ static void ReadLight(Pane *p, Ppu *ppu, int player_z) {
   p->backdrop = c0;
   int br = ppu->brightness & 15;
   if (player_is_indoors) {
-    p->fog_tp = dark ? 0 : p->bg_lut[0];
+    p->fog_tp = dark ? 0 : around;
     p->fog_fp = dark ? 0 : ScaleRgb(0x08080c, br, 15);
   } else {
     p->fog_tp = ScaleRgb(0x788296, br, 15);

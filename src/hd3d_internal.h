@@ -45,6 +45,7 @@ typedef struct Hd3dSceneInfo {
   uint8 bg1_role;            // kHd3dBg1_*
   int32 origin_x, origin_y, size;  // world px
   int16 wall_height;         // the room's east, west and south walls (px)
+  int16 void_index;          // the room's filler texel, the color around it (0: none, the backdrop shows)
 } Hd3dSceneInfo;
 
 // Phase A, the world bound (reads RAM and VRAM, never writes them): the

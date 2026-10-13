@@ -2,8 +2,10 @@
 # the 2D-HD look off, the game's own darkness applies: the far part of the
 # room is black and only the Lamp lights the floor around Link; without the
 # Lamp it is black there too. With the 2D-HD lighting on, its rule applies
-# instead: the room is dim, not black. (Areas in picture pixels: the cave's
-# far right part, and the floor just above Link, who stands at the door.)
+# instead: the Lamp lights the floor about as brightly as in the 2D-HD
+# picture (52 there), and the far part stays dark (this cave's walls are
+# nearly black). (Areas in picture pixels: the cave's far right part, and
+# the floor just above Link, who stands at the door.)
 view3d 1
 hd2d 0
 load 2
@@ -24,8 +26,14 @@ drawrun 200
 expect_3d 1
 expect_luma 176 64 256 144 0 12
 expect_luma 104 150 152 196 0 12
-# The 2D-HD lighting: dim but not black.
+# The 2D-HD lighting, with the Lamp.
 hd2d 1 70
+load 2
+drawrun 30
+poke f34a 1
+enter f0
+drawrun 200
 expect_3d 1
-expect_luma 176 64 256 144 10 60
+expect_luma 176 64 256 144 0 12
+expect_luma 104 150 152 196 40 80
 hd2d 0

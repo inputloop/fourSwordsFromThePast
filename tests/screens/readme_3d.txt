@@ -13,9 +13,17 @@ view3d 1
 drawrun 15
 cam3d 1 tp 0 45
 shot tests/out/readme_3d_tp.ppm
+# Down the steps into the courtyard: the camera turned, then first person
+# (the soldier stands in the world as a flat card that faces you).
+hold 1 D
+drawrun 90
+hold 1 -
+drawrun 5
 cam3d 1 tp -35 40
+drawrun 2
 shot tests/out/readme_3d_turned.ppm
-cam3d 1 fp 0 4
+cam3d 1 fp 150 8
+drawrun 2
 shot tests/out/readme_3d_fp_out.ppm
 # First person in the Sanctuary.
 enter 12
@@ -27,7 +35,7 @@ shot tests/out/readme_3d_fp_sanctuary.ppm
 cam3d 1 tp 0 45
 localjoin 2
 tick 30
-cam3d 2 fp 90 6
+cam3d 2 fp 0 6
 drawtick 1
 tick 2
 splitshot tests/out/readme_3d_split.ppm 1 2
