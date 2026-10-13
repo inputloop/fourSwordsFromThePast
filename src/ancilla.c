@@ -6847,6 +6847,7 @@ int AncillaAdd_ArrowFindSlot(uint8 type, uint8 ay) {  // 899d36
         ancilla_alloc_rotate = 4;
       k = ancilla_alloc_rotate;
     } while (ancilla_type[k] != 10);
+    Mp_AncillaSlotTaken(k);
   }
   if (k >= 0) {
     ancilla_type[k] = type;
@@ -7021,6 +7022,7 @@ int Ancilla_AllocInit(uint8 type, uint8 limit) {  // 8ff577
     // reuse slots for sparkles or arrows in wall
     if (old_type == 0x3c || old_type == 0x13 || old_type == 0xa) {
       ancilla_alloc_rotate = k;
+      Mp_AncillaSlotTaken(k);
       return k;
     }
   } while (k != 0);

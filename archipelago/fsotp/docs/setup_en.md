@@ -19,8 +19,9 @@ of your Archipelago install. Restart the Launcher afterwards.
 ## Making your YAML
 
 Your options live in a YAML file. Either start from
-`Four Swords of the Past.yaml`, which comes with the game's sources (in the
-`archipelago` folder), or use *Generate Template Options* in the Launcher and
+`Four Swords of the Past.yaml`, which comes with the game (next to
+`zelda3.ini` in the download, in the `archipelago` folder of the sources),
+or use *Generate Template Options* in the Launcher and
 take `Four Swords of the Past.yaml` from the `Players/Templates` folder.
 
 Set `name` to your slot name: you type it into the game to connect, so keep

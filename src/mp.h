@@ -191,6 +191,10 @@ void Mp_EndObject();
 void Mp_PreSprite(int k);
 // Runs ancilla k as its owner. False: it waits this frame (not run).
 bool Mp_PreAncilla(int k);
+// The game took over slot k from an object still in it (an arrow stuck in a
+// wall, a sparkle): what is put there belongs to whoever puts it there, not
+// to the old object's owner.
+void Mp_AncillaSlotTaken(int k);
 void Mp_PostAncilla(int k);
 bool Mp_SuppressCamera();
 // Runs the camera scroll of the gameplay modules. A player who just got their

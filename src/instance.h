@@ -41,6 +41,9 @@ uint8 Inst_PlayerViewModule(int p);       // main_module_index of what p sees
 uint8 Inst_PlayerViewSubmodule(int p);    // and its submodule_index
 const uint8 *Inst_PlayerWorldRam(int p);  // the memory of the world p's Link is in (read only)
 bool Inst_IsJoined(int p);
+// Bits of a dungeon room's saved flags that the game clears again by itself
+// (drained water), so worlds don't keep them alive for each other.
+uint16 Inst_TransientRoomBits(int room);
 int Inst_NumJoined();
 
 // Drop-in/out. A new player appears next to the lowest numbered player.

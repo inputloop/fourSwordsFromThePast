@@ -1,7 +1,7 @@
 # Randomized: the uncle waits in the secret passage and gives the two items
-# the seed put there instead of his sword and shield (seed 9: 3 bombs and
+# the seed put there instead of his sword and shield (seed c: 3 bombs and
 # 20 rupees). The story stays as it is, and he gives them only once.
-rando 9
+rando c
 run 200
 newgame
 run 400
@@ -57,5 +57,6 @@ expect_ram f3c5 2
 expect_ram f3c6 15
 expect_ram f4f6 0
 expect_ram f4f7 3
-# New files use the newest placement (no items in chests that are not there).
-expect_ram f4f9 1
+# New files use the newest placement (version 2: no items in chests that are
+# not there, and Turtle Rock needs a sword).
+expect_ram f4f9 2

@@ -1,0 +1,214 @@
+# An object the game puts into a taken-over slot (an arrow stuck in a wall,
+# a sparkle) belongs to whoever put it there. P2 shoots arrows into the wall
+# and the other low object slots are busy, then an Archipelago item comes
+# for P1: its hold-up goes into P2's arrow slot and must still end P1's
+# hold-up (before, it ran as P2's object and P1 stood frozen for good).
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+srun 60
+pos 1 2500 8610
+poke f340 2
+poke f377 1e
+pram 2 202 1
+pram 2 303 3
+pos 2 2400 8540
+run 2
+hold 2 L
+run 10
+hold 2 -
+run 2
+hold 2 Y
+run 3
+hold 2 -
+run 3
+peek c4a 5
+run 22
+hold 2 Y
+run 3
+hold 2 -
+run 3
+peek c4a 5
+run 22
+hold 2 Y
+run 3
+hold 2 -
+run 3
+peek c4a 5
+run 22
+peek c4a 5
+# P2 drops two bombs: the five low object slots are all busy.
+poke f343 a
+pram 2 202 4
+pram 2 303 1
+hold 2 Y
+run 3
+hold 2 -
+run 8
+hold 2 Y
+run 3
+hold 2 -
+run 4
+peek c4a 5
+apitem 12
+srun 2
+peek c4a 5
+status
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+hold 1 A
+hold 2 A
+run 3
+hold 1 -
+hold 2 -
+run 40
+srun 400
+peek c4a 5
+expect_apcount 1
+hold 1 A
+srun 3
+hold 1 -
+srun 40
+hold 1 A
+srun 3
+hold 1 -
+srun 40
+hold 1 A
+srun 3
+hold 1 -
+srun 40
+hold 1 A
+srun 3
+hold 1 -
+srun 40
+hold 1 A
+srun 3
+hold 1 -
+srun 40
+hold 1 A
+srun 3
+hold 1 -
+srun 40
+srun 100
+status
+expect_ram f34a 1
+expect_pram 1 5d 0
+expect_playing 1

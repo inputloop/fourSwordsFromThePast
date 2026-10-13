@@ -83,8 +83,9 @@ def _evaluate(swords: int, shields: int, gloves: int, lamp: bool, bow: bool, hoo
     e.ip = e.lift2 and e.flippers and e.pearl and e.fire and e.hammer and e.hook and e.sword1
     e.mm = (e.lift2 and e.flute and e.pearl and e.ether and e.somaria and e.lamp and e.fire and
             e.boots and e.hook)
+    # (Quake only works with a sword.)
     e.tr = (e.dm_east and e.lift2 and e.hammer and e.pearl and e.somaria and e.quake and
-            e.fire and e.ice and e.lamp and e.hook)
+            e.fire and e.ice and e.lamp and e.hook and e.sword1)
     crystals = e.pod and e.sp and e.sw and e.tt and e.ip and e.mm and e.tr
     e.gt = (crystals and e.dwdm and e.hook and e.hammer and e.bow and e.fire and e.somaria and
             e.lamp and e.boots)

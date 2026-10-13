@@ -1,0 +1,63 @@
+# Save and quit from the item menu while a teammate opens the chest in Link's house.
+rando 40
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+poke f342 1
+join 2
+run 20
+# P1: the item menu (a world of its own)
+hold 1 S
+run 2
+hold 1 -
+run 60
+expect_instances 2
+# P2 opens the chest
+pos 2 2492 8650
+run 4
+hold 2 U
+run 20
+status
+hold 2 UA
+run 2
+hold 2 -
+run 200
+hold 2 B
+run 2
+hold 2 -
+run 30
+hold 2 B
+run 2
+hold 2 -
+run 60
+view 2
+peek f208 2
+expect_ram f208 12
+view 1
+# P1: Select (save box), down, A: save and quit.
+hold 1 s
+run 2
+hold 1 -
+run 80
+expect_module 14
+hold 1 D
+run 2
+hold 1 -
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 300
+expect_instances 1
+expect_module 0
+peek f208 2
+loadslot
+run 300
+peek f208 2
+# The chest P2 opened must still be open in the saved file
+expect_ram f208 12

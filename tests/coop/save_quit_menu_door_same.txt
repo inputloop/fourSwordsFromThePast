@@ -1,0 +1,64 @@
+# Save and quit from the item menu while a teammate in the SAME world unlocks
+# a key door in the room.
+load 2
+run 30
+enter 58
+run 200
+clearsprites
+join 2
+run 20
+poke f36f 01
+run 2
+# Both go through the middle door into the room's right half.
+pos 1 4280 2944
+pos 2 4280 2960
+run 2
+hold 1 R
+hold 2 R
+run 100
+hold 1 -
+hold 2 -
+run 20
+pos 1 4430 2960
+pos 2 4472 2960
+run 200
+expect_instances 1
+expect_same 1 2
+# P1 opens the item menu (a world of its own).
+hold 1 S
+run 2
+hold 1 -
+run 60
+expect_instances 2
+# P2 unlocks the key door with the team's only key, and steps back.
+hold 2 D
+run 60
+hold 2 U
+run 12
+hold 2 -
+run 20
+view 2
+expect_ram f36f 00
+expect_ram 401 20
+view 1
+# P1: Select (save box), down, A: save and quit.
+hold 1 s
+run 2
+hold 1 -
+run 80
+expect_module 14
+hold 1 D
+run 2
+hold 1 -
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 300
+expect_instances 1
+expect_module 0
+loadslot
+run 300
+peek f0b0 2
+peek f36f
+expect_ram f0b1 20

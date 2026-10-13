@@ -1,9 +1,9 @@
 # Item randomizer: the second sword found in a chest is the Master Sword
 # level, held up like any other item. The pedestal's ceremony (only there)
 # made the house's submodule 43 run past the end of the dungeon's table:
-# the game locked up in the text box for good. (Seed 50 has a sword in
+# the game locked up in the text box for good. (Seed 18 has a sword in
 # the chest in Link's house; Link already has the Fighter's Sword.)
-rando 50
+rando 18
 run 200
 newgame
 run 400

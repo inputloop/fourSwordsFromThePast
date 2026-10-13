@@ -1,0 +1,24 @@
+# Files keep the placement they were made with: a file of placement version 1
+# (from before Turtle Rock needed a sword) still has the items of version 1.
+# Seed 50 put a sword in the chest in Link's house in version 1 (version 2
+# puts the Hammer there).
+rando 50
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+poke f4f9 1
+poke f359 1
+run 2
+pos 1 2500 8650
+hold 1 U
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 3
+expect_ram f359 2
+expect_ram f4f9 1

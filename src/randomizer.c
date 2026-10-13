@@ -20,8 +20,12 @@ enum {
 
 // Files keep the placement they were made with. 0: the first one. 1: chest
 // table entries in rooms without a chest are left out (they got items that
-// nobody could reach).
-enum { kRandoPlacementVersion = 1 };
+// nobody could reach). 2: Turtle Rock needs a sword (Quake only works with
+// one), and chests the logic doesn't know get nothing needed to win.
+enum { kRandoPlacementVersion = 2 };
+
+// The placement version the logic works for right now (Generate sets it).
+static int g_logic_version = kRandoPlacementVersion;
 
 // Item ids as used by the chest table and Link_ReceiveItem.
 enum {
@@ -213,7 +217,7 @@ static void Evaluate(const State *s, Ev *e) {
   e->mm = e->lift2 && e->flute && e->pearl && e->ether && e->somaria && e->lamp && e->fire &&
           e->boots && e->hook;
   e->tr = e->dm_east && e->lift2 && e->hammer && e->pearl && e->somaria && e->quake &&
-          e->fire && e->ice && e->lamp && e->hook;
+          e->fire && e->ice && e->lamp && e->hook && (g_logic_version < 2 || e->sword1);
   bool crystals = e->pod && e->sp && e->sw && e->tt && e->ip && e->mm && e->tr;
   e->gt = crystals && e->dwdm && e->hook && e->hammer && e->bow && e->fire && e->somaria &&
           e->lamp && e->boots;
@@ -409,7 +413,8 @@ static bool TryFill(Placement *pl, Rng *r) {
     Evaluate(&s, &e);
     int cand[kMaxChests], ncand = 0;
     for (int k = 0; k < pl->nchests; k++)
-      if (pl->shuffled[k] && pl->item[k] == 0xff && CanReach(pl->room[k], &e))
+      if (pl->shuffled[k] && pl->item[k] == 0xff && CanReach(pl->room[k], &e) &&
+          (g_logic_version < 2 || IsKnownRoom(pl->room[k])))
         cand[ncand++] = k;
     if (ncand == 0)
       return false;
@@ -447,6 +452,7 @@ static bool TryFill(Placement *pl, Rng *r) {
 }
 
 static bool Generate(uint32 seed, int version, Placement *pl) {
+  g_logic_version = version;
   LoadChests(pl, version);
   Rng r = { seed * 0x2545F4914F6CDD1Dull + 1 };
   for (int attempt = 0; attempt < 64; attempt++) {
@@ -561,6 +567,7 @@ uint8 Rando_AdjustReceivedItem(uint8 item) {
 }
 
 int Rando_TestRoomAccess(const uint8 counts[256], int room) {
+  g_logic_version = kRandoPlacementVersion;
   State s;
   memcpy(s.n, counts, 256);
   Ev e;
@@ -569,6 +576,7 @@ int Rando_TestRoomAccess(const uint8 counts[256], int room) {
 }
 
 bool Rando_TestWin(const uint8 counts[256]) {
+  g_logic_version = kRandoPlacementVersion;
   State s;
   memcpy(s.n, counts, 256);
   Ev e;

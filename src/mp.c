@@ -149,6 +149,11 @@ static bool Mp_MovesOnAtEdge(uint8 handler_state) {
 
 // Assigns ownership of newly spawned ancillae and newly lifted sprites to
 // the player whose context is currently resident.
+void Mp_AncillaSlotTaken(int k) {
+  if (k >= 0 && k < 10)
+    g_mp.ancilla_seen[k] = 0;  // (so the next look sees a new object)
+}
+
 static void Mp_AttributeObjects() {
   for (int i = 0; i < 10; i++) {
     if (ancilla_type[i] != g_mp.ancilla_seen[i]) {

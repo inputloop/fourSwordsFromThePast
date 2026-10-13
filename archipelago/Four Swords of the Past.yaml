@@ -13,7 +13,7 @@ game: Four Swords of the Past
 requires:
   version: 0.6.4
   game:
-    Four Swords of the Past: 1.0.0
+    Four Swords of the Past: 1.1.0
 
 Four Swords of the Past:
   # How early your items are placed to keep everyone moving: 0 (off) to 99.

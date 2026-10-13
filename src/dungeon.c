@@ -3,6 +3,7 @@
 #include "variables.h"
 #include "dungeon.h"
 #include "mp.h"
+#include "instance.h"
 #include "randomizer.h"
 #include "archipelago.h"
 #include "nmi.h"
@@ -8191,10 +8192,13 @@ void Dungeon_FlagRoomData_Quadrants() {  // 82b929
 }
 
 void Dung_SaveDataForCurrentRoom() {  // 82b947
-  save_dung_info[dungeon_room_index] =
-    (dung_savegame_state_bits >> 4) |
-    (dung_door_opened & 0xf000) |
-    dung_quadrants_visited;
+  uint16 v = (dung_savegame_state_bits >> 4) | (dung_door_opened & 0xf000) | dung_quadrants_visited;
+  // Co-op: teammates in other copies of the room may have opened doors and
+  // chests or taken keys this copy hasn't seen; that stays (except what the
+  // game itself takes back, like drained water).
+  if (g_mp_coop)
+    v |= save_dung_info[dungeon_room_index] & ~Inst_TransientRoomBits(dungeon_room_index);
+  save_dung_info[dungeon_room_index] = v;
 }
 
 void HandleEdgeTransition_AdjustCameraBoundaries(uint8 arg) {  // 82b9dc

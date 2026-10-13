@@ -62,7 +62,7 @@ Players can drop in and drop out at any time.
   Archipelago*. Items from the room reach every computer in the same frame
   (each goes to the first player who is free to hold it up), and the chests
   any Link opens are checked for the team. The others see the room's
-  messages ("Received Bow from Alice") on their screens too.
+  messages ("Received Bow from Alice (Link's House)") on their screens too.
 - **Free roaming** is always on: nobody ever has to wait for the others or
   head the same way.
 - Online, the pause and turbo hotkeys do nothing (they would stop or outrun
@@ -280,10 +280,12 @@ room), Archipelago events (an item from the room, a DeathLink), and the
 otherwise depends on timing). The game is deterministic, so feeding the same
 frames gives the same game everywhere.
 
-Archipelago: the host proposes the next item of the room's list with every
-frame until the save says it was received (the item count in the save is
-the only thing that decides), so a rollback that replays a frame
-differently simply gets the item proposed again. Checks, the goal and
+Archipelago: once a Link can take it (nobody busy holding up an item or
+reading a text box), the host adds the next item of the room's list to the
+frame it is making, and keeps doing that frame after frame until the save
+says it was received (the item count in the save is the only thing that
+decides), so a rollback that replays a frame differently simply gets the
+item proposed again. Checks, the goal and
 deaths go back to the server from the save area of the final frames only
 (`Session_ConfirmedSaveArea`), so nothing a rollback undoes is ever sent.
 

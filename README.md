@@ -171,8 +171,9 @@ and arrives a moment later. (Two players on a local Archipelago server.)*
 Good to know first: the folders named below (`Players`, `custom_worlds`,
 `output`) are in your Archipelago install (*Browse Files* in the Launcher).
 Typing the address and slot name in the game needs a keyboard (plain letters,
-digits, spaces and symbols); on a controller-only device put them in
-`zelda3.ini` instead (see *Settings file*). The game has no chat: for hints
+digits, spaces and symbols); on a controller-only device put them in the
+`[Archipelago]` section of `zelda3.coop.ini` if that file exists, otherwise
+of `zelda3.ini` (see *Settings file*). The game has no chat: for hints
 (`!hint`) and the room's other commands, connect Archipelago's *Text Client*
 to the same room with your slot name.
 
@@ -192,8 +193,9 @@ and installs it), or use *Install APWorld* in the Launcher, or copy the file
 into the `custom_worlds` folder of your Archipelago install. Restart the
 Launcher.
 
-**2. Make your YAML** (your options). Copy
-[`archipelago/Four Swords of the Past.yaml`](archipelago/Four%20Swords%20of%20the%20Past.yaml)
+**2. Make your YAML** (your options). Copy `Four Swords of the Past.yaml`
+(next to `zelda3.ini` in the game's download; in the sources it is
+[`archipelago/Four Swords of the Past.yaml`](archipelago/Four%20Swords%20of%20the%20Past.yaml))
 (or use *Generate Template Options* in the Launcher and take the file from
 `Players/Templates`) and set:
 
@@ -321,9 +323,10 @@ servers).
 
 **Settings file.** When you connect or close the menu, the game saves the
 server, the slot name and the DeathLink choice in the `[Archipelago]` section
-of `zelda3.coop.ini` (`Server`, `Slot`, `DeathLink = auto|on|off`). That file
-is read after `zelda3.ini` and wins, so once it exists change these in the
-menu, not in `zelda3.ini`. The password is never saved: to have it
+of `zelda3.coop.ini` (`Server`, `Slot`, `DeathLink = auto|on|off`; an empty
+server or slot name isn't written). That file is read after `zelda3.ini` and
+wins, so once it has them change these in the menu or in that file, not in
+`zelda3.ini`. The password is never saved: to have it
 remembered, add `Password = ...` to the `[Archipelago]` section of
 `zelda3.ini` (`zelda3.coop.ini` is written again without it).
 

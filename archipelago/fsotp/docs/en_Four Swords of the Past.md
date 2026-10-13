@@ -11,7 +11,8 @@ copy of the original game (the US version) to extract its graphics and sound.
 
 This world isn't part of Archipelago, so archipelago.gg has no options page
 for it. Start from the example YAML that comes with the game
-(`archipelago/Four Swords of the Past.yaml`), or use *Generate Template
+(`Four Swords of the Past.yaml`, next to `zelda3.ini` in the download, or
+`archipelago/Four Swords of the Past.yaml` in the sources), or use *Generate Template
 Options* in the Archipelago Launcher and take `Four Swords of the Past.yaml`
 from `Players/Templates`.
 

@@ -60,6 +60,16 @@ static uint8 TransientBits(int addr) {
 }
 static const uint16 kTransientAddrs[] = { 0xF2BB, 0xF2FB, 0xF216, 0xF051 };
 
+uint16 Inst_TransientRoomBits(int room) {
+  uint16 m = 0;
+  for (size_t k = 0; k < countof(kTransientAddrs); k++) {
+    int a = kTransientAddrs[k] - 0xF000;  // save_dung_info: two bytes a room
+    if (a >> 1 == room)
+      m |= TransientBits(kTransientAddrs[k]) << (a & 1) * 8;
+  }
+  return m;
+}
+
 
 // Pre-frame copy of an instance, so a frame can be replayed without a player.
 static uint8 g_snap_ram[kRamSize];

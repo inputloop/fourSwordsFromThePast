@@ -292,7 +292,7 @@ The check is careful on purpose. For example, it treats every chest in a dungeon
 
 To be safe, a few chests in unknown or hard-to-reach spots (like the castle basement, which normally opens during the escape) only ever get filler items.
 
-**Chests that aren't there.** The game's chest list has a few entries for rooms that have no chest at all (other randomizers move those chests elsewhere). Older builds could put items there, even important ones, where nobody could ever get them. New files leave those entries out. Each file stores which version of the placement it was made with (save address 7EF4F9), so files made with an older build keep exactly the items they had.
+**Chests that aren't there.** The game's chest list has a few entries for rooms that have no chest at all (other randomizers move those chests elsewhere). Older builds could put items there, even important ones, where nobody could ever get them. New files leave those entries out. Each file stores which version of the placement it was made with (save address 7EF4F9), so files made with an older build keep exactly the items they had. Version 2 fixed two mistakes in the logic: Turtle Rock didn't count as needing a sword (its entrance needs Quake, which only works with one), and the castle basement and sewer chests could still get important items.
 
 ## Archipelago: one game in a multiworld
 
@@ -377,7 +377,7 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 
 ## How it is tested and built
 
-The mod has 144 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 149 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

@@ -818,7 +818,6 @@ static void ScreenApEdit() {
   Label(buf);
   Item("Done", NULL);
   if (Act() == kAct_Select) {
-    g_ui.dirty_settings = true;
     Goto(kScreen_Archipelago);
     return;
   }
@@ -1414,10 +1413,11 @@ bool Ui_HandleKey(int key, bool pressed) {
     char *v = ApField(g_ui.ap_field);
     size_t n = strlen(v);
     if (key == SDLK_BACKSPACE) {
-      if (n)
+      if (n) {
         v[n - 1] = 0;
+        g_ui.dirty_settings = true;
+      }
     } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
-      g_ui.dirty_settings = true;
       Goto(kScreen_Archipelago);
     } else if (key == SDLK_v && (SDL_GetModState() & KMOD_CTRL)) {
       char *clip = SDL_GetClipboardText();
@@ -1485,8 +1485,10 @@ void Ui_HandleText(const char *text) {
     size_t n = strlen(v), size = ApFieldSize(g_ui.ap_field);
     for (; *text && n < size - 1; text++) {
       char c = *text;
-      if (c > 32 && c < 127 || (c == ' ' && g_ui.ap_field != 0))
+      if (c > 32 && c < 127 || (c == ' ' && g_ui.ap_field != 0)) {
         v[n++] = c;
+        g_ui.dirty_settings = true;  // (kept even if the screen is left with B)
+      }
     }
     v[n] = 0;
     return;
@@ -2334,9 +2336,12 @@ void Ui_SaveSettings() {
     fprintf(f, "PlayerName = %s\n", g_config.mp_player_name);
   fprintf(f, "LastJoinAddress = %s\n", g_ui.join_addr);
   // (Not the password: it would sit in a plain text file.)
+  // (Empty ones aren't written: they would hide what zelda3.ini says.)
   fprintf(f, "[Archipelago]\n");
-  fprintf(f, "Server = %s\n", g_ap_settings.server);
-  fprintf(f, "Slot = %s\n", g_ap_settings.slot);
+  if (g_ap_settings.server[0])
+    fprintf(f, "Server = %s\n", g_ap_settings.server);
+  if (g_ap_settings.slot[0])
+    fprintf(f, "Slot = %s\n", g_ap_settings.slot);
   fprintf(f, "DeathLink = %s\n", g_ap_settings.death_link == 1 ? "on" : g_ap_settings.death_link == 2 ? "off" : "auto");
   fclose(f);
   g_ui.dirty_settings = false;
