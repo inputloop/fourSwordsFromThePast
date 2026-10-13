@@ -57,7 +57,8 @@ generated on a computer with the world installed:
    password if the room has one, and connect. The first line of the screen
    says when you are connected.
 4. Now make a **new** save file: while the game is connected, new files are
-   files of that room (the file select screen says "New files: Archipelago").
+   files of that room (the file select screen says "New files: Archipelago
+   (this room)").
 
 Once connected, the items found in the multiworld for you start arriving,
 and every location you check is sent to the server. The save file you play

@@ -40,7 +40,8 @@ class FSotPWorld(World):
 
     def generate_early(self) -> None:
         # Most of the game needs the Lamp, so it goes to a place of this game
-        # that is open from the start (the port's own randomizer does the same).
+        # that is open from the start (the port's own randomizer is stricter:
+        # Link's house or the sanctuary).
         self.multiworld.local_early_items[self.player]["Lamp"] = 1
 
     def create_regions(self) -> None:

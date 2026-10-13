@@ -29,7 +29,6 @@ enum {
 };
 enum {
   kApState_Goal = 1,           // the goal was reached
-  kApState_LinkedDeath = 2,    // the next game over came from DeathLink (not sent on)
   kApState_DeathPending = 4,   // a DeathLink still has Links to take down
 };
 

@@ -257,7 +257,9 @@ world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
   and overworld flags are combined, and counters (bombs, arrows, rupees,
   keys) add up the changes of each world. Health and magic, the dungeon key
   counter in use, refills in progress, light/dark world and the follower
-  stay per world.
+  stay per world. The state of the room a world is in (doors unlocked, keys
+  and chests taken) goes into the save area as it changes, not only when the
+  room is left as in the original game.
 - Snapshots and the netplay state hash cover all worlds, so netplay works
   unchanged.
 - **Seeing other worlds.** Each world records its leader's Link sprites
@@ -386,8 +388,11 @@ diff with the changed pixels in red in `tests/out/`.
   is still far below what any PC needs.
 - Room contents in two worlds can differ (for example an enemy killed in one
   world still lives in the other) until the worlds merge. Then the world
-  that stays keeps its room. A chest opened in one copy of a room may still
-  look closed in another copy, but it is empty there.
+  that stays keeps its room. Doors are the exception: a key door, big key
+  door or bombable wall opened in one world opens in every copy of the room
+  and stays open after a merge, and nobody pays a second key. A chest opened
+  in one copy of a room may still look closed in another copy, but it is
+  empty there.
 - The original game has 10 projectile slots and some items allow only one at a
   time (one boomerang, one hookshot). These limits are shared by the team.
 - Followers (Zelda, the old man, ...) follow the leader of their world.

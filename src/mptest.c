@@ -1569,7 +1569,13 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       WORD(*Mp_PlayerRam(p, 0x22)) = atoi(arg2);
       WORD(*Mp_PlayerRam(p, 0x20)) = atoi(arg3);
     } else if (!strcmp(cmd, "poke")) {
-      g_ram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
+      long addr = strtol(arg1, NULL, 16);
+      if (addr < 0 || addr >= 0x20000) {  // (a RAM offset like f35c, not 7ef35c)
+        printf("FAIL: poke %s: not a RAM offset\n", arg1);
+        g_failures++;
+        continue;
+      }
+      g_ram[addr] = strtol(arg2, NULL, 16);
     } else if (!strcmp(cmd, "expect_camx")) {
       // expect_camx <p> <x>: the camera of player p's world is at x
       SwitchToPlayer(PlayerArg(arg1));

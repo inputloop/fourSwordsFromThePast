@@ -168,6 +168,14 @@ and arrives a moment later. (Two players on a local Archipelago server.)*
 <details open>
 <summary><b>Step by step</b></summary>
 
+Good to know first: the folders named below (`Players`, `custom_worlds`,
+`output`) are in your Archipelago install (*Browse Files* in the Launcher).
+Typing the address and slot name in the game needs a keyboard (plain letters,
+digits, spaces and symbols); on a controller-only device put them in
+`zelda3.ini` instead (see *Settings file*). The game has no chat: for hints
+(`!hint`) and the room's other commands, connect Archipelago's *Text Client*
+to the same room with your slot name.
+
 **What you need**
 
 - This game, set up as described under [Quick start](#quick-start-linux--macos)
@@ -228,11 +236,14 @@ happens locally (everything else can still be on the website):
    line works too). *Slot name*: as in your YAML. *Password*: only if
    the room has one. (The menu shows everything in capitals; what you type
    keeps its case.)
-4. Choose *Connect*. The first line of the screen changes to "Connected to
-   ... as ...".
+4. Choose *Connect*. The status at the top of the screen changes to
+   "Connected to <address> (ws or wss) as <slot>", and *Connect* becomes
+   *Disconnect*.
 5. **Make a new save file.** While connected, new files are Archipelago files
    of that room; the file select screen says "New files: Archipelago (this
-   room)".
+   room)". (Connect from the file select screen, or save and quit first. Turn
+   *Gameplay options > Start new games with all items* off, or the file
+   starts with every item.)
 
 To play on another day: connect to the same room first, then load the same
 file. A file remembers its room: loaded while connected to another one, it
@@ -259,10 +270,12 @@ and sent when you connect again, and your items arrive then.
   and are held up like from a chest, one at a time, as soon as a Link is
   free: standing on the ground, not in a menu, a text box or a transition. A
   swimming Link or a bunny waits until it is on land again in its own shape.
-- Small keys, big keys, maps and compasses stay in their dungeons. The
-  Boots, Book, Flippers, Mirror, shovel, Flute, medallions, pendants and
-  crystals are where they always are. The logic is the item randomizer's,
-  without glitches.
+- Small keys, big keys, maps and compasses stay in their dungeons, and
+  everything that isn't in a chest or one of the places above stays where it
+  always is: the Boots, Book, Flippers, Mirror, shovel, Flute, medallions,
+  pendants and crystals, but also free heart pieces, boss heart containers
+  and what people give you. The logic is the item randomizer's, without
+  glitches.
 - **Goal:** beat Ganon. Reaching the Triforce room tells the server you are
   done.
 
@@ -299,16 +312,20 @@ rejected or the encryption fails, it says so and tries again later (that is
 what someone listening in between would cause). For
 `wss://` the game uses the system's TLS library: on Windows the one built
 into Windows; on Linux OpenSSL (`libssl.so.3` or `libssl.so.1.1`, installed
-on practically every distribution); on macOS OpenSSL from Homebrew
-(`brew install openssl@3`) if there is one, otherwise only `ws://` works.
+on practically every distribution); on macOS OpenSSL 3 from Homebrew
+(`brew install openssl@3`) or MacPorts. Without a TLS library only `ws://`
+works: a server that only accepts `wss://` (and archipelago.gg, unless you
+write `ws://` yourself) can't be reached.
 `ZELDA3_AP_CAFILE=<file>` adds a certificate authority (for self-signed test
 servers).
 
-**Settings file.** The menu keeps the server, the slot name and the DeathLink
-choice in the `[Archipelago]` section of `zelda3.coop.ini` (`Server`, `Slot`,
-`DeathLink = auto|on|off`); you can also put them in `zelda3.ini`. The
-password isn't saved; write `Password = ...` there yourself if you want it
-remembered.
+**Settings file.** When you connect or close the menu, the game saves the
+server, the slot name and the DeathLink choice in the `[Archipelago]` section
+of `zelda3.coop.ini` (`Server`, `Slot`, `DeathLink = auto|on|off`). That file
+is read after `zelda3.ini` and wins, so once it exists change these in the
+menu, not in `zelda3.ini`. The password is never saved: to have it
+remembered, add `Password = ...` to the `[Archipelago]` section of
+`zelda3.ini` (`zelda3.coop.ini` is written again without it).
 
 **When something goes wrong**
 
@@ -328,6 +345,8 @@ remembered.
   an earlier multiworld. Load the right file, or make a new one.
 - Can't connect to archipelago.gg: check the port on the room page (it
   changes when a room is re-created) and open the room page to wake the room.
+  While the game is still trying to connect, the fields can't be changed:
+  choose *Disconnect*, fix the field, then *Connect*.
 - Items don't arrive: a Link has to be free (see above): close menus and text
   boxes and get out of the water. They are never lost; the save counts what
   it has received.
@@ -344,8 +363,13 @@ the game's item code; location = `0x46530000` + chest number, special places
 pretend room; `archipelago/tests/run_client_tests.sh` tests the connection
 against a mock server. With an Archipelago source tree,
 `AP_ROOT=<it> archipelago/tests/e2e.sh` plays a generated multiworld with the
-real server (connect, open a chest, get the item back, send the goal), and the
-world's own tests run with Archipelago's `pytest` (`AP_TEST_WORLDS=fsotp`).
+real server (connect, open a chest, get the item back, send the goal). The
+world's own tests: copy or link `archipelago/fsotp` to `worlds/fsotp` in an
+Archipelago source tree and run
+`AP_TEST_WORLDS=fsotp python -m pytest worlds/fsotp test/general -m "world or not world"`.
+`tests/coop/archipelago_logic.txt` needs its test vectors first
+(`python3 archipelago/tools/logic_vectors.py tests/out/ap_logic_vectors.txt`;
+`tests/run_coop_tests.sh` does this).
 
 ## 2D-HD look (beta)
 
@@ -365,8 +389,10 @@ lens-and-light pass over the pixel art, in the style of Octopath Traveler.
   under a pit) are softer and hazy.
 - **Lighting**: dark rooms are lit for real: a warm glow around each Link
   with the Lamp, lit torches, fire-rod fire and the big explosions, over a darkness that lifts
-  as torches are lit. Elsewhere fire glows, and so does a Link whose selected
-  item is the Lamp.
+  as torches are lit. Without the Lamp a dark room stays dim, with the Links
+  visible but no light around them (with the 2D-HD look off it is pitch
+  black, as in the original game). Elsewhere fire glows, and so does a Link
+  whose selected item is the Lamp.
 - **Seeing through** (an option, off by default): a Link hidden behind a
   roof, bridge or door frame shows through it. Off, he stays hidden as in
   the original.
