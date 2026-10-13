@@ -203,6 +203,7 @@ enum {
   kScreen_Lan,
   kScreen_Video,
   kScreen_Hd2d,
+  kScreen_Hd3d,
   kScreen_Gameplay,
   kScreen_Controls,
   kScreen_Bindings,
@@ -860,6 +861,17 @@ static void ScreenLan() {
     Goto(kScreen_Multiplayer);
 }
 
+// The 3D view on or off. (It shows what is on now: F11 changes that for a
+// while without changing the setting.)
+static void Hd3dOnOff(const char *label) {
+  Item(label, OnOff(g_hd3d.enabled));
+  if (Act() != kAct_None) {
+    g_config.hd3d = !g_hd3d.enabled;
+    Hd3d_SetEnabled(g_config.hd3d);
+    g_ui.dirty_settings = true;
+  }
+}
+
 static void ScreenVideo() {
   snprintf(g_ui.title, sizeof(g_ui.title), "VIDEO AND HD OPTIONS");
   int a;
@@ -892,6 +904,10 @@ static void ScreenVideo() {
   Item("2D-HD settings", ">");
   if (Act() == kAct_Select || Act() == kAct_Right)
     Goto(kScreen_Hd2d);
+  Hd3dOnOff("3D view (beta)");
+  Item("3D view settings", ">");
+  if (Act() == kAct_Select || Act() == kAct_Right)
+    Goto(kScreen_Hd3d);
   Item("No sprite flicker", OnOff(g_config.no_sprite_limits));
   if (Act() != kAct_None) {
     g_config.no_sprite_limits ^= 1;
@@ -959,6 +975,66 @@ static void ScreenHd2d() {
   if (Act() == kAct_Select)
     Goto(kScreen_Video);
   snprintf(g_ui.footer, sizeof(g_ui.footer), "Left/Right: change strength");
+}
+
+// An on/off setting of the 3D view.
+static void Hd3dSetting(const char *label, bool *config, bool *live) {
+  Item(label, OnOff(*config));
+  if (Act() != kAct_None) {
+    *live = *config = !*config;
+    g_ui.dirty_settings = true;
+  }
+}
+
+// A number changed in steps with Left/Right (Select goes round).
+static void Stepper(const char *label, const char *unit, uint8 *config, uint8 *live, int lo, int hi, int step) {
+  char buf[16];
+  snprintf(buf, sizeof(buf), "< %3d%s >", *config, unit);
+  Item(label, buf);
+  int a = Act(), v = *config;
+  if (a == kAct_Left || a == kAct_Right || a == kAct_Select) {
+    v = a == kAct_Left ? v - step : v + step;
+    v = v < lo ? lo : v > hi ? (a == kAct_Select ? lo : hi) : v;
+    *config = *live = (uint8)v;
+    g_ui.dirty_settings = true;
+  }
+}
+
+static void ScreenHd3d() {
+  snprintf(g_ui.title, sizeof(g_ui.title), "3D VIEW (BETA)");
+  Hd3dOnOff("3D view");
+  // First person for the player using the menu.
+  int me = g_ui.owner >= 0 && g_ui.owner < kSessionMaxLocal ? g_ui.owner : 0;
+  int p = Session_GetStatus()->local_slot[me];
+  Hd3dCamState cam;
+  Hd3d_GetCamera(me, &cam);
+  char label[32];
+  snprintf(label, sizeof(label), "First person (P%d)", (p >= 0 ? p : me) + 1);
+  Item(label, OnOff(cam.first_person));
+  if (Act() != kAct_None)
+    Hd3d_ToggleFirstPerson(me);
+  Hd3dSetting("Camera returns", &g_config.hd3d_camera_returns, &g_hd3d.camera_returns);
+  Hd3dSetting("Controls turn with camera", &g_config.hd3d_turn_controls, &g_hd3d.turn_controls);
+  Hd3dSetting("Mouse look (first person)", &g_config.hd3d_mouse_look, &g_hd3d.mouse_look);
+  Hd3dSetting("Fade scenery near Link", &g_config.hd3d_fade_scenery, &g_hd3d.fade_scenery);
+  Stepper("Stick speed", "%", &g_config.hd3d_stick_speed, &g_hd3d.stick_speed, 25, 200, 25);
+  Strength("Mouse speed", &g_config.hd3d_mouse_speed, &g_hd3d.mouse_speed);
+  Hd3dSetting("Invert up/down", &g_config.hd3d_invert_y, &g_hd3d.invert_y);
+  Stepper("First-person view", " deg", &g_config.hd3d_fov, &g_hd3d.fov, 50, 90, 5);
+  Strength("Perspective", &g_config.hd3d_perspective, &g_hd3d.perspective);
+  Item("Reset camera", NULL);
+  if (Act() == kAct_Select)
+    Hd3d_ResetCamera(me);
+  // (The menu is 36 letters wide.)
+  Label("Camera: right stick, right drag,");
+  Label("  Del/PgDn turn, Home/End tilt");
+  Label("First person: left click, L3, Insert");
+  Label("Zoom: mouse wheel (third person)");
+  Label("Reset: hold L3, middle click, PgUp");
+  Item("Back", NULL);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Video);
+  snprintf(g_ui.footer, sizeof(g_ui.footer), "Left/Right: change. 2D-HD adds on top");
 }
 
 static void ScreenGameplay() {
@@ -1068,7 +1144,8 @@ static void ScreenGameplay() {
 
 static void ScreenControls() {
   snprintf(g_ui.title, sizeof(g_ui.title), "CONTROLS");
-  Label("Default keys: arrows, X=A Z=B S=X A=Y");
+  // (At most 36 letters a line.)
+  Label("Keys: arrows, X=A Z=B S=X A=Y");
   Label("  Enter=Start  Right Shift=Select");
   Label("Change them in Pause menu > Controls");
   Label("Menu: Esc, controller Guide, or");
@@ -1078,7 +1155,10 @@ static void ScreenControls() {
   Label("While down: L/R picks who to watch,");
   Label("  A sends a teammate a heart");
   Label("Lift teammate: A, A again throws");
-  Label("Heavy rock: lift it together (both A)");
+  Label("Heavy rock: both press A to lift it");
+  Label("3D view: right stick turns camera");
+  Label("  (or hold the right mouse button)");
+  Label("Left click or L3: first person");
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);
@@ -1152,11 +1232,12 @@ static void ScreenBindings() {
     Bindings_ResetPlayer(p);
     g_ui.dirty_settings = true;
   }
-  // Live view of what this player is pressing.
+  // Live view of what this player is pressing (the left stick's directions
+  // too; View has no bit of its own).
   uint16 in = Bindings_GetInput(p);
   buf[0] = 0;
   for (int b = 0; b < kBindButtons; b++) {
-    if (in & Bindings_ButtonBit(b)) {
+    if ((in & Bindings_ButtonBit(b)) || Bindings_ButtonDown(p, b)) {
       size_t n = strlen(buf);
       snprintf(buf + n, sizeof(buf) - n, "%s%s", n ? " " : "", Bindings_ButtonName(b));
     }
@@ -1183,6 +1264,7 @@ static void BuildScreen() {
   case kScreen_Lan: ScreenLan(); break;
   case kScreen_Video: ScreenVideo(); break;
   case kScreen_Hd2d: ScreenHd2d(); break;
+  case kScreen_Hd3d: ScreenHd3d(); break;
   case kScreen_Gameplay: ScreenGameplay(); break;
   case kScreen_Controls: ScreenControls(); break;
   case kScreen_Bindings: ScreenBindings(); break;
@@ -1380,7 +1462,7 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
       Goto(g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Lan ||
            g_ui.screen == kScreen_Archipelago ? kScreen_Multiplayer :
            g_ui.screen == kScreen_ApEdit ? kScreen_Archipelago :
-           g_ui.screen == kScreen_Hd2d ? kScreen_Video : kScreen_Main);
+           g_ui.screen == kScreen_Hd2d || g_ui.screen == kScreen_Hd3d ? kScreen_Video : kScreen_Main);
     g_ui.action = kAct_None;
   }
   if (g_ui.action != kAct_None && Ui_IsOpen()) {
@@ -1559,6 +1641,31 @@ static void DrawEdgeArrow(const UiView *view, int sx, int sy, uint32 color, cons
   DrawText(lx, ly, label, color);
 }
 
+// Where the point `above` px over the ground at world (x, y) is on pane v,
+// in pane pixels: through its camera if the pane was drawn in 3D, else as
+// the 2D picture has it (me: where the pane's player is, for its camera).
+// *behind: behind the 3D camera (sx, sy then point its way).
+static void PaneProject(int v, const InstPlace *me, int x, int y, int above, int *sx, int *sy, bool *behind) {
+  *behind = false;
+  if (Hd3d_PaneIs3D(v) && (Hd3d_Project(v, x, y, above, sx, sy, behind) || *behind))
+    return;
+  *behind = false;
+  *sx = (int16)(x - me->cam_x) + (g_views[v].w - 256) / 2;  // (widescreen: columns left of the camera)
+  *sy = (int16)(y - above - me->cam_y);
+}
+
+// The player pane v shows in first person (-1: none). Its own Link isn't
+// drawn there, so it gets no name tag.
+static int PaneFirstPersonPlayer(int v) {
+  const UiView *view = &g_views[v];
+  if (!Hd3d_PaneIs3D(v) || view->local < 0 || view->local >= kSessionMaxLocal)
+    return -1;
+  int p = Session_GetStatus()->local_slot[view->local];
+  Hd3dCamState cam;
+  Hd3d_GetCamera(view->local, &cam);
+  return cam.first_person && p >= 0 && p == view->player ? p : -1;
+}
+
 // Is player p looking at the item menu, a map or the flute's map? They fill
 // the screen, so nothing of the world is drawn over them.
 static bool ViewIsFullScreenMenu(int p) {
@@ -1580,12 +1687,14 @@ static void DrawTeammateArrows() {
     uint8 m = Inst_PlayerViewModule(view->player);
     if (m < 6 || m == 0x14 || m == 0x1a || ViewIsFullScreenMenu(view->player))
       continue;
-    int extra = (view->w - 256) / 2;  // widescreen: columns left of the camera
     for (int q = 0; q < kMpMaxPlayers; q++) {
       if (q == view->player || !Inst_PlayerPlace(q, &them) || them.space != me.space)
         continue;
-      int sx = (int16)(them.x - me.cam_x) + extra, sy = (int16)(them.y - me.cam_y);
-      if (sx >= -4 && sx < view->w + 4 && sy >= -4 && sy < view->h + 4)
+      // (Place.y is the middle of the Link, 12 px over its feet.)
+      int sx, sy;
+      bool behind;
+      PaneProject(v, &me, them.x, them.y + 12, 12, &sx, &sy, &behind);
+      if (!behind && sx >= -4 && sx < view->w + 4 && sy >= -4 && sy < view->h + 4)
         continue;  // on screen
       char label[4];
       snprintf(label, sizeof(label), "P%d", q + 1);
@@ -1623,7 +1732,7 @@ static void DrawPings() {
     uint8 m = Inst_PlayerViewModule(view->player);
     if (m != 7 && m != 9)
       continue;
-    int extra = (view->w - 256) / 2;
+    bool is3d = Hd3d_PaneIs3D(v);
     for (int q = 0; q < kMpMaxPlayers; q++) {
       InstPing pg;
       if (!Inst_PlayerPing(q, &pg) || pg.space != me.space)
@@ -1634,15 +1743,22 @@ static void DrawPings() {
       uint32 color = pg.kind && (pg.ttl & 8) ? 0xffffff : Mp_PlayerColorRgb(q);
       char label[12];
       PingLabel(label, sizeof(label), q, pg.kind);
-      int sx = (int16)(pg.x - me.cam_x) + extra, sy = (int16)(pg.y - me.cam_y);
-      if (sx < 2 || sx > view->w - 3 || sy < 2 || sy > view->h - 3) {
+      int sx, sy;
+      bool behind;
+      PaneProject(v, &me, pg.x, pg.y, 0, &sx, &sy, &behind);
+      if (behind || sx < 2 || sx > view->w - 3 || sy < 2 || sy > view->h - 3) {
         DrawEdgeArrow(view, sx, sy, color, label);
         continue;
       }
       int px = view->x + sx, py = view->y + sy;
+      // In 3D the rings are as big as the ground there is (within reason).
+      float scale = is3d ? Hd3d_ScaleAt(v, pg.x, pg.y) : 1.0f;
+      scale = scale > 3.0f ? 3.0f : scale >= 0.5f ? scale : 0.5f;
       // Two rings that keep growing out from the spot, and the spot itself.
       for (int k = 0; k < 2; k++) {
         int r = 3 + ((age + k * 15) % 30) / 2;
+        if (is3d)
+          r = (int)((float)r * scale + 0.5f);
         DrawRing(view, px - 1, py, r + 1, 0x000000);
         DrawRing(view, px - 1, py - 1, r, color);
       }
@@ -1897,15 +2013,21 @@ static void DrawNameTags() {
     uint8 m = Inst_PlayerViewModule(view->player);
     if (m != 7 && m != 9)
       continue;
-    int extra = (view->w - 256) / 2;
+    int fp = PaneFirstPersonPlayer(v);
     for (int q = 0; q < kMpMaxPlayers; q++) {
-      if (!Inst_PlayerPlace(q, &them) || them.space != me.space)
+      if (q == fp || !Inst_PlayerPlace(q, &them) || them.space != me.space)
         continue;
       char label[4];
       snprintf(label, sizeof(label), "P%d", q + 1);
       int tw = TextWidth(label);
-      int x = view->x + (int16)(them.x - me.cam_x) + extra + 2 - tw / 2;
-      int y = view->y + (int16)(them.y - me.cam_y) - 22;
+      // Above the head: 30 px over the feet (12 under the middle of the Link).
+      int sx, sy;
+      bool behind;
+      PaneProject(v, &me, them.x, them.y + 12, 30, &sx, &sy, &behind);
+      if (behind)
+        continue;
+      int x = view->x + sx + 2 - tw / 2;
+      int y = view->y + sy - 4;
       if (x < view->x || x + tw > view->x + view->w || y < view->y || y + 8 > view->y + view->h)
         continue;
       ShadeRect(x - 1, y - 1, tw + 2, 9);
@@ -2309,6 +2431,13 @@ void Ui_SaveSettings() {
           g_config.hd2d_depth_of_field, g_config.hd2d_lighting, g_config.hd2d_bloom, g_config.hd2d_grade,
           g_config.hd2d_vignette);
   fprintf(f, "Hd2dSeeThrough = %d\n", g_config.hd2d_see_through);
+  // (The setting, not a change made with F11 for a while.)
+  fprintf(f, "Hd3d = %d\nHd3dCameraReturns = %d\nHd3dTurnControls = %d\nHd3dMouseLook = %d\nHd3dFadeScenery = %d\n",
+          g_config.hd3d, g_config.hd3d_camera_returns, g_config.hd3d_turn_controls, g_config.hd3d_mouse_look,
+          g_config.hd3d_fade_scenery);
+  fprintf(f, "Hd3dStickSpeed = %d\nHd3dMouseSpeed = %d\nHd3dInvertY = %d\nHd3dFov = %d\nHd3dPerspective = %d\n",
+          g_config.hd3d_stick_speed, g_config.hd3d_mouse_speed, g_config.hd3d_invert_y, g_config.hd3d_fov,
+          g_config.hd3d_perspective);
   fprintf(f, "DimFlashes = %d\n", (g_config.features0 & kFeatures0_DimFlashes) != 0);
   fprintf(f, "OutputMethod = %s\n", g_config.output_method == kOutputMethod_OpenGL ? "OpenGL" :
           g_config.output_method == kOutputMethod_OpenGL_ES ? "OpenGL ES" :

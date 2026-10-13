@@ -8,10 +8,12 @@
 BindProfile g_bind[kBindPlayers];
 
 static const char *const kButtonNames[kBindButtons] = {
-  "Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L", "R", "Start", "Select", "Ping",
+  "Up", "Down", "Left", "Right", "A", "B", "X", "Y", "L", "R", "Start", "Select", "Ping", "View",
 };
-// Bit of each button in the joypad word: B Y Select Start Up Down Left Right A X L R, Ping
-static const uint8 kButtonBits[kBindButtons] = { 4, 5, 6, 7, 8, 0, 9, 1, 10, 11, 3, 2, 12 };
+// Bit of each button in the joypad word: B Y Select Start Up Down Left Right A X L R, Ping.
+// View has none (0xff): it never reaches the game or the other computers.
+enum { kNoBit = 0xff };
+static const uint8 kButtonBits[kBindButtons] = { 4, 5, 6, 7, 8, 0, 9, 1, 10, 11, 3, 2, 12, kNoBit };
 // Legacy [KeyMap] Controls order: Up, Down, Left, Right, Select, Start, A, B, X, Y, L, R
 static const uint8 kLegacyOrder[12] = {
   kBind_Up, kBind_Down, kBind_Left, kBind_Right, kBind_Select, kBind_Start,
@@ -24,7 +26,7 @@ static const char *const kPadNames[kGamepadBtn_Count] = {
 };
 
 const char *Bindings_ButtonName(int b) { return kButtonNames[b]; }
-uint16 Bindings_ButtonBit(int b) { return 1 << kButtonBits[b]; }
+uint16 Bindings_ButtonBit(int b) { return kButtonBits[b] == kNoBit ? 0 : 1 << kButtonBits[b]; }
 
 const char *Bindings_GamepadButtonName(int pad_button) {
   return pad_button >= 0 && pad_button < kGamepadBtn_Count ? kPadNames[pad_button] : "";
@@ -46,7 +48,7 @@ void Bindings_ResetPlayer(int p) {
   static const int8 kPad[kBindButtons] = {
     kGamepadBtn_DpadUp, kGamepadBtn_DpadDown, kGamepadBtn_DpadLeft, kGamepadBtn_DpadRight,
     kGamepadBtn_B, kGamepadBtn_A, kGamepadBtn_Y, kGamepadBtn_X, kGamepadBtn_L1, kGamepadBtn_R1,
-    kGamepadBtn_Start, kGamepadBtn_Back, kGamepadBtn_R3,
+    kGamepadBtn_Start, kGamepadBtn_Back, kGamepadBtn_R3, kGamepadBtn_L3,
   };
   for (int b = 0; b < kBindButtons; b++)
     bp->pad[b][0] = kPad[b];
@@ -55,28 +57,34 @@ void Bindings_ResetPlayer(int p) {
   if (p == 0) {
     static const int32 kKeys[kBindButtons] = {
       SDLK_UP, SDLK_DOWN, SDLK_LEFT, SDLK_RIGHT, SDLK_x, SDLK_z, SDLK_s, SDLK_a, SDLK_c, SDLK_v,
-      SDLK_RETURN, SDLK_RSHIFT, SDLK_q,
+      SDLK_RETURN, SDLK_RSHIFT, SDLK_q, SDLK_INSERT,
     };
     for (int b = 0; b < kBindButtons; b++)
       bp->keys[b][0] = kKeys[b];
   }
 }
 
-// The Ping button came after the others: its key gives way to any other
-// button of any player that uses the same key (the keyboard is shared), as
-// with a binding line from before it existed.
+// The Ping and View buttons came after the others: their keys give way to
+// any earlier button of any player that uses the same key (the keyboard is
+// shared), as with a binding line from before they existed. (View gives way
+// to Ping too.)
+void Bindings_ResolveLateClashes() {
+  for (int late = kBind_Ping; late <= kBind_View; late++)
+    for (int p = 0; p < kBindPlayers; p++)
+      for (int s = 0; s < kBindSlots; s++) {
+        int32 k = g_bind[p].keys[late][s];
+        for (int q = 0; q < kBindPlayers && k; q++)
+          for (int b = 0; b < late && k; b++)
+            for (int t = 0; t < kBindSlots; t++)
+              if (g_bind[q].keys[b][t] == k) {
+                g_bind[p].keys[late][s] = k = 0;
+                break;
+              }
+      }
+}
+
 void Bindings_ResolvePingClashes() {
-  for (int p = 0; p < kBindPlayers; p++)
-    for (int s = 0; s < kBindSlots; s++) {
-      int32 k = g_bind[p].keys[kBind_Ping][s];
-      for (int q = 0; q < kBindPlayers && k; q++)
-        for (int b = 0; b < kBindButtons && k; b++)
-          for (int t = 0; t < kBindSlots; t++)
-            if (b != kBind_Ping && g_bind[q].keys[b][t] == k) {
-              g_bind[p].keys[kBind_Ping][s] = k = 0;
-              break;
-            }
-    }
+  Bindings_ResolveLateClashes();
 }
 
 void Bindings_SetDefaults() {
@@ -160,6 +168,7 @@ enum { kMaxDownKeys = 32, kMaxControllers = 8 };
 static int32 g_down_keys[kMaxDownKeys];
 static uint32 g_pad_down[kMaxControllers];
 static int16 g_pad_axis[kMaxControllers][2];
+static int16 g_pad_raxis[kMaxControllers][2];  // the right sticks (the 3D view's camera)
 
 void Bindings_OnKey(int32 key, bool pressed) {
   int free_slot = -1;
@@ -210,11 +219,19 @@ void Bindings_OnPadAxis(int c, int axis_x, int axis_y) {
   g_pad_axis[c][1] = axis_y;
 }
 
+void Bindings_OnPadRightAxis(int c, int axis_x, int axis_y) {
+  if (c < 0 || c >= kMaxControllers)
+    return;
+  g_pad_raxis[c][0] = (int16)IntMin(IntMax(axis_x, -32768), 32767);
+  g_pad_raxis[c][1] = (int16)IntMin(IntMax(axis_y, -32768), 32767);
+}
+
 void Bindings_ResetController(int c) {
   if (c < 0 || c >= kMaxControllers)
     return;
   g_pad_down[c] = 0;
   g_pad_axis[c][0] = g_pad_axis[c][1] = 0;
+  g_pad_raxis[c][0] = g_pad_raxis[c][1] = 0;
 }
 
 static uint16 StickToDirections(int x, int y, int deadzone_percent) {
@@ -231,20 +248,63 @@ static uint16 StickToDirections(int x, int y, int deadzone_percent) {
   return r;
 }
 
-uint16 Bindings_GetInput(int p) {
+bool Bindings_ButtonDown(int p, int b) {
+  if (p < 0 || p >= kBindPlayers || b < 0 || b >= kBindButtons)
+    return false;
   const BindProfile *bp = &g_bind[p];
-  uint16 r = 0;
   int c = bp->controller;
   uint32 pad = c < kMaxControllers ? g_pad_down[c] : 0;
-  for (int b = 0; b < kBindButtons; b++) {
-    for (int s = 0; s < kBindSlots; s++) {
-      if (IsKeyDown(bp->keys[b][s]) || (bp->pad[b][s] >= 0 && (pad >> bp->pad[b][s] & 1)))
-        r |= 1 << kButtonBits[b];
-    }
-  }
+  for (int s = 0; s < kBindSlots; s++)
+    if (IsKeyDown(bp->keys[b][s]) || (bp->pad[b][s] >= 0 && (pad >> bp->pad[b][s] & 1)))
+      return true;
+  return false;
+}
+
+uint16 Bindings_GetDigitalInput(int p) {
+  uint16 r = 0;
+  for (int b = 0; b < kBindButtons; b++)
+    if (kButtonBits[b] != kNoBit && Bindings_ButtonDown(p, b))
+      r |= 1 << kButtonBits[b];
+  return r;
+}
+
+uint16 Bindings_GetInput(int p) {
+  const BindProfile *bp = &g_bind[p];
+  uint16 r = Bindings_GetDigitalInput(p);
+  int c = bp->controller;
   if (c < kMaxControllers && bp->stick_moves)
     r |= StickToDirections(g_pad_axis[c][0], g_pad_axis[c][1], bp->deadzone);
   return r;
+}
+
+static float AxisToFloat(int v) {
+  float f = (float)v * (1.0f / 32767.0f);
+  return f < -1.0f ? -1.0f : f > 1.0f ? 1.0f : f;
+}
+
+bool Bindings_GetRightStick(int p, float *x, float *y) {
+  *x = *y = 0.0f;
+  int c = p >= 0 && p < kBindPlayers ? g_bind[p].controller : kBindNoController;
+  if (c >= kMaxControllers)
+    return false;
+  *x = AxisToFloat(g_pad_raxis[c][0]);
+  *y = AxisToFloat(g_pad_raxis[c][1]);
+  return true;
+}
+
+// The same deadzone as the d-pad bits the stick gives (StickToDirections).
+bool Bindings_GetMoveStick(int p, float *x, float *y) {
+  *x = *y = 0.0f;
+  if (p < 0 || p >= kBindPlayers)
+    return false;
+  const BindProfile *bp = &g_bind[p];
+  int c = bp->controller;
+  if (c >= kMaxControllers || !bp->stick_moves ||
+      !StickToDirections(g_pad_axis[c][0], g_pad_axis[c][1], bp->deadzone))
+    return false;
+  *x = AxisToFloat(g_pad_axis[c][0]);
+  *y = AxisToFloat(g_pad_axis[c][1]);
+  return true;
 }
 
 // Is controller c the one some other local player's profile uses?
@@ -324,7 +384,8 @@ static char *Trim(char *s) {
 }
 
 // value: comma separated list of the buttons in menu order (12 in configs
-// from before the Ping button, which then keeps its default), slots separated by '|'
+// from before the Ping button, 13 from before the View button, which then
+// keep their defaults), slots separated by '|'
 static void ParseButtonList(char *value, int p, bool keys) {
   char *save_b = NULL;
   int b = 0;
@@ -349,8 +410,8 @@ static void ParseButtonList(char *value, int p, bool keys) {
       }
     }
   }
-  // A line from before the Ping button leaves it at its default: unless
-  // that key or button is taken by one of the others.
+  // A line from before the Ping or View button leaves it at its default:
+  // unless that key or button is taken by one of the others.
   BindProfile *bp = &g_bind[p];
   for (int rest = b; rest < kBindButtons; rest++)
     for (int i = 0; i < b; i++)
@@ -390,7 +451,7 @@ bool Bindings_ParseConfig(const char *key, char *value) {
 void Bindings_WriteConfig(void *file) {
   FILE *f = (FILE *)file;
   fprintf(f, "[Controls]\n");
-  fprintf(f, "# Buttons in order: Up, Down, Left, Right, A, B, X, Y, L, R, Start, Select.\n");
+  fprintf(f, "# Buttons in order: Up, Down, Left, Right, A, B, X, Y, L, R, Start, Select, Ping, View.\n");
   fprintf(f, "# Use | between alternatives. Controller buttons: A B X Y Back Start LB RB LT RT L3 R3 DpadUp...\n");
   for (int p = 0; p < kBindPlayers; p++) {
     BindProfile *bp = &g_bind[p];

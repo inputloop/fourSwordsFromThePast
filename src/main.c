@@ -74,6 +74,10 @@ static uint32 g_pad_modifiers[kMaxPads];
 static uint16 g_pad_last_cmd[kMaxPads][kGamepadBtn_Count];
 static int PadIndexFromId(SDL_JoystickID id);
 static void RumbleForEvents();
+// The last value of each stick axis (SDL sends one axis at a time), cleared
+// when a controller goes, so the next one in that slot starts centered.
+static int g_pad_last_lx[kMaxPads], g_pad_last_ly[kMaxPads], g_pad_last_rx[kMaxPads], g_pad_last_ry[kMaxPads];
+static void ResetPadSticks(int pad);
 static bool g_display_perf;
 static int g_curr_fps;
 static int g_ppu_render_flags = 0;
@@ -162,8 +166,9 @@ static SDL_HitTestResult HitTestCallback(SDL_Window *win, const SDL_Point *pt, v
 
 static SDL_mutex *g_audio_mutex;
 
-// The worlds to show: one per local player, in different places (split screen).
-static int GetViews(int *views) {
+// The worlds to show: one per local player, in different places (split
+// screen), and for each the first local player seeing it (-1: nobody).
+static int GetViews(int *views, int8 *pane_local) {
   const SessionStatus *st = Session_GetStatus();
   int n = 0;
   for (int i = 0; i < kSessionMaxLocal; i++) {
@@ -173,10 +178,10 @@ static int GetViews(int *views) {
     for (int j = 0; j < n; j++)
       dup |= views[j] == inst;
     if (!dup)
-      views[n++] = inst;
+      pane_local[n] = (int8)i, views[n++] = inst;
   }
   if (n == 0)
-    views[n++] = Inst_Current();
+    pane_local[n] = -1, views[n++] = Inst_Current();
   return n;
 }
 
@@ -196,7 +201,10 @@ static void DrawSplitScreen(uint8 *pixel_buffer, int pitch, const int *views, in
 
 static void DrawPpuFrameWithPerf() {
   int views[kInstMax];
-  int nviews = GetViews(views);
+  int8 pane_local[kInstMax];
+  // With the 3D view, a player in first person has a pane of their own.
+  int nviews = g_hd3d.enabled ? Hd3d_ComputeViews(views, pane_local, kInstMax) : GetViews(views, pane_local);
+  Hd3d_SetPanes(pane_local, nviews);
   // Each screen shows the HUD item of a player playing on this computer.
   const SessionStatus *st = Session_GetStatus();
   g_mp_local_mask = 0;
@@ -209,10 +217,8 @@ static void DrawPpuFrameWithPerf() {
     uv[v].x = nviews > 1 ? (v & 1) * g_snes_width : 0;
     uv[v].y = nviews > 1 ? (v >> 1) * g_snes_height : 0;
     uv[v].w = g_snes_width, uv[v].h = g_snes_height;
-    uv[v].player = -1;
-    for (int i = 0; i < kSessionMaxLocal && uv[v].player < 0; i++)
-      if (st->local_slot[i] >= 0 && Inst_ViewOfPlayer(Ui_WatchedPlayer(i)) == views[v])
-        uv[v].player = Ui_WatchedPlayer(i);
+    uv[v].player = pane_local[v] >= 0 ? Ui_WatchedPlayer(pane_local[v]) : -1;
+    uv[v].local = pane_local[v];
   }
   Ui_SetViews(uv, nviews);
   int cols = nviews >= 2 ? 2 : 1, rows = nviews >= 3 ? 2 : 1;
@@ -230,14 +236,19 @@ static void DrawPpuFrameWithPerf() {
   if (!pixel_buffer)
     return;  // the renderer couldn't give us a buffer this frame
   if (nviews > 1) {
-    // Split screen: every world is drawn at normal resolution.
+    // Split screen: every world is drawn at normal resolution. The worlds are
+    // read under the audio lock; 3D panes are then drawn outside it (that
+    // takes longer and needs no game memory).
     SDL_LockMutex(g_audio_mutex);
+    Hd3d_BeginPanes(true);
     DrawSplitScreen(pixel_buffer, pitch, views, nviews, g_ppu_render_flags & ~kPpuRenderFlags_4x4Mode7);
     SDL_UnlockMutex(g_audio_mutex);
+    Hd3d_FinishPanes();
     Ui_Draw(pixel_buffer, pitch, g_disp_width, g_disp_height, 1);
     g_renderer_funcs.EndDraw();
     return;
   }
+  Hd3d_BeginPanes(false);
   if (g_display_perf || g_config.display_perf_title) {
     static float history[64], average;
     static int history_pos;
@@ -458,7 +469,7 @@ int main(int argc, char** argv) {
   g_hd2d.lighting = g_config.hd2d_lighting;
   g_hd2d.see_through = g_config.hd2d_see_through;
   // The 3D view as configured.
-  g_hd3d.enabled = g_config.hd3d;
+  Hd3d_SetEnabled(g_config.hd3d);
   g_hd3d.camera_returns = g_config.hd3d_camera_returns;
   g_hd3d.turn_controls = g_config.hd3d_turn_controls;
   g_hd3d.mouse_look = g_config.hd3d_mouse_look;
@@ -564,6 +575,8 @@ int main(int argc, char** argv) {
   uint32 curTick = 0;
   uint32 frameCtr = 0;
   bool audiopaused = true;
+  bool relative_mouse = false;
+  uint64 last_counter = SDL_GetPerformanceCounter();
 
   if (g_config.autosave)
     HandleCommand(kKeys_Load + 0, true);
@@ -595,6 +608,7 @@ int main(int argc, char** argv) {
           g_pad_used[pad] = false;
           g_pad_modifiers[pad] = 0;
           Bindings_ResetController(pad);
+          ResetPadSticks(pad);
           // The player whose profile used that pad leaves (not pad 0's: player 1 has the keyboard).
           for (int i = 1; i < kSessionMaxLocal; i++)
             if (g_bind[i].controller == pad)
@@ -619,14 +633,29 @@ int main(int argc, char** argv) {
       case SDL_MOUSEWHEEL:
         if (SDL_GetModState() & KMOD_CTRL && event.wheel.y != 0)
           ChangeWindowScale(event.wheel.y > 0 ? 1 : -1);
+        else if (event.wheel.which != SDL_TOUCH_MOUSEID)
+          Hd3d_OnMouseWheel(event.wheel.y);  // (the 3D view's zoom)
         break;
       case SDL_MOUSEBUTTONDOWN:
+      case SDL_MOUSEBUTTONUP:
         if (event.button.button == SDL_BUTTON_LEFT && event.button.state == SDL_PRESSED && event.button.clicks == 2) {
           if ((g_win_flags & SDL_WINDOW_FULLSCREEN_DESKTOP) == 0 && (g_win_flags & SDL_WINDOW_FULLSCREEN) == 0 && SDL_GetModState() & KMOD_SHIFT) {
             g_win_flags ^= SDL_WINDOW_BORDERLESS;
             SDL_SetWindowBordered(g_window, (g_win_flags & SDL_WINDOW_BORDERLESS) == 0);
           }
         }
+        // The 3D view: left click first person, middle click the classic
+        // view, right drag turns the camera.
+        Hd3d_OnMouseButton(event.button.button, event.button.state == SDL_PRESSED, event.button.clicks,
+                           SDL_GetModState(), event.button.which == SDL_TOUCH_MOUSEID);
+        break;
+      case SDL_MOUSEMOTION:
+        if (event.motion.which != SDL_TOUCH_MOUSEID)
+          Hd3d_OnMouseMotion(event.motion.xrel, event.motion.yrel);
+        break;
+      case SDL_WINDOWEVENT:
+        if (event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED || event.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+          Hd3d_OnWindowFocus(event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED);
         break;
       case SDL_KEYDOWN:
         if (event.key.repeat)
@@ -649,6 +678,14 @@ int main(int argc, char** argv) {
         g_running = false;
         break;
       }
+    }
+
+    // The 3D view captures the mouse for mouse look and right drags (not
+    // while paused or in the menu).
+    bool want_relative = !g_paused && Hd3d_WantsRelativeMouse();
+    if (want_relative != relative_mouse) {
+      relative_mouse = want_relative;
+      SDL_SetRelativeMouseMode(want_relative ? SDL_TRUE : SDL_FALSE);
     }
 
     if (g_paused != audiopaused) {
@@ -679,6 +716,15 @@ int main(int argc, char** argv) {
     }
     // The overlay menu takes the inputs while it is open.
     Ui_Update(local_inputs, Bindings_GetMenuFallbackInput(Ui_MenuOwner(), Ui_MenuController()));
+    // The 3D view's cameras move in real time (turbo frames included), and a
+    // turned camera turns the d-pad: the one thing it changes in the game,
+    // done here so only the turned buttons are sent.
+    uint64 counter = SDL_GetPerformanceCounter();
+    float dt = (float)((double)(counter - last_counter) / (double)SDL_GetPerformanceFrequency());
+    last_counter = counter;
+    Hd3d_Update(dt > 0.05f ? 0.05f : dt);
+    Hd3d_HandleViewButtons();
+    Hd3d_RemapInputs(local_inputs);
 
     bool is_replay = false;
     // Sound comes from the world of the first local player.
@@ -903,8 +949,22 @@ static void HandleCommand_Locked(uint32 j, bool pressed) {
     Session_ResyncAll();
 }
 
+// The 3D view's camera keys act while they are held: a key goes up as the
+// command it went down as, even if Shift, Ctrl or Alt changed meanwhile.
+static struct { int key; uint32 cmd; } g_held_view_keys[8];
+
 static void HandleInput(int keyCode, int keyMod, bool pressed) {
   int j = FindCmdForSdlKey(keyCode, keyMod);
+  for (size_t i = 0; i < countof(g_held_view_keys); i++) {
+    if (g_held_view_keys[i].key == keyCode && !pressed) {
+      if (g_held_view_keys[i].cmd != (uint32)j)
+        HandleCommand(g_held_view_keys[i].cmd, false);
+      g_held_view_keys[i].key = 0;
+    } else if (!g_held_view_keys[i].key && pressed && j >= kKeys_View3dTurnLeft && j <= kKeys_View3dTiltDown) {
+      g_held_view_keys[i].key = keyCode, g_held_view_keys[i].cmd = (uint32)j;
+      break;
+    }
+  }
   if (j != 0)
     HandleCommand(j, pressed);
 }
@@ -924,6 +984,7 @@ static void OpenOneGamepad(int i) {
         g_pad_used[p] = true;
         g_pad_ids[p] = id;
         Bindings_ResetController(p);
+        ResetPadSticks(p);
         g_pad_modifiers[p] = 0;
         printf("Controller %d connected: %s\n", p + 1, SDL_GameControllerName(controller));
         return;
@@ -1062,11 +1123,18 @@ static void HandleVolumeAdjustment(int volume_adjustment) {
 #endif
 }
 
+static void ResetPadSticks(int pad) {
+  g_pad_last_lx[pad] = g_pad_last_ly[pad] = g_pad_last_rx[pad] = g_pad_last_ry[pad] = 0;
+}
+
 static void HandleGamepadAxisInput(int pad, int axis, int value) {
-  static int last_xs[kMaxPads], last_ys[kMaxPads];
   if (axis == SDL_CONTROLLER_AXIS_LEFTX || axis == SDL_CONTROLLER_AXIS_LEFTY) {
-    *(axis == SDL_CONTROLLER_AXIS_LEFTX ? &last_xs[pad] : &last_ys[pad]) = value;
-    Bindings_OnPadAxis(pad, last_xs[pad], last_ys[pad]);
+    *(axis == SDL_CONTROLLER_AXIS_LEFTX ? &g_pad_last_lx[pad] : &g_pad_last_ly[pad]) = value;
+    Bindings_OnPadAxis(pad, g_pad_last_lx[pad], g_pad_last_ly[pad]);
+  } else if (axis == SDL_CONTROLLER_AXIS_RIGHTX || axis == SDL_CONTROLLER_AXIS_RIGHTY) {
+    // The 3D view's camera.
+    *(axis == SDL_CONTROLLER_AXIS_RIGHTX ? &g_pad_last_rx[pad] : &g_pad_last_ry[pad]) = value;
+    Bindings_OnPadRightAxis(pad, g_pad_last_rx[pad], g_pad_last_ry[pad]);
   } else if ((axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT || axis == SDL_CONTROLLER_AXIS_TRIGGERRIGHT)) {
     if (value < 12000 || value >= 16000)  // hysteresis
       HandleGamepadInput(pad, axis == SDL_CONTROLLER_AXIS_TRIGGERLEFT ? kGamepadBtn_L2 : kGamepadBtn_R2, value >= 12000);

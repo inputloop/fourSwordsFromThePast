@@ -7,17 +7,19 @@
 
 enum {
   kBindPlayers = 4,
-  kBindButtons = 13,
+  kBindButtons = 14,
   kBindSlots = 2,       // alternatives per button and device
   kBindNoController = 0xff,
 };
 
 // The SNES buttons in the order shown in the menu, then the co-op Ping
-// button (joypad bit 12, which the game never sees).
+// button (joypad bit 12, which the game never sees), then the 3D view's View
+// button (first person on a tap, the classic view on a hold), which is in no
+// joypad word at all: it only changes the picture.
 enum {
   kBind_Up, kBind_Down, kBind_Left, kBind_Right,
   kBind_A, kBind_B, kBind_X, kBind_Y, kBind_L, kBind_R,
-  kBind_Start, kBind_Select, kBind_Ping,
+  kBind_Start, kBind_Select, kBind_Ping, kBind_View,
 };
 
 typedef struct BindProfile {
@@ -32,15 +34,16 @@ typedef struct BindProfile {
 extern BindProfile g_bind[kBindPlayers];
 
 void Bindings_SetDefaults();
-// After loading the settings: a Ping key also used by another button (of
-// any player) is taken off Ping.
-void Bindings_ResolvePingClashes();
+// After loading the settings: a key of a button added later (Ping, then View)
+// that another button of any player also uses is taken off the later button.
+void Bindings_ResolveLateClashes();
+void Bindings_ResolvePingClashes();  // (the old name of Bindings_ResolveLateClashes)
 void Bindings_ResetPlayer(int player);
 // Swaps A/B and X/Y on the controller (Xbox <-> Nintendo layout).
 void Bindings_SwapFaceButtons(int player);
 
 const char *Bindings_ButtonName(int b);
-uint16 Bindings_ButtonBit(int b);  // bit in the joypad word the game reads
+uint16 Bindings_ButtonBit(int b);  // bit in the joypad word the game reads (0: View, which has none)
 const char *Bindings_GamepadButtonName(int pad_button);
 void Bindings_DescribeKeys(int player, int b, char *buf, size_t size);
 void Bindings_DescribePad(int player, int b, char *buf, size_t size);
@@ -56,8 +59,13 @@ void Bindings_OnKey(int32 key, bool pressed);
 bool Bindings_IsGameKey(int32 key);
 void Bindings_OnPadButton(int controller, int pad_button, bool pressed);
 void Bindings_OnPadAxis(int controller, int axis_x, int axis_y);
+void Bindings_OnPadRightAxis(int controller, int axis_x, int axis_y);
 void Bindings_ResetController(int controller);
 uint16 Bindings_GetInput(int player);
+bool Bindings_ButtonDown(int player, int b);                  // any button, View included (key or pad)
+bool Bindings_GetRightStick(int player, float *x, float *y);  // -1..1, y down; false: no controller
+bool Bindings_GetMoveStick(int player, float *x, float *y);   // left stick past the deadzone, if it moves Link
+uint16 Bindings_GetDigitalInput(int player);                  // keys and buttons only (no stick)
 // Inputs for the overlay menu from fixed keys/buttons that work regardless of
 // bindings: the arrow keys and the d-pad of that controller (-1: any).
 uint16 Bindings_GetMenuFallbackInput(int owner, int controller);
