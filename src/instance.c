@@ -589,16 +589,32 @@ static int SaveRoomState() {
   return dungeon_room_index;
 }
 
+// Sprites drawn for one camera, moved by (dx, dy) to show the same spot for
+// another. Those that end up off the screen are hidden.
+static void ShiftSprites(uint16 *oam, uint8 *high, int n, int dx, int dy) {
+  for (int i = 0; i < n; i++) {
+    int x = (oam[i * 2] & 0xff) | (high[i] & 1) << 8, y = oam[i * 2] >> 8;
+    x = (x >= 256 ? x - 512 : x) + dx;
+    y = (y >= 240 ? y - 256 : y) + dy;
+    if (x < -32 || x >= 256 || y < -16 || y >= 224)
+      x = 0, y = 0xf0;
+    oam[i * 2] = (x & 0xff) | (y & 0xff) << 8;
+    high[i] = (high[i] & ~1) | (x < 0);
+  }
+}
+
 static void MovePlayers(int from, int to) {
   TRACE("  move players of world %d into %d\n", from, to);
   uint8 ctx[kMpMaxPlayers][kMpCtxMaxBytes];
   uint8 joined[kMpMaxPlayers] = { 0 }, downed[kMpMaxPlayers], ctr[kMpMaxPlayers], away[kMpMaxPlayers];
   uint8 transient[countof(kTransientAddrs)];
+  static MpRenderPlayer drawn[kMpMaxPlayers];  // how they were drawn this frame
   Inst_Switch(from);
   // The room as the players leave it (a door unlocked this very frame) goes
   // to the world they join.
   int room = SaveRoomState();
   uint16 room_flags = room >= 0 ? save_dung_info[room] : 0;
+  uint16 cam_x = BG2HOFS_copy2, cam_y = BG2VOFS_copy2;
   // Whoever drained the swamp keeps it drained when met by a teammate.
   for (size_t k = 0; k < countof(kTransientAddrs); k++)
     transient[k] = g_ram[kTransientAddrs[k]] & TransientBits(kTransientAddrs[k]);
@@ -610,6 +626,10 @@ static void MovePlayers(int from, int to) {
     ctr[p] = g_mp.p[p].revive_ctr;
     away[p] = g_mp.away[p];
     Mp_ExportPlayer(p, ctx[p]);
+    bool leader = p == g_mp_render.self_player;
+    drawn[p] = leader ? g_mp_render.self : g_mp_render.p[p];
+    if (leader)  // (the leader's Link tiles are in video memory)
+      memcpy(drawn[p].tiles, &g_zenv.vram[0x4000], sizeof(drawn[p].tiles));
   }
   SpriteKills kills;
   GatherSpriteKills(&kills);
@@ -627,6 +647,15 @@ static void MovePlayers(int from, int to) {
     bool both = g_mp.p[p].joined;
     Mp_ImportPlayer(p, ctx[p], downed[p], ctr[p]);
     g_mp.away[p] = both ? 0 : away[p];
+    // This world's frame already ran without them: until the next one they
+    // are drawn as their own world drew them, or they would blink out.
+    if (!both && p != g_mp.leader) {
+      MpRenderPlayer *rp = &g_mp_render.p[p];
+      *rp = drawn[p];
+      int dx = (int16)(cam_x - BG2HOFS_copy2), dy = (int16)(cam_y - BG2VOFS_copy2);
+      ShiftSprites(rp->oam, rp->high, rp->count, dx, dy);
+      ShiftSprites(rp->anc_oam, rp->anc_high, rp->anc_count, dx, dy);
+    }
   }
 }
 
@@ -1227,12 +1256,28 @@ int Inst_PlayerPos(int p, uint16 *x, uint16 *y) {
   return i;
 }
 
+// Stairs in a room or to another floor (dungeon submodules 6, 8, 0E and
+// 10-13): the world still shows its room, with its Link walking on them.
+static bool OnStairs(const uint8 *ram) {
+  uint8 s = ram[0x11];  // submodule_index
+  return ram[0x10] == 7 && (s == 6 || s == 8 || s == 0x0e || (s >= 0x10 && s <= 0x13));
+}
+
+// The dungeon room a world shows. Stairs to another floor switch to the
+// room they lead to right away, but only load it once the Link has walked
+// into them (dungeon_room_index2 is the room loaded).
+static uint16 ShownRoom(const uint8 *ram) {
+  uint8 s = ram[0x11];
+  bool to_room = ram[0x10] == 7 && (s == 6 || s == 0x0e || (s >= 0x11 && s <= 0x13));
+  return to_room ? WORD(ram[0x48E]) : WORD(ram[0xA0]);
+}
+
 // Which coordinates the current world's positions are in: the light or
 // dark world, a dungeon (its rooms share coordinates) or one house or cave.
 static uint32 CurrentSpace() {
   uint8 palace = BYTE(cur_palace_index_x2);
   return !player_is_indoors ? (overworld_area_index & 0x40) :
-         palace == 0xff ? 0x20000 | dungeon_room_index : 0x10000 | palace;
+         palace == 0xff ? 0x20000 | ShownRoom(g_ram) : 0x10000 | palace;
 }
 
 bool Inst_PlayerPing(int p, InstPing *out) {
@@ -1258,7 +1303,8 @@ bool Inst_PlayerPlace(int p, InstPlace *out) {
     return false;
   Inst_Switch(i);
   uint8 m = main_module_index;
-  bool ok = (m == 7 || m == 9 || m == 14) && (submodule_index == 0 || m == 14);
+  // (A Link on stairs keeps its name tag and arrow.)
+  bool ok = (m == 7 || m == 9 || m == 14) && (submodule_index == 0 || m == 14 || OnStairs(g_ram));
   if (ok) {
     out->world = i;
     out->x = Mp_PlayerX(p) + 8, out->y = Mp_PlayerY(p) + 12;  // the middle of the Link
@@ -1270,14 +1316,16 @@ bool Inst_PlayerPlace(int p, InstPlace *out) {
   return ok;
 }
 
-// Where world i is and where its camera looks, if it is in normal gameplay.
+// Where world i is and where its camera looks, if it is in normal gameplay
+// (or on stairs: a Link taking them alone gets a world of its own, and
+// stays in view while it walks up or down them).
 static bool WorldView(int i, uint32 *key, uint16 *cam_x, uint16 *cam_y) {
   const uint8 *ram = g_inst[i].ram;
   uint8 m = ram[0x10], s = ram[0x11];  // main_module_index, submodule_index
-  if (!((m == 7 || m == 9) && s == 0))
+  if (!((m == 7 || m == 9) && s == 0) && !OnStairs(ram))
     return false;
-  // player_is_indoors, dungeon_room_index, overworld_area_index
-  *key = ram[0x1B] << 16 | (ram[0x1B] ? WORD(ram[0xA0]) : WORD(ram[0x40A]));
+  // player_is_indoors, the room, overworld_area_index
+  *key = ram[0x1B] << 16 | (ram[0x1B] ? ShownRoom(ram) : WORD(ram[0x40A]));
   *cam_x = WORD(ram[0xE2]), *cam_y = WORD(ram[0xE8]);  // BG2HOFS/BG2VOFS_copy2
   return true;
 }

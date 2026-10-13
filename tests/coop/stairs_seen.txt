@@ -1,0 +1,82 @@
+# A Link on stairs stays drawn for a teammate in the same room, and still sees
+# the teammate, with name tags and arrows for both. A Link that takes stairs
+# alone gets a world of its own for the walk, and a world on stairs used to
+# show nobody from other worlds nor be shown on their screens. Nobody blinks
+# out when the two worlds merge again afterwards either.
+
+# Stairs in a room (a cave, 10a): P1 walks up them, P2 stands by.
+load 2
+run 20
+enter 10a
+run 150
+join 2
+run 20
+pos 2 5200 8600
+run 5
+hold 1 U
+runcheckseen 1 2 90
+expect_instances 2
+# (up the stairs, and the worlds merge at the top)
+runcheckseen 1 2 60
+hold 1 -
+runcheckseen 1 2 30
+expect_instances 1
+leave 2
+
+# A spiral staircase (castle basement, 11, up to 02 and back): P2 watches P1
+# walk into it, and later out of it again.
+load 2
+run 20
+enter 11
+run 150
+clearsprites
+join 2
+run 20
+pos 1 884 760
+pos 2 920 760
+run 30
+hold 1 U
+hold 2 U
+run 90
+hold 2 -
+hold 1 -
+run 20
+pos 1 888 572
+run 30
+hold 1 U
+runcheckseen 1 2 110
+expect_instances 2
+# (in the stairwell, up in room 02 and back down)
+run 280
+hold 1 -
+runcheckseen 1 2 90
+expect_instances 1
+leave 2
+
+# Straight stairs to the floor above (castle lobby, 61, up to 51): P2 stops
+# below them and watches P1 go up.
+load 2
+run 20
+enter 61
+run 150
+clearsprites
+join 2
+run 20
+hold 1 U
+hold 2 U
+run 100
+clearsprites
+run 60
+hold 2 -
+hold 1 -
+run 30
+hold 1 U
+hold 2 U
+run 56
+hold 2 -
+run 75
+# (back in one world after the steps below; the leader takes these stairs)
+setleader 1
+runcheckseen 1 2 62
+expect_instances 2
+hold 1 -

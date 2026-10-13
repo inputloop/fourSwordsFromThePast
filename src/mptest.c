@@ -87,6 +87,8 @@
 //   drawrun <n>         run n frames, drawing each into a buffer exactly the size the renderer asks for (fails on an overrun)
 //   stalewidth <p> <n>  p's world's video chip keeps n widescreen columns per side (drawing must use the setting)
 //   runcheckdraw <p> <n>  run n frames; player p (not its world's leader) must never be drawn with shrunken body pieces
+//   runcheckseen <a> <b> <n>  run n frames; on every one, a and b are drawn on each other's screen (same world or not)
+//                       where they really are, and can have a name tag or arrow
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart)
@@ -301,6 +303,46 @@ static void SwitchToPlayer(int p) {
   int i = Inst_OfPlayer(p);
   if (i >= 0)
     Inst_Switch(i);
+}
+
+// What is wrong with how player b shows on player a's screen (from a's own
+// world or another one): NULL if b is drawn where it really is and a name
+// tag or arrow can point at it.
+static const char *ShownProblem(int a, int b) {
+  uint16 bx, by;
+  if (Inst_PlayerPos(b, &bx, &by) < 0 || Inst_OfPlayer(a) < 0)
+    return "isn't playing";
+  SwitchToPlayer(a);
+  const MpRenderPlayer *rp = NULL;
+  int dx = 0, dy = 0;
+  if (Inst_OfPlayer(a) == Inst_OfPlayer(b)) {
+    rp = b == g_mp_render.self_player ? &g_mp_render.self : &g_mp_render.p[b];
+    if (!rp->visible)
+      rp = NULL;
+  } else {
+    InstRemoteLink rl[kMpMaxPlayers * 2];
+    int nr = Inst_LinksFromOtherWorlds(rl, countof(rl));
+    for (int k = 0; k < nr; k++)
+      if (rl[k].player == b)
+        rp = rl[k].rp, dx = rl[k].dx, dy = rl[k].dy;
+  }
+  // (The first of its sprites that lands on the screen.)
+  int i = 0, x = 0, y = 0;
+  for (; rp && i < rp->count; i++) {
+    x = (rp->oam[i * 2] & 0xff) | (rp->high[i] & 1) << 8, y = rp->oam[i * 2] >> 8;
+    x = (x >= 256 ? x - 512 : x) + dx;
+    y = (y >= 240 ? y - 256 : y) + dy;
+    if (x > -16 && x < 256 && y > -16 && y < 224)
+      break;
+  }
+  if (!rp || i == rp->count)
+    return "is not drawn";
+  if (abs(x - (int16)(bx - BG2HOFS_copy2)) > 24 || abs(y - (int16)(by - BG2VOFS_copy2)) > 32)
+    return "is drawn in the wrong place";
+  InstPlace pa, pb;
+  if (!Inst_PlayerPlace(a, &pa) || !Inst_PlayerPlace(b, &pb) || pa.space != pb.space)
+    return "has no name tag or arrow";
+  return NULL;
 }
 
 static void SpawnNear(uint8 type, int sp, int dx) {
@@ -1691,6 +1733,27 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           printf("FAIL: P%d drawn with %d shrunken body pieces at frame %d\n", p + 1, bad, frame);
           g_failures++;
           break;
+        }
+      }
+    } else if (!strcmp(cmd, "runcheckseen")) {
+      // runcheckseen <a> <b> <n>: runs n frames; on every one, players a and b see
+      // each other: each is drawn on the other's screen where it really is, and
+      // can have a name tag or an arrow. (Only the first miss is reported; all n
+      // frames run either way.)
+      int a = PlayerArg(arg1), b = PlayerArg(arg2);
+      bool missed = false;
+      for (int n = atoi(arg3); n > 0; n--, frame++) {
+        Inst_RunFrame(held);
+        int home = Inst_Current();
+        const char *why = ShownProblem(a, b);
+        int p = b, q = a;
+        if (!why)
+          why = ShownProblem(b, a), p = a, q = b;
+        Inst_Switch(home);
+        if (why && !missed) {
+          printf("FAIL: P%d %s on P%d's screen at frame %d\n", p + 1, why, q + 1, frame);
+          g_failures++;
+          missed = true;
         }
       }
     } else if (!strcmp(cmd, "expect_carried")) {
