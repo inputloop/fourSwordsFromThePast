@@ -1,7 +1,7 @@
 # Randomized: the uncle waits in the secret passage and gives the two items
-# the seed put there instead of his sword and shield (seed 2: 3 bombs and
-# 50 rupees). The story stays as it is, and he gives them only once.
-rando 2
+# the seed put there instead of his sword and shield (seed 9: 3 bombs and
+# 20 rupees). The story stays as it is, and he gives them only once.
+rando 9
 run 200
 newgame
 run 400
@@ -52,8 +52,10 @@ run 4
 hold 1 -
 run 120
 expect_ram f343 3
-expect_ram f360 32
+expect_ram f360 14
 expect_ram f3c5 2
 expect_ram f3c6 15
 expect_ram f4f6 0
 expect_ram f4f7 3
+# New files use the newest placement (no items in chests that are not there).
+expect_ram f4f9 1

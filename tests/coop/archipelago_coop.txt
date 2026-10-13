@@ -1,0 +1,24 @@
+# Archipelago in couch co-op: an item from the room goes to the first player
+# (by number) who is free to hold it up. Player 1 is in the item menu, so
+# player 2 gets it; the inventory is shared anyway.
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+srun 100
+hold 1 S
+srun 4
+hold 1 -
+srun 60
+apitem 36
+srun 6
+expect_apcount 1
+expect_pram 2 5d 15
+expect_pram 1 5d 0
+srun 100
+expect_ram f360 14

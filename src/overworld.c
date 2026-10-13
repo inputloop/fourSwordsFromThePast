@@ -1,6 +1,7 @@
 #include "overworld.h"
 #include "mp.h"
 #include "randomizer.h"
+#include "archipelago.h"
 #include "hud.h"
 #include "load_gfx.h"
 #include "dungeon.h"
@@ -572,6 +573,7 @@ void RecoverPositionAfterDrowning() {  // 829583
     main_module_index = 18;
     submodule_index = 1;
     countdown_for_blink = 0;
+    Ap_OnGameOver();
   }
 }
 

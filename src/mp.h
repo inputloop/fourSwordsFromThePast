@@ -181,6 +181,10 @@ void Mp_BeginLeaderOam();
 void Mp_EndLeaderOam();
 void Mp_ReadJoypads();
 bool Mp_OnFatalDamage();
+// DeathLink (Archipelago): the resident Link falls as if hit for all its
+// hearts (no fairy helps). True when it was the last one standing: the game
+// is over (and that Link leads its world).
+bool Mp_DeathLinkFall();
 void Mp_BeginObject();
 void Mp_EndObject();
 void Mp_PreSprite(int k);

@@ -31,7 +31,7 @@ static inline int FindInWordArray(const uint16 *data, uint16 lookfor, size_t siz
 }
 
 
-extern const uint16 kMemoryLocationToGiveItemTo[76];
+extern const uint16 kMemoryLocationToGiveItemTo[77];
 
 const uint16 *SrcPtr(uint16 src);
 uint8 Ancilla_Sfx2_Near(uint8 a);

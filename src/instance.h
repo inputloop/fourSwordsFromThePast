@@ -83,6 +83,10 @@ InstSnapshot *Inst_SnapshotNew();
 void Inst_SnapshotFree(InstSnapshot *s);
 void Inst_SnapshotSave(InstSnapshot *s);
 void Inst_SnapshotLoad(const InstSnapshot *s);
+// The save file area (0x500 bytes from 7EF000) every world agreed on at the
+// end of the frame: of a snapshot, or of the latest frame.
+const uint8 *Inst_SnapshotSaveArea(const InstSnapshot *s);
+const uint8 *Inst_SaveArea();
 // Test instrumentation: prints the sprite tables of every world in s.
 void Inst_SnapshotPrintSprites(const InstSnapshot *s);
 // false: frames don't send their sound to the audio thread (frames that are

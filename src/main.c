@@ -32,6 +32,7 @@
 #include "hd2d.h"
 #include "bindings.h"
 #include "instance.h"
+#include "archipelago.h"
 
 static bool g_run_without_emu = 0;
 
@@ -563,6 +564,10 @@ int main(int argc, char** argv) {
   g_mp_color_scheme = g_config.mp_colorblind;
   Session_SetRandomizer(g_config.randomizer);
   Session_SetFullInventory(g_config.full_inventory);
+  snprintf(g_ap_settings.server, sizeof(g_ap_settings.server), "%s", g_config.ap_server ? g_config.ap_server : "");
+  snprintf(g_ap_settings.slot, sizeof(g_ap_settings.slot), "%s", g_config.ap_slot ? g_config.ap_slot : "");
+  snprintf(g_ap_settings.password, sizeof(g_ap_settings.password), "%s", g_config.ap_password ? g_config.ap_password : "");
+  g_ap_settings.death_link = g_config.ap_death_link;
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);
 
@@ -673,6 +678,8 @@ int main(int argc, char** argv) {
       RumbleForEvents();
       SDL_UnlockMutex(g_audio_mutex);
     }
+    // Archipelago: what the game did goes to the server (the host's job).
+    Ap_Tick();
 
     frameCtr++;
 

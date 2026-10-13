@@ -59,12 +59,12 @@ static const uint8 kSprite_TutorialEntities_Tab[4] = {2, 1, 0, 3};
 static const uint8 kSoldier_DirectionLockSettings[4] = {3, 2, 0, 1};
 static const uint8 kWishPond_X[8] = {0, 4, 8, 12, 16, 20, 24, 0};
 static const uint8 kWishPond_Y[8] = {0, 8, 16, 24, 32, 40, 4, 36};
-const uint8 kWishPond2_OamFlags[76] = {
+const uint8 kWishPond2_OamFlags[77] = {
   5, 0xff, 5, 5, 5, 5, 5, 1, 2, 1, 1, 1, 2, 2, 2, 4,
   4,    4, 1, 1, 2, 1, 1, 1, 2, 1, 2, 1, 4, 4, 2, 1,
   6,    1, 2, 1, 2, 2, 1, 2, 2, 4, 1, 1, 4, 2, 1, 4,
   2,    2, 4, 4, 4, 2, 1, 4, 1, 2, 2, 1, 2, 2, 1, 1,
-  4,    4, 1, 2, 2, 4, 4, 4, 2, 5, 2, 1,
+  4,    4, 1, 2, 2, 4, 4, 4, 2, 5, 2, 1, 6,
 };
 static const uint8 kWishPondItemOffs[32] = {
   0, 4, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 22, 23, 24, 25, 28, 30, 31, 32, 33, 33, 37, 40, 42, 42, 42, 42

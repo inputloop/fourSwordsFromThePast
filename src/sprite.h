@@ -77,7 +77,7 @@ extern const uint8 kAbsorptionSfx[15];
 extern const uint8 kSpriteInit_BumpDamage[243];
 extern const uint16 kSinusLookupTable[256];
 extern const uint8 kThrowableScenery_Flags[9];
-extern const uint8 kWishPond2_OamFlags[76];
+extern const uint8 kWishPond2_OamFlags[77];
 
 uint16 Sprite_GetX(int k);
 uint16 Sprite_GetY(int k);

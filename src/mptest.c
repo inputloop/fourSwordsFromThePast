@@ -64,6 +64,20 @@
 //   reload              save and load every world the way netplay sends them; nothing may change
 //   randocheck <seed> <count> [v]  every seed gives a beatable placement (v: print spoilers)
 //   storycheck          every rewritten story message fits the text box
+// Archipelago (a pretend room; no server):
+//   aproom <hexbind|off> [deathlink 0|1]  new files are Archipelago files of that room
+//   apitem <hexcode>    the room sends an item (item id = base + code; ff: one the game doesn't know)
+//   apdeathlink         someone else in the room died
+//   srun <n>            run n frames the way the game does (session frames: Archipelago events, then Ap_Tick)
+//   expect_apcount <n>  the file has received n of the room's items
+//   expect_apsent <n>   the game has sent n checked locations
+//   expect_apchecked <hexloc> <0|1>  location base+hexloc (chest number, or 100+n for special place n) was sent
+//   expect_apgoal <0|1> / expect_apdeaths <n>  the goal / so many DeathLinks were sent
+//   aplogic <file>      the APWorld's logic (archipelago/tools/logic_vectors.py) agrees with the randomizer's
+// Archipelago with a real server (archipelago/tests/e2e.sh):
+//   apconnect <server> <slot> [password]  connect from the Archipelago screen
+//   apwait <connected|items n> [seconds]  run in real time until connected / n items received (default 20 s)
+//   apnotices           print the lines the game would show
 // Pictures:
 //   shot <file.ppm>     render the current frame
 //   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
@@ -109,6 +123,8 @@
 //   lan [n]             search for LAN games (and expect n)
 //   menu                toggle the overlay menu (navigate with hold + tick)
 //   key <up|down|left|right|enter|back> [times]  a button press in the menu
+//   type <text>         typing on the keyboard (in a menu's text field)
+//   expect_apsettings <server> <slot> <auto|on|off>  the Archipelago screen's settings ("-": empty)
 // Debug only (not for tests): trace <0|1>, chestdump, dumprender <p>, dumpworldmap <file> <dark>,
 //   findtile <p> <hexattr>, findroomtag <hextag>, spoiler <hexseed> <file>, upnp (asks the router for a port mapping),
 //   stun <server:port> (asks a STUN server for our public address).
@@ -125,6 +141,8 @@
 #include "player.h"
 #include "util.h"
 #include "randomizer.h"
+#include "archipelago.h"
+#include "ap_client.h"
 #include "hd2d.h"
 #include "tile_detect.h"
 #include "story.h"
@@ -1021,6 +1039,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ui_Update(in, 0);
         if (!Ui_PausesGame())
           frame += Session_Tick(in, g_wanted_zelda_features);
+        Ap_Tick();
         TrackSprites(frame, view);
         SDL_Delay(16);
         SessionPlayer seats[kMpMaxPlayers];
@@ -1114,6 +1133,115 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       char ip[64];
       bool ok = Upnp_StunPublicIp(arg1, ip, sizeof(ip));
       printf("stun %s: %s\n", arg1, ok ? ip : "no answer");
+    } else if (!strcmp(cmd, "aproom")) {
+      Ap_TestRoom(strcmp(arg1, "off") ? strtoul(arg1, NULL, 16) : 0, atoi(arg2) != 0);
+    } else if (!strcmp(cmd, "apitem")) {
+      Ap_TestGiveItem(strtol(arg1, NULL, 16) == 0xff ? kApIdBase + 0x99 : kApIdBase + strtol(arg1, NULL, 16));
+    } else if (!strcmp(cmd, "apdeathlink")) {
+      Ap_TestDeathLink();
+    } else if (!strcmp(cmd, "srun")) {
+      for (int n = atoi(arg1); n > 0; n--) {
+        frame += Session_Tick(held, g_wanted_zelda_features);
+        Ap_Tick();
+      }
+    } else if (!strcmp(cmd, "apconnect")) {
+      snprintf(g_ap_settings.server, sizeof(g_ap_settings.server), "%s", arg1);
+      snprintf(g_ap_settings.slot, sizeof(g_ap_settings.slot), "%s", arg2);
+      snprintf(g_ap_settings.password, sizeof(g_ap_settings.password), "%s", arg3);
+      Ap_Connect();
+    } else if (!strcmp(cmd, "apwait")) {
+      bool items = !strcmp(arg1, "items");
+      int want = items ? atoi(arg2) : 0, secs = atoi(items ? arg3 : arg2);
+      bool done = false;
+      for (int i = 0; i < (secs ? secs : 20) * 60 && !done; i++) {
+        frame += Session_Tick(held, g_wanted_zelda_features);
+        Ap_Tick();
+        SDL_Delay(16);
+        done = items ? (g_ram[0xF000 + kApSave_ItemCount] | g_ram[0xF000 + kApSave_ItemCount + 1] << 8) >= want :
+                       Ap_HostBind() != 0;
+      }
+      char status[96];
+      Ap_StatusLine(status, sizeof(status));
+      printf("apwait %s: %s (%s)\n", arg1, done ? "done" : "timed out", status);
+      if (!done)
+        g_failures++;
+    } else if (!strcmp(cmd, "apnotices")) {
+      char text[96];
+      int kind;
+      while (Ap_PollNotice(text, sizeof(text), &kind))
+        printf("[ap %d] %s\n", kind, text);
+    } else if (!strcmp(cmd, "expect_apcount")) {
+      int n = g_ram[0xF000 + kApSave_ItemCount] | g_ram[0xF000 + kApSave_ItemCount + 1] << 8;
+      if (n != atoi(arg1)) {
+        printf("FAIL: %d Archipelago items received, expected %s at frame %d\n", n, arg1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_apsent")) {
+      if (Ap_TestSent()->checks != atoi(arg1)) {
+        printf("FAIL: %d locations sent, expected %s at frame %d\n", Ap_TestSent()->checks, arg1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_apchecked")) {
+      int x = strtol(arg1, NULL, 16);
+      int64 id = x >= 0x100 ? kApSpecialLocationBase + x - 0x100 : kApIdBase + x;
+      bool sent = false;
+      for (int i = 0; i < Ap_TestSent()->checks; i++)
+        sent |= Ap_TestSent()->check[i] == id;
+      if (sent != (atoi(arg2) != 0)) {
+        printf("FAIL: location %s %s at frame %d\n", arg1, sent ? "was sent" : "wasn't sent", frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_apgoal")) {
+      if (Ap_TestSent()->goal != (atoi(arg1) != 0)) {
+        printf("FAIL: goal %s at frame %d\n", Ap_TestSent()->goal ? "sent" : "not sent", frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_apdeaths")) {
+      if (Ap_TestSent()->deaths != atoi(arg1)) {
+        printf("FAIL: %d DeathLinks sent, expected %s at frame %d\n", Ap_TestSent()->deaths, arg1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "aplogic")) {
+      // Each line: "items 49=2 04=1 ... | rooms 0104=1 0055=1 ... | win=0"
+      FILE *lf = fopen(arg1, "r");
+      if (!lf) {
+        printf("FAIL: can't read %s\n", arg1);
+        g_failures++;
+        continue;
+      }
+      char lbuf[4096];
+      int nlines = 0, bad = 0;
+      while (fgets(lbuf, sizeof(lbuf), lf)) {
+        uint8 counts[256] = { 0 };
+        char *rooms = strstr(lbuf, "| rooms"), *win = strstr(lbuf, "| win=");
+        if (strncmp(lbuf, "items", 5) || !rooms || !win)
+          continue;
+        nlines++;
+        for (char *p = lbuf + 5; p < rooms;) {
+          unsigned code, cnt;
+          int used;
+          if (sscanf(p, " %x=%u%n", &code, &cnt, &used) != 2)
+            break;
+          counts[code & 0xff] = cnt;
+          p += used;
+        }
+        for (char *p = rooms + 7; p < win;) {
+          unsigned room;
+          int v, used;
+          if (sscanf(p, " %x=%d%n", &room, &v, &used) != 2)
+            break;
+          int c = Rando_TestRoomAccess(counts, room);
+          if (c != v && bad++ < 10)
+            printf("FAIL: logic line %d room %03x: C says %d, the APWorld %d\n", nlines, room, c, v);
+          p += used;
+        }
+        if (Rando_TestWin(counts) != (atoi(win + 6) != 0) && bad++ < 10)
+          printf("FAIL: logic line %d: C says win=%d\n", nlines, Rando_TestWin(counts));
+      }
+      fclose(lf);
+      printf("aplogic: %d states, %d disagreements\n", nlines, bad);
+      if (bad || !nlines)
+        g_failures++;
     } else if (!strcmp(cmd, "expect_fullinv")) {
       // expect_fullinv <0|1>: new save files start with every item (on a
       // client: the host's setting, as it arrived with the frames)
@@ -1353,6 +1481,17 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         uint16 none[4] = {0};
         Ui_Update(none, bit);
         Ui_Update(none, 0);
+      }
+    } else if (!strcmp(cmd, "type")) {
+      Ui_HandleText(arg1);
+    } else if (!strcmp(cmd, "expect_apsettings")) {
+      static const char *const kDl[3] = { "auto", "on", "off" };
+      const char *server = g_ap_settings.server[0] ? g_ap_settings.server : "-";
+      const char *slot = g_ap_settings.slot[0] ? g_ap_settings.slot : "-";
+      if (strcmp(server, arg1) || strcmp(slot, arg2) || strcmp(kDl[g_ap_settings.death_link % 3], arg3)) {
+        printf("FAIL: Archipelago settings %s %s %s, expected %s %s %s\n", server, slot,
+               kDl[g_ap_settings.death_link % 3], arg1, arg2, arg3);
+        g_failures++;
       }
     } else if (!strcmp(cmd, "corrupt")) {
       g_ram[0xF360] ^= 0x55;  // rupees

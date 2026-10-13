@@ -3,6 +3,8 @@
 cd "$(dirname "$0")/.."
 mkdir -p tests/out tests/baseline
 status=0
+# Test vectors for archipelago_logic.txt: the APWorld's logic, to compare with the game's.
+python3 archipelago/tools/logic_vectors.py tests/out/ap_logic_vectors.txt 3000 1 > /dev/null || status=1
 # Every script in tests/coop runs on its own; the net_* pairs run below.
 for f in tests/coop/*.txt; do
   t=$(basename "$f" .txt)
@@ -26,7 +28,7 @@ unset ZELDA3_NETSIM
 # netsim command): the worlds stay in sync, nobody's own buttons are guessed,
 # and killed enemies stay dead (at most a few undone by rollbacks). Then a
 # client that loses its connection, restarts and is removed (net_reconnect).
-for pair in net_combat net_combat_slow net_reconnect; do
+for pair in net_combat net_combat_slow net_reconnect net_ap; do
   ./zelda3 --mptest tests/coop/${pair}_host.txt > tests/out/${pair}_host.log 2>&1 &
   host=$!
   sleep 1

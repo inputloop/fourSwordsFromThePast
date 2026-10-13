@@ -1,4 +1,5 @@
 #include "randomizer.h"
+#include "archipelago.h"
 #include "variables.h"
 #include "assets.h"
 #include "player.h"
@@ -13,8 +14,14 @@ enum {
   kRandoSmithSwordOffs = 0x4F5,  // sword level while the smiths have the sword
   kRandoPendingOffs = 0x4F6,     // start items still to hand out (bit 0, bit 1)
   kRandoDoneOffs = 0x4F7,        // special locations already used (bit per location)
+  kRandoVersionOffs = 0x4F9,     // how the chests were chosen (kRandoPlacementVersion)
   kMaxChests = 256,
 };
+
+// Files keep the placement they were made with. 0: the first one. 1: chest
+// table entries in rooms without a chest are left out (they got items that
+// nobody could reach).
+enum { kRandoPlacementVersion = 1 };
 
 // Item ids as used by the chest table and Link_ReceiveItem.
 enum {
@@ -40,6 +47,13 @@ static const struct {
   {0x1004, kI_GoldenSword},    // Pyramid fairy
   {0x1005, kI_RedShield},      // Waterfall of Wishing fairy
 };
+
+// Rooms with chest table entries but no chest in them (ALttP randomizers move
+// some of these chests elsewhere). Must match DEAD_ROOMS in
+// archipelago/tools/gen_locations.py.
+static bool IsDeadChestRoom(int room) {
+  return room == 0x005 || room == 0x016 || room == 0x05B || room == 0x12D || room == 0x13D;
+}
 
 static bool IsSword(uint8 item) {
   return item == kI_FighterSwordShield || item == kI_FighterSword || item == kI_MasterSword ||
@@ -72,6 +86,7 @@ static void ApplyOpenStart(uint8 *save) {
 }
 
 void Rando_OnFileLoaded() {
+  Ap_OnFileLoaded();
   if (Rando_CurrentSeed() == 0)
     return;
   // Randomized files made before the open start existed get it now.
@@ -93,11 +108,15 @@ void Rando_UncleGivesItems() {
 }
 
 void Rando_OnNewFile(uint8 *sram_slot) {
-  if (g_new_game_setting == kRando_Off) {
+  sram_slot[kRandoVersionOffs] = 0;
+  Ap_OnNewFile(sram_slot);
+  // An Archipelago file is randomized by the server; its seed here only turns
+  // on the open start and progressive items.
+  uint32 seed = Ap_GetNewGameBind() ? Ap_GetNewGameBind() | 2 : g_new_game_setting;
+  if (seed == kRando_Off) {
     memset(sram_slot + kRandoMarkerOffs, 0, 5);
     return;
   }
-  uint32 seed = g_new_game_setting;
   if (seed == kRando_RandomSeed) {
     // Random, but the same on every netplay machine: a hash of the game's
     // timers and work RAM at the moment the file is created.
@@ -111,6 +130,7 @@ void Rando_OnNewFile(uint8 *sram_slot) {
   }
   sram_slot[kRandoMarkerOffs] = kRandoMarker;
   memcpy(sram_slot + kRandoSeedOffs, &seed, 4);
+  sram_slot[kRandoVersionOffs] = kRandoPlacementVersion;
   ApplyOpenStart(sram_slot);
 }
 
@@ -313,13 +333,13 @@ typedef struct Placement {
   bool shuffled[kMaxChests];
 } Placement;
 
-static void LoadChests(Placement *pl) {
+static void LoadChests(Placement *pl, int version) {
   pl->nchests = 0;
   for (size_t i = 0; i + 2 < kDungeonRoomChests_SIZE && pl->nchests < kMaxChests - kRando_NumSpecial; i += 3) {
     int k = pl->nchests++;
     pl->room[k] = WORD(kDungeonRoomChests[i]) & 0x7fff;
     pl->vanilla[k] = pl->item[k] = kDungeonRoomChests[i + 2];
-    pl->shuffled[k] = !IsDungeonItem(pl->vanilla[k]);
+    pl->shuffled[k] = !IsDungeonItem(pl->vanilla[k]) && !(version >= 1 && IsDeadChestRoom(pl->room[k]));
   }
   pl->nreal = pl->nchests;
   for (int i = 0; i < kRando_NumSpecial; i++) {
@@ -426,28 +446,45 @@ static bool TryFill(Placement *pl, Rng *r) {
   return e.win;
 }
 
-static bool Generate(uint32 seed, Placement *pl) {
-  LoadChests(pl);
+static bool Generate(uint32 seed, int version, Placement *pl) {
+  LoadChests(pl, version);
   Rng r = { seed * 0x2545F4914F6CDD1Dull + 1 };
   for (int attempt = 0; attempt < 64; attempt++) {
     if (TryFill(pl, &r))
       return true;
   }
-  LoadChests(pl);  // give up: the original placement always works
+  LoadChests(pl, version);  // give up: the original placement always works
   return false;
+}
+
+// The placement version of the file in RAM.
+static int CurrentVersion() {
+  return g_ram[0xF000 + kRandoVersionOffs];
 }
 
 static Placement g_cache;
 static uint32 g_cache_seed;
+static int g_cache_version;
 static bool g_cache_valid;
+
+bool Rando_IsApLocation(int idx) {
+  if (idx < 0 || 3 * idx + 2 >= (int)kDungeonRoomChests_SIZE)
+    return false;
+  int room = WORD(kDungeonRoomChests[3 * idx]) & 0x7fff;
+  return !IsDungeonItem(kDungeonRoomChests[3 * idx + 2]) && !IsDeadChestRoom(room);
+}
 
 uint8 Rando_ChestItem(int idx, uint8 vanilla_item) {
   uint32 seed = Rando_CurrentSeed();
   if (seed == 0)
     return vanilla_item;
-  if (!g_cache_valid || g_cache_seed != seed) {
-    Generate(seed, &g_cache);
+  // Archipelago: the server says what was in there.
+  if (Ap_IsApFile())
+    return Rando_IsApLocation(idx) ? kApPlaceholderItem : vanilla_item;
+  if (!g_cache_valid || g_cache_seed != seed || g_cache_version != CurrentVersion()) {
+    Generate(seed, CurrentVersion(), &g_cache);
     g_cache_seed = seed;
+    g_cache_version = CurrentVersion();
     g_cache_valid = true;
   }
   return idx >= 0 && idx < g_cache.nreal ? g_cache.item[idx] : vanilla_item;
@@ -456,8 +493,12 @@ uint8 Rando_ChestItem(int idx, uint8 vanilla_item) {
 uint8 Rando_SpecialItem(int which, uint8 vanilla_item) {
   if (Rando_CurrentSeed() == 0)
     return vanilla_item;
-  Rando_ChestItem(-1, 0);  // make sure the placement is there
   g_ram[0xF000 + kRandoDoneOffs] |= 1 << which;
+  if (Ap_IsApFile()) {
+    Ap_OnSpecialPlace(which);
+    return kApPlaceholderItem;
+  }
+  Rando_ChestItem(-1, 0);  // make sure the placement is there
   return g_cache.item[g_cache.nreal + which];
 }
 
@@ -519,9 +560,25 @@ uint8 Rando_AdjustReceivedItem(uint8 item) {
   return item;
 }
 
+int Rando_TestRoomAccess(const uint8 counts[256], int room) {
+  State s;
+  memcpy(s.n, counts, 256);
+  Ev e;
+  Evaluate(&s, &e);
+  return RoomAccess(room, &e);
+}
+
+bool Rando_TestWin(const uint8 counts[256]) {
+  State s;
+  memcpy(s.n, counts, 256);
+  Ev e;
+  Evaluate(&s, &e);
+  return e.win;
+}
+
 bool Rando_Check(uint32 seed, bool verbose) {
   Placement pl;
-  bool ok = Generate(seed, &pl);
+  bool ok = Generate(seed, kRandoPlacementVersion, &pl);
   // Same items as the original game, and dungeon items where they were.
   int count[256] = { 0 };
   for (int k = 0; k < pl.nchests; k++) {
@@ -532,6 +589,10 @@ bool Rando_Check(uint32 seed, bool verbose) {
   }
   for (int i = 0; i < 256; i++)
     if (count[i])
+      ok = false;
+  // Nothing goes where there is no chest.
+  for (int k = 0; k < pl.nreal; k++)
+    if (IsDeadChestRoom(pl.room[k]) && pl.item[k] != pl.vanilla[k])
       ok = false;
   if (verbose) {
     for (int k = 0; k < pl.nchests; k++)
@@ -611,7 +672,9 @@ static const char *PlaceName(int room, char *buf, size_t size) {
 
 bool Rando_WriteSpoiler(uint32 seed, const char *path) {
   Placement pl;
-  if (seed <= kRando_RandomSeed || !Generate(seed, &pl))
+  // The game being played may be from before the latest placement version.
+  int version = seed == Rando_CurrentSeed() ? CurrentVersion() : kRandoPlacementVersion;
+  if (seed <= kRando_RandomSeed || !Generate(seed, version, &pl))
     return false;
   FILE *f = fopen(path, "w");
   if (!f)

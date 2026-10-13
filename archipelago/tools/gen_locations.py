@@ -17,7 +17,7 @@ CHEST_TABLE = 0xE96E  # LoROM address of the chest table (3 bytes a chest: room 
 NUM_CHESTS = 168
 # Chest table entries in rooms without a chest object (ALttP randomizers move
 # some of these chests elsewhere; in this game nobody can open them). Must
-# match kDeadChestRooms in src/randomizer.c.
+# match IsDeadChestRoom in src/randomizer.c.
 DEAD_ROOMS = {0x005, 0x016, 0x05B, 0x12D, 0x13D}
 DUNGEON_ITEMS = {0x24, 0x25, 0x32, 0x33}  # small key, compass, big key, map
 

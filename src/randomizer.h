@@ -38,6 +38,9 @@ uint32 Rando_CurrentSeed();
 
 // The item in chest number idx (index into the chest table).
 uint8 Rando_ChestItem(int idx, uint8 vanilla_item);
+// Does chest number idx take part in the shuffle (and so is an Archipelago
+// location)? Dungeon items stay, and some table entries have no chest.
+bool Rando_IsApLocation(int idx);
 // Applied to every item Link receives: swords, shields, gloves and mails are
 // progressive (the next level of what Link has).
 uint8 Rando_AdjustReceivedItem(uint8 item);
@@ -63,6 +66,12 @@ void Rando_GiveStartItems();
 // Writes a spoiler log for seed to path: where the important items are, in
 // the order they can be collected, then every location. False on failure.
 bool Rando_WriteSpoiler(uint32 seed, const char *path);
+
+// Tests: the logic for a set of items (count by item code): can a chest in
+// room be reached (1, 0, -1 for a room the logic doesn't know), and can the
+// game be finished.
+int Rando_TestRoomAccess(const uint8 counts[256], int room);
+bool Rando_TestWin(const uint8 counts[256]);
 
 // Tests: generates the placement for seed and checks it can be beaten.
 // Prints the spoiler when verbose. Returns false if no placement was found.

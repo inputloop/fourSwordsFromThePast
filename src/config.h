@@ -87,6 +87,12 @@ typedef struct Config {
   const char *mp_last_join;
   const char *mp_stun_server;  // asked for our public address when UPnP fails ("" = never)
 
+  // [Archipelago]
+  const char *ap_server;
+  const char *ap_slot;
+  const char *ap_password;
+  int ap_death_link;  // 0: as the room says, 1: on, 2: off
+
   const char *link_graphics;
   char *memory_buffer;
   const char *shader;

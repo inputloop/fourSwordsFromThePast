@@ -1,0 +1,32 @@
+# Archipelago DeathLink, with two players. A received DeathLink downs every
+# standing Link; the last one falls for real (game over), and that game over
+# isn't sent back to the room. A game over of our own is sent.
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+join 2
+srun 100
+expect_alive 1
+expect_alive 2
+# DeathLink off (the room's setting): nothing happens.
+aproom 12345678 0
+srun 2
+apdeathlink
+srun 20
+expect_alive 1
+expect_alive 2
+expect_module 7
+# On: both go down, the game is over.
+aproom 12345678 1
+srun 2
+apdeathlink
+srun 20
+expect_downed 1
+expect_module 18
+srun 20
+expect_apdeaths 0

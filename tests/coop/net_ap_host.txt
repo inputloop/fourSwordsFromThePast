@@ -1,0 +1,43 @@
+# Archipelago over netplay: only the host is in the room; its items reach
+# the client's game in the same frames. Run together with net_ap_client.txt.
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+host 47474
+waitplayers 2
+tick 60
+expect_players 2
+apitem 36
+apitem 28
+tick 200
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+hold 1 A
+tick 4
+hold 1 -
+tick 60
+expect_apcount 2
+expect_ram f343 3
+tick 300
+apdeathlink
+tick 300
+expect_downed 1
+expect_module 18
+expect_apdeaths 0
+status
+expect_resyncs 0

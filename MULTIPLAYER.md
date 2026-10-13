@@ -52,6 +52,12 @@ Players can drop in and drop out at any time.
   teammates.
 - **Gameplay settings for new games** (the randomizer, *Start new games with
   all items*, the Four Swords story): the host's are used.
+- **Archipelago** (a multiworld randomizer, see the README): the team is one
+  slot, and only the host connects to the Archipelago room, in *Multiplayer >
+  Archipelago*. Items from the room reach every computer in the same frame
+  (each goes to the first player who is free to hold it up), and the chests
+  any Link opens are checked for the team. The others see the room's
+  messages ("Received Bow from Alice") on their screens too.
 - **Free roaming** is always on: nobody ever has to wait for the others or
   head the same way.
 - Online, the pause and turbo hotkeys do nothing (they would stop or outrun
@@ -261,10 +267,18 @@ world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
 
 `src/session.c` describes every game frame as an `MpFrameInput`: all four
 joypads, join/leave events, friendly fire, the enabled game features, the
-settings for new games (story, randomizer, full inventory), and the
+settings for new games (story, randomizer, full inventory, the Archipelago
+room), Archipelago events (an item from the room, a DeathLink), and the
 "music playing" flag the game reads from the sound chip (the only input that
 otherwise depends on timing). The game is deterministic, so feeding the same
 frames gives the same game everywhere.
+
+Archipelago: the host proposes the next item of the room's list with every
+frame until the save says it was received (the item count in the save is
+the only thing that decides), so a rollback that replays a frame
+differently simply gets the item proposed again. Checks, the goal and
+deaths go back to the server from the save area of the final frames only
+(`Session_ConfirmedSaveArea`), so nothing a rollback undoes is ever sent.
 
 - The host runs at 60 fps and streams the frames to everyone. It never waits
   for a slow connection.

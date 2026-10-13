@@ -29,35 +29,38 @@ static void KillAghanim_Func8();
 static void KillAghanim_Func12();
 static uint8 PlaySfx_SetPan(uint8 a);
 
-const uint8 kReceiveItem_Tab1[76] = {
+// Item receipt tables, by item code. 0x4C is not in the original game: the
+// placeholder an Archipelago location hands out (looks like a crystal, gives
+// nothing; see archipelago.h).
+const uint8 kReceiveItem_Tab1[77] = {
   0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 2, 2, 2,
   2, 2, 2, 0, 2, 0, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2,
   2, 2, 2, 2, 0, 2, 2, 2, 2, 2, 0, 2, 2, 2, 2, 2,
   2, 2, 2, 2, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-  2, 2, 0, 0, 2, 0, 2, 2, 2, 0, 2, 2,
+  2, 2, 0, 0, 2, 0, 2, 2, 2, 0, 2, 2, 2,
 };
-static const int8 kReceiveItem_Tab2[76] = {
+static const int8 kReceiveItem_Tab2[77] = {
   -5, -5, -5, -5, -5, -4, -4, -5, -5, -4, -4, -4, -2, -4, -4, -4,
   -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4,
   -4, -4, -4, -5, -4, -4, -4, -4, -4, -4, -2, -4, -4, -4, -4, -4,
   -4, -4, -4, -4, -2, -2, -2, -4, -4, -4, -4, -4, -4, -4, -4, -4,
-  -4, -4, -2, -2, -4, -2, -4, -4, -4, -5, -4, -4,
+  -4, -4, -2, -2, -4, -2, -4, -4, -4, -5, -4, -4, -4,
 };
-static const uint8 kReceiveItem_Tab3[76] = {
+static const uint8 kReceiveItem_Tab3[77] = {
   4, 4, 4, 4, 4, 0, 0, 4, 4, 4, 4, 4, 5, 0, 0, 0,
   0, 0, 0, 4, 0, 4, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 4, 4, 0, 4, 0, 0, 0, 4, 0, 0,
+  0, 0, 4, 4, 0, 4, 0, 0, 0, 4, 0, 0, 0,
 };
-const uint8 kReceiveItemGfx[76] = {
+const uint8 kReceiveItemGfx[77] = {
   6, 0x18, 0x18, 0x18, 0x2d, 0x20, 0x2e,    9,    9,  0xa,    8,    5, 0x10,  0xb, 0x2c, 0x1b,
   0x1a, 0x1c, 0x14, 0x19,  0xc,    7, 0x1d, 0x2f,    7, 0x15, 0x12,  0xd,  0xd,  0xe, 0x11, 0x17,
   0x28, 0x27,    4,    4,  0xf, 0x16,    3, 0x13,    1, 0x1e, 0x10,    0,    0,    0,    0,    0,
   0, 0x30, 0x22, 0x21, 0x24, 0x24, 0x24, 0x23, 0x23, 0x23, 0x29, 0x2a, 0x2c, 0x2b,    3,    3,
-  0x34, 0x35, 0x31, 0x33,    2, 0x32, 0x36, 0x37, 0x2c,    6,  0xc, 0x38,
+  0x34, 0x35, 0x31, 0x33,    2, 0x32, 0x36, 0x37, 0x2c,    6,  0xc, 0x38, 0x28,
 };
-const uint16 kMemoryLocationToGiveItemTo[76] = {
+const uint16 kMemoryLocationToGiveItemTo[77] = {
   0xf359, 0xf359, 0xf359, 0xf359,
   0xf35a, 0xf35a, 0xf35a, 0xf345,
   0xf346, 0xf34b, 0xf342, 0xf340,
@@ -77,8 +80,9 @@ const uint16 kMemoryLocationToGiveItemTo[76] = {
   0xf360, 0xf360, 0xf372, 0xf376,
   0xf376, 0xf373, 0xf360, 0xf360,
   0xf35c, 0xf359, 0xf34c, 0xf355,
+  0xf37a,
 };
-static const int8 kValueToGiveItemTo[76] = {
+static const int8 kValueToGiveItemTo[77] = {
      1,   2,   3,  4,
      1,   2,   3,  1,
      1,   1,   1,  1,
@@ -98,6 +102,7 @@ static const int8 kValueToGiveItemTo[76] = {
   -100, -50,  -1,  1,
     10,  -1,  -1, -1,
     -1,   1,   3,  1,
+    -1,
 };
 static const uint8 kDungeon_DefaultAttr[384] = {
   1, 1, 1, 0, 2, 1, 2, 0, 1, 1, 2, 2, 2, 2, 2, 2,

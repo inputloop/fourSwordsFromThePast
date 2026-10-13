@@ -17,8 +17,9 @@ item and name in their corner, per-player rumble, a team panel in the
 spare quarter of a three-way split screen,
 private item menus and maps, rollback netcode, spectating while you're down
 (and sending teammates hearts), name tags, color-blind friendly colors,
-rumble, toggleable friendly fire, native widescreen, an optional 2D-HD look
-and an in-game options menu.
+rumble, toggleable friendly fire, native widescreen, an optional 2D-HD look,
+an in-game options menu, a built-in item randomizer and
+[Archipelago](https://archipelago.gg) multiworld support.
 
 Built on the [snesrev/zelda3](https://github.com/snesrev/zelda3) C
 reimplementation (vendored from commit `45a149d8`, MIT licensed). You need your
@@ -132,6 +133,176 @@ dungeon keys, maps and compasses are left alone.
   option work exactly as in the original game.
 - It combines with the randomizer, and the file select screen says when new
   files will get it. In netplay the host's setting is used.
+
+## Archipelago (multiworld randomizer)
+
+[Archipelago](https://archipelago.gg) links randomizers of many games into
+one *multiworld*: your chests can hold another player's items (in their own
+game, maybe a different one) and theirs can hold yours. This game has its
+own Archipelago world, **Four Swords of the Past**, and connects to an
+Archipelago server by itself (no extra client program).
+
+<details open>
+<summary><b>Step by step</b></summary>
+
+**What you need**
+
+- This game, set up as described under [Quick start](#quick-start-linux--macos)
+  or [Windows](#windows).
+- On the computer that makes the multiworld: [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases)
+  0.6.4 or newer (the Launcher), and `fsotp.apworld`, the Archipelago world
+  for this game. Take it from the release, or build it from these sources
+  with `python3 archipelago/build_apworld.py` (only needs Python 3; it writes
+  `archipelago/fsotp.apworld`). Players of other games don't need it.
+
+**1. Install the world.** Double-click `fsotp.apworld` (the Launcher opens
+and installs it), or use *Install APWorld* in the Launcher, or copy the file
+into the `custom_worlds` folder of your Archipelago install. Restart the
+Launcher.
+
+**2. Make your YAML** (your options). Copy
+[`archipelago/Four Swords of the Past.yaml`](archipelago/Four%20Swords%20of%20the%20Past.yaml)
+(or use *Generate Template Options* in the Launcher and take the file from
+`Players/Templates`) and set:
+
+- `name`: your slot name, at most 16 characters. You type it into the game
+  later, exactly (capitals count).
+- `death_link`: `true` or `false` (see DeathLink below).
+- `goal`: `ganon` (the only goal for now), and if you like the options every
+  Archipelago game has: `progression_balancing`, `accessibility`,
+  `local_items`, `start_inventory`, ...
+
+A co-op team is **one** player in the multiworld: one YAML for the whole
+team.
+
+**3. Generate the multiworld on your computer.** The archipelago.gg website
+can only generate games that are part of Archipelago itself, so this step
+happens locally (everything else can still be on the website):
+
+1. Put everyone's YAML files (all games) into the `Players` folder of your
+   Archipelago install.
+2. In the Launcher, click *Generate*. The multiworld is written to the
+   `output` folder as `AP_<number>.zip`.
+
+**4. Host it.** Either:
+
+- **On archipelago.gg:** open [archipelago.gg/uploads](https://archipelago.gg/uploads),
+  upload the `AP_<number>.zip`, and click *Create New Room*. The room page
+  shows the address to connect to, like `archipelago.gg:38281` (the port is
+  different for every room). Share the room page with the others. An idle
+  room goes to sleep: opening its page wakes it up.
+- **On your own computer:** click *Host* in the Launcher and pick the zip.
+  The others connect to your address on port 38281 (over the internet:
+  forward TCP port 38281 on your router).
+
+**5. Connect from the game.**
+
+1. Start the game and open the menu: `Esc`, or Back+Start on a controller.
+2. Go to *Multiplayer > Archipelago*.
+3. *Server*: the room's address, e.g. `archipelago.gg:38281` (type it, or
+   paste it with Ctrl+V). *Slot name*: as in your YAML. *Password*: only if
+   the room has one. (The menu shows everything in capitals; what you type
+   keeps its case.)
+4. Choose *Connect*. The first line of the screen changes to "Connected to
+   ... as ...".
+5. **Make a new save file.** While connected, new files are Archipelago files
+   of that room; the file select screen says "New files: Archipelago (this
+   room)".
+
+To play on another day: connect to the same room first, then load the same
+file. A file remembers its room: loaded while connected to another one, it
+neither gets items nor sends anything (the game says so). You can also play
+an Archipelago file without a connection; what you check is kept in the save
+and sent when you connect again, and your items arrive then.
+
+</details>
+
+**How it plays**
+
+- An Archipelago file is randomized by the multiworld, with the open start of
+  the [item randomizer](#item-randomizer): Link starts at his house with
+  nothing and can go anywhere. Swords, shields, gloves, mails and boomerangs
+  are progressive.
+- There are 106 locations: the 100 chests that don't hold dungeon keys, maps
+  or compasses, the two items of Link's uncle in the secret passage, the
+  Master Sword pedestal, the smiths, and the fairies of the Pyramid and the
+  Waterfall of Wishing. Each hands out a white crystal, the **Archipelago
+  item**: the server says what it was, and a line at the bottom of the screen
+  tells you ("Sent Hookshot to Alice", "Found your own Lamp"). Lines in
+  purple are items someone needs, blue useful ones, red traps and problems.
+- **Your items** (also the ones found in your own game) come from the server
+  and are held up like from a chest, one at a time, as soon as a Link is
+  free: standing on the ground, not in a menu, a text box or a transition. A
+  swimming Link or a bunny waits until it is on land again in its own shape.
+- Small keys, big keys, maps and compasses stay in their dungeons. The
+  Boots, Book, Flippers, Mirror, shovel, Flute, medallions, pendants and
+  crystals are where they always are. The logic is the item randomizer's,
+  without glitches.
+- **Goal:** beat Ganon. Reaching the Triforce room tells the server you are
+  done.
+
+**Co-op.** The whole team is one slot and shares one inventory. Couch players
+just join as usual. Online, **only the host connects** to the Archipelago
+room (on the others' computers the Archipelago screen says so): the items
+reach every computer in the same frame, and what any Link checks counts for
+the team. An item goes to the first player (P1, then P2, ...) who is free to
+hold it up.
+
+**DeathLink.** With `death_link: true` in your YAML (or *DeathLink: ON* in the
+game's Archipelago screen, which can also turn it *OFF* for this computer; the
+default follows the YAML), deaths travel between everyone in the multiworld
+who has DeathLink on:
+
+- A death of yours is sent when the game is over, that is when the last Link
+  standing falls. In co-op one Link going down isn't a death.
+- When a death comes in, every standing Link goes down at once (no fairy
+  helps), so the game is over. That game over isn't sent back.
+
+**Secure connections.** The game connects over plain WebSocket (`ws://`) or
+encrypted (`wss://`). Write the scheme in front of the address to choose;
+without one, both are tried (encrypted first for archipelago.gg). For
+`wss://` the game uses the system's TLS library: on Windows the one built
+into Windows; on Linux OpenSSL (`libssl.so.3` or `libssl.so.1.1`, installed
+on practically every distribution); on macOS OpenSSL from Homebrew
+(`brew install openssl@3`) if there is one, otherwise only `ws://` works.
+`ZELDA3_AP_CAFILE=<file>` adds a certificate authority (for self-signed test
+servers).
+
+**Settings file.** The menu keeps the server, the slot name and the DeathLink
+choice in the `[Archipelago]` section of `zelda3.coop.ini` (`Server`, `Slot`,
+`DeathLink = auto|on|off`); you can also put them in `zelda3.ini`. The
+password isn't saved; write `Password = ...` there yourself if you want it
+remembered.
+
+**When something goes wrong**
+
+- *Generate* says "No world found to handle game Four Swords of the Past":
+  the `.apworld` isn't installed in that Archipelago (step 1), or the
+  Launcher wasn't restarted.
+- The game says the slot name, password or game was refused: check the slot
+  name letter for letter (capitals count) and the password. "Wrong game"
+  means that slot belongs to another game.
+- "This Archipelago room needs a newer version of the game" or "...was made
+  with an older fsotp.apworld": the world that generated the multiworld and
+  the game don't match. Use the `.apworld` that comes with your build.
+- "This save file belongs to another Archipelago room": you loaded a file of
+  an earlier multiworld. Load the right file, or make a new one.
+- Can't connect to archipelago.gg: check the port on the room page (it
+  changes when a room is re-created) and open the room page to wake the room.
+- Items don't arrive: a Link has to be free (see above): close menus and text
+  boxes and get out of the water. They are never lost; the save counts what
+  it has received.
+
+**For developers.** `archipelago/fsotp` is the world (its logic in `rules.py`
+is a port of `src/randomizer.c`, checked against it by
+`tests/coop/archipelago_logic.txt`), `archipelago/build_apworld.py` packs it,
+and `archipelago/tools/gen_locations.py` regenerates the location table from
+the ROM and Archipelago's A Link to the Past location names. In the game,
+`src/archipelago.c` is the game side (save data, item delivery, checks,
+DeathLink) and `src/ap_client.c` the connection. IDs: item = `0x46530000` +
+the game's item code; location = `0x46530000` + chest number, special places
+`0x46530100` + 0..5. `tests/coop/archipelago*.txt` test the game side with a
+pretend room, and `archipelago/tests/` the connection against a mock server.
 
 ## 2D-HD look (beta)
 

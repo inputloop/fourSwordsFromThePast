@@ -286,6 +286,8 @@ static int GetIniSection(const char *s) {
     return 6;
   if (StringEqualsNoCase(s, "[Controls]"))
     return 7;
+  if (StringEqualsNoCase(s, "[Archipelago]"))
+    return 8;
   return -1;
 }
 
@@ -480,6 +482,26 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     }
   } else if (section == 7) {
     return Bindings_ParseConfig(key, value);
+  } else if (section == 8) {
+    if (StringEqualsNoCase(key, "Server")) {
+      g_config.ap_server = value;
+      return true;
+    } else if (StringEqualsNoCase(key, "Slot")) {
+      g_config.ap_slot = value;
+      return true;
+    } else if (StringEqualsNoCase(key, "Password")) {
+      g_config.ap_password = value;
+      return true;
+    } else if (StringEqualsNoCase(key, "DeathLink")) {
+      bool on;
+      if (StringEqualsNoCase(value, "auto"))
+        g_config.ap_death_link = 0;
+      else if (ParseBool(value, &on))
+        g_config.ap_death_link = on ? 1 : 2;
+      else
+        return false;
+      return true;
+    }
   } else if (section == 6) {
     if (StringEqualsNoCase(key, "FriendlyFire")) {
       return ParseBool(value, &g_config.mp_friendly_fire);

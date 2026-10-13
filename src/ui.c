@@ -18,6 +18,7 @@
 #include "assets.h"
 #include "messaging.h"
 #include "select_file.h"
+#include "archipelago.h"
 
 // ---------------------------------------------------------------------------
 // 5x7 pixel font
@@ -205,6 +206,8 @@ enum {
   kScreen_Controls,
   kScreen_Bindings,
   kScreen_Players,
+  kScreen_Archipelago,
+  kScreen_ApEdit,
 };
 
 enum {
@@ -263,6 +266,10 @@ static struct {
   bool own_files_read;
   int kick_confirm;       // seat + 1 waiting for a second press
   int kick_owner;         // ... and the computer in that seat then
+  // Archipelago: the field being typed (0 server, 1 slot, 2 password), and
+  // the latest lines from the room.
+  int ap_field;
+  struct { char text[96]; int kind; uint32 time; } ap_lines[4];
 } g_ui;
 
 static bool Item(const char *label, const char *value) {
@@ -302,7 +309,7 @@ static void Goto(int screen) {
   g_ui.copy_confirm = false;
   g_ui.own_files_read = false;
   g_ui.kick_confirm = 0;
-  if (screen == kScreen_JoinAddress || screen == kScreen_Seed)
+  if (screen == kScreen_JoinAddress || screen == kScreen_Seed || screen == kScreen_ApEdit)
     SDL_StartTextInput();
   else
     SDL_StopTextInput();
@@ -481,6 +488,10 @@ static void ScreenMultiplayer() {
   Item("Players", buf);
   if (Act() == kAct_Select)
     Goto(kScreen_Players);
+  Item("Archipelago", st->mode == kSessionClient ? "host's room" : Ap_HostBind() ? "connected" :
+       Ap_IsConnecting() ? "connecting" : "off");
+  if (Act() == kAct_Select)
+    Goto(kScreen_Archipelago);
   if (st->mode == kSessionOffline) {
     Item("Host a game", g_ui.use_upnp ? "with UPnP" : "LAN only");
     int a = Act();
@@ -707,6 +718,100 @@ static void ScreenJoinAddress() {
   snprintf(g_ui.footer, sizeof(g_ui.footer), "Like FW00-00DS-EB52, 192.168.1.20 or host.net:47474");
 }
 
+// Archipelago (archipelago.gg): the room to connect to.
+static char *ApField(int i) {
+  return i == 0 ? g_ap_settings.server : i == 1 ? g_ap_settings.slot : g_ap_settings.password;
+}
+
+static size_t ApFieldSize(int i) {
+  return i == 0 ? sizeof(g_ap_settings.server) : i == 1 ? sizeof(g_ap_settings.slot) : sizeof(g_ap_settings.password);
+}
+
+static void ScreenArchipelago() {
+  snprintf(g_ui.title, sizeof(g_ui.title), "ARCHIPELAGO");
+  char buf[96];
+  if (Session_GetStatus()->mode == kSessionClient) {
+    Label("In an online game, the host");
+    Label("connects to the Archipelago room.");
+    Item("Back", NULL);
+    if (Act() == kAct_Select)
+      Goto(kScreen_Multiplayer);
+    return;
+  }
+  Ap_StatusLine(buf, sizeof(buf));
+  Label(buf);
+  bool busy = Ap_IsConnecting();
+  static const char *const kFields[3] = { "Server", "Slot name", "Password" };
+  for (int i = 0; i < 3; i++) {
+    const char *v = ApField(i);
+    Item(kFields[i], i == 2 ? (v[0] ? "****" : "none") : v[0] ? v : "-");
+    if (Act() == kAct_Select && !busy) {
+      g_ui.ap_field = i;
+      Goto(kScreen_ApEdit);
+      return;
+    }
+  }
+  static const char *const kDeathLink[3] = { "as the room says", "ON", "OFF" };
+  Item("DeathLink", kDeathLink[g_ap_settings.death_link % 3]);
+  int a = Act();
+  if (a != kAct_None) {
+    g_ap_settings.death_link = (g_ap_settings.death_link + (a == kAct_Left ? 2 : 1)) % 3;
+    g_ui.dirty_settings = true;
+  }
+  if (!busy) {
+    Item("Connect", NULL);
+    if (Act() == kAct_Select) {
+      if (!g_ap_settings.server[0] || !g_ap_settings.slot[0]) {
+        Toast("Enter the server and your slot name first");
+      } else {
+        Ap_Connect();
+        Ui_SaveSettings();
+      }
+    }
+  } else {
+    Item("Disconnect", NULL);
+    if (Act() == kAct_Select)
+      Ap_Disconnect();
+  }
+  // What the game in RAM is, and what new files will be.
+  if (Ap_IsApFile())
+    Label(Ap_FileBind() == Ap_HostBind() ? "This game: a file of this room" :
+          Ap_HostBind() ? "This game: a file of ANOTHER room" : "This game: an Archipelago file");
+  else if (Ap_HostBind())
+    Label("New files: files of this room");
+  Item("Back", NULL);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Multiplayer);
+  snprintf(g_ui.footer, sizeof(g_ui.footer), "Connect, then make a new file");
+}
+
+static void ScreenApEdit() {
+  static const char *const kTitles[3] = { "ARCHIPELAGO SERVER", "SLOT NAME", "ROOM PASSWORD" };
+  snprintf(g_ui.title, sizeof(g_ui.title), "%s", kTitles[g_ui.ap_field % 3]);
+  Label(g_ui.ap_field == 0 ? "Type or paste (Ctrl+V) the address" :
+        g_ui.ap_field == 1 ? "Your name in the room (as in your YAML)" : "Leave empty if the room has none");
+  char buf[72];
+  const char *v = ApField(g_ui.ap_field);
+  if (strlen(v) > 34)
+    v += strlen(v) - 34;
+  char shown[40];
+  size_t len = strlen(v) < sizeof(shown) - 1 ? strlen(v) : sizeof(shown) - 1;
+  memcpy(shown, v, len);
+  shown[len] = 0;
+  if (g_ui.ap_field == 2)
+    memset(shown, '*', strlen(shown));
+  snprintf(buf, sizeof(buf), "%s%s", shown, (SDL_GetTicks() / 400) & 1 ? "_" : " ");
+  Label(buf);
+  Item("Done", NULL);
+  if (Act() == kAct_Select) {
+    g_ui.dirty_settings = true;
+    Goto(kScreen_Archipelago);
+    return;
+  }
+  if (g_ui.ap_field == 0)
+    snprintf(g_ui.footer, sizeof(g_ui.footer), "Like archipelago.gg:38281 or localhost");
+}
+
 static void ScreenLan() {
   snprintf(g_ui.title, sizeof(g_ui.title), "LAN GAMES");
   uint32 now = SDL_GetTicks();
@@ -852,7 +957,9 @@ static void ScreenGameplay() {
   snprintf(g_ui.title, sizeof(g_ui.title), "GAMEPLAY OPTIONS");
   bool client = Session_GetStatus()->mode == kSessionClient;
   // The randomizer: Off -> random seed -> the seed of the game being played -> Off
-  uint32 rando = Session_GetRandomizer(), current = Rando_CurrentSeed();
+  // (An Archipelago file's seed is of no use: the multiworld placed its items.)
+  bool ap_file = Ap_IsApFile();
+  uint32 rando = Session_GetRandomizer(), current = ap_file ? 0 : Rando_CurrentSeed();
   char buf[48];
   if (rando == kRando_Off)
     snprintf(buf, sizeof(buf), "off");
@@ -885,7 +992,9 @@ static void ScreenGameplay() {
       return;
     }
   }
-  if (current)
+  if (ap_file)
+    snprintf(buf, sizeof(buf), "Archipelago");
+  else if (current)
     snprintf(buf, sizeof(buf), "randomized, seed %08X", current);
   else
     snprintf(buf, sizeof(buf), "not randomized");
@@ -1056,6 +1165,8 @@ static void BuildScreen() {
   case kScreen_Controls: ScreenControls(); break;
   case kScreen_Bindings: ScreenBindings(); break;
   case kScreen_Players: ScreenPlayers(); break;
+  case kScreen_Archipelago: ScreenArchipelago(); break;
+  case kScreen_ApEdit: ScreenApEdit(); break;
   }
 }
 
@@ -1244,7 +1355,9 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
     if (g_ui.screen == kScreen_Main)
       Goto(kScreen_None);
     else
-      Goto(g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Lan ? kScreen_Multiplayer :
+      Goto(g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Lan ||
+           g_ui.screen == kScreen_Archipelago ? kScreen_Multiplayer :
+           g_ui.screen == kScreen_ApEdit ? kScreen_Archipelago :
            g_ui.screen == kScreen_Hd2d ? kScreen_Video : kScreen_Main);
     g_ui.action = kAct_None;
   }
@@ -1277,9 +1390,29 @@ bool Ui_HandleKey(int key, bool pressed) {
       Goto(kScreen_Gameplay);
     else if (g_ui.screen == kScreen_JoinAddress)
       Goto(kScreen_Multiplayer);
+    else if (g_ui.screen == kScreen_ApEdit)
+      Goto(kScreen_Archipelago);
     else
       Toggle();
     return true;
+  }
+  if (g_ui.screen == kScreen_ApEdit) {
+    char *v = ApField(g_ui.ap_field);
+    size_t n = strlen(v);
+    if (key == SDLK_BACKSPACE) {
+      if (n)
+        v[n - 1] = 0;
+    } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+      g_ui.dirty_settings = true;
+      Goto(kScreen_Archipelago);
+    } else if (key == SDLK_v && (SDL_GetModState() & KMOD_CTRL)) {
+      char *clip = SDL_GetClipboardText();
+      if (clip) {
+        Ui_HandleText(clip);
+        SDL_free(clip);
+      }
+    }
+    return true;  // swallow other keys while typing
   }
   if (g_ui.screen == kScreen_JoinAddress) {
     size_t n = strlen(g_ui.join_addr);
@@ -1329,6 +1462,19 @@ void Ui_HandleText(const char *text) {
       if (v >= 0)
         g_ui.seed_edit = g_ui.seed_edit << 4 | v;
     }
+    return;
+  }
+  if (g_ui.screen == kScreen_ApEdit) {
+    // Printable ASCII (the overlay font has nothing else); a pasted
+    // address loses its spaces and line breaks.
+    char *v = ApField(g_ui.ap_field);
+    size_t n = strlen(v), size = ApFieldSize(g_ui.ap_field);
+    for (; *text && n < size - 1; text++) {
+      char c = *text;
+      if (c > 32 && c < 127 || (c == ' ' && g_ui.ap_field != 0))
+        v[n++] = c;
+    }
+    v[n] = 0;
     return;
   }
   if (g_ui.screen != kScreen_JoinAddress)
@@ -1748,9 +1894,11 @@ static void DrawSeedNotice() {
   if (main_module_index != 1 && main_module_index != 4)  // file select, naming a file
     return;
   uint32 rando = Rando_GetNewGameSetting();  // what new files actually get
-  char buf[2][48];
+  char buf[3][48];
   int n = 0;
-  if (rando == kRando_RandomSeed)
+  if (Ap_GetNewGameBind())
+    snprintf(buf[n++], sizeof(buf[0]), "New files: Archipelago (this room)");
+  else if (rando == kRando_RandomSeed)
     snprintf(buf[n++], sizeof(buf[0]), "New files: randomized, new seed");
   else if (rando != kRando_Off)
     snprintf(buf[n++], sizeof(buf[0]), "New files: randomized, seed %08X", rando);
@@ -1921,6 +2069,32 @@ static void DrawNotifications() {
   }
 }
 
+// Archipelago: items sent and received, hints and the room's messages, a
+// few at a time above the other notices.
+static void DrawApNotices() {
+  uint32 now = SDL_GetTicks();
+  char text[96];
+  int kind;
+  while (Ap_PollNotice(text, sizeof(text), &kind)) {
+    memmove(&g_ui.ap_lines[1], &g_ui.ap_lines[0], sizeof(g_ui.ap_lines[0]) * 3);
+    snprintf(g_ui.ap_lines[0].text, sizeof(g_ui.ap_lines[0].text), "%s", text);
+    g_ui.ap_lines[0].kind = kind;
+    g_ui.ap_lines[0].time = now;
+  }
+  static const uint32 kColors[] = { 0xffffff, 0xd8a8ff, 0x90c0ff, 0xff9090, 0xff6060 };
+  int y = g_cv.height - 54;
+  for (int i = 0; i < 4; i++) {
+    if (!g_ui.ap_lines[i].text[0] || now - g_ui.ap_lines[i].time > 7000)
+      continue;
+    const char *t = g_ui.ap_lines[i].text;
+    int w = IntMin(TextWidth(t) + 8, g_cv.width - 8);
+    int x = (g_cv.width - w) / 2;
+    ShadeRect(x, y, w, 12);
+    DrawTextFit(x + 4, y + 3, t, kColors[g_ui.ap_lines[i].kind % 5], w - 8);
+    y -= 13;
+  }
+}
+
 static uint32 ScaleRgb(uint32 c, int num, int den) {
   return ((c >> 16 & 0xff) * num / den) << 16 | ((c >> 8 & 0xff) * num / den) << 8 | (c & 0xff) * num / den;
 }
@@ -2062,6 +2236,7 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
     DrawTeamPanel(g_views[0].w, g_views[0].h, g_views[0].w, g_views[0].h);
   DrawCornerHud();
   DrawNotifications();
+  DrawApNotices();
   DrawMenu();
 }
 
@@ -2126,6 +2301,11 @@ void Ui_SaveSettings() {
   if (g_config.mp_player_name)
     fprintf(f, "PlayerName = %s\n", g_config.mp_player_name);
   fprintf(f, "LastJoinAddress = %s\n", g_ui.join_addr);
+  // (Not the password: it would sit in a plain text file.)
+  fprintf(f, "[Archipelago]\n");
+  fprintf(f, "Server = %s\n", g_ap_settings.server);
+  fprintf(f, "Slot = %s\n", g_ap_settings.slot);
+  fprintf(f, "DeathLink = %s\n", g_ap_settings.death_link == 1 ? "on" : g_ap_settings.death_link == 2 ? "off" : "auto");
   fclose(f);
   g_ui.dirty_settings = false;
 }

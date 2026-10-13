@@ -10,6 +10,7 @@
 
 #include "types.h"
 #include "mp.h"
+#include <stddef.h>
 
 enum {
   kSessionPort = 47474,
@@ -34,12 +35,16 @@ typedef struct MpFrameInput {
   uint16 inputs[kMpMaxPlayers];
   uint8 flags;  // bit0: friendly fire, bit1: music playing (apui00),
                 // bit2: Four Swords story, bit3: randomizer setting follows,
-                // bit4: new games start with a full inventory, bit7: hash valid
+                // bit4: new games start with a full inventory,
+                // bit5: Archipelago room follows, bit7: hash valid
   uint8 nevents;
   uint32 features;
   uint32 hash;  // hash of the state after this frame, if flags bit7
   uint32 rando;  // randomizer setting for new games, if flags bit3 (see randomizer.h)
-  uint8 events[kSessionMaxEvents][4];  // type, slot, owner client id, owner local index
+  uint32 ap;     // new games are Archipelago files of this room, if flags bit5 (archipelago.h)
+  // Join/leave: type, slot, owner client id, owner local index.
+  // Archipelago (kSessEv_ApItem, kSessEv_ApDeath): see archipelago.h.
+  uint8 events[kSessionMaxEvents][4];
 } MpFrameInput;
 
 typedef struct SessionLanGame {
@@ -148,6 +153,12 @@ bool Session_IsNetplay();
 // Whether local save states / turbo may be used.
 bool Session_AllowsLocalStateChanges();
 bool Session_LastFrameWasReplay();
+// The save file area (0x500 bytes from 7EF000) after the newest frame that
+// can't change any more (offline: the latest frame).
+const uint8 *Session_ConfirmedSaveArea();
+// Archipelago messages: the host passes its lines on to the clients.
+void Session_ShareNotice(const char *text, int kind);
+bool Session_PollSharedNotice(char *buf, size_t size, int *kind);
 // Tests: called inside the simulation before frame f
 // is run (so it is replayed by rollbacks, and runs at the same frame everywhere).
 extern void (*g_session_frame_hook)(uint32 f);

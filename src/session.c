@@ -10,12 +10,13 @@
 #include "features.h"
 #include "instance.h"
 #include "randomizer.h"
+#include "archipelago.h"
 #include "story.h"
 #include "variables.h"
 #include "select_file.h"
 
 enum {
-  kProtoVersion = 20,
+  kProtoVersion = 21,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -47,6 +48,7 @@ enum {
   kPkt_Discover,
   kPkt_Info,
   kPkt_Roster,
+  kPkt_ApNotice,
 };
 
 typedef struct Writer {
@@ -164,6 +166,11 @@ static struct {
   // host: players removed from this game, so they can't knock their way back
   struct { uint32 token, ip; char name[24]; } kicked[8];
   int nkicked;
+  // Archipelago lines: the host's latest (sent with the roster) and, on a
+  // client, the ones received but not shown yet.
+  struct { uint32 seq; uint8 kind; char text[96]; } notice[8];
+  uint32 notice_seq;    // host: lines so far; client: the newest one received
+  int notice_rd, notice_wr;
 } g_s;
 
 // --- snapshot compression (byte run length encoding) ---
@@ -239,6 +246,10 @@ static void UpdateLocalSlots() {
 static void ApplyEvents(const MpFrameInput *fi) {
   for (int i = 0; i < fi->nevents && i < kSessionMaxEvents; i++) {
     const uint8 *e = fi->events[i];
+    if (e[0] == kSessEv_ApItem || e[0] == kSessEv_ApDeath) {
+      Ap_ApplyEvent(e);
+      continue;
+    }
     int slot = e[1];
     if (slot >= kMpMaxPlayers)
       continue;
@@ -270,8 +281,10 @@ static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   Story_SetEnabled(fi->flags & 4);
   Rando_SetNewGameSetting(fi->flags & 8 ? fi->rando : kRando_Off);
   FileSelect_SetFullInventory(fi->flags & 0x10);
+  Ap_SetNewGameBind(fi->flags & 0x20 ? fi->ap : 0);
   g_wanted_zelda_features = fi->features;
   g_apui00_override = deterministic_audio ? (fi->flags >> 1) & 1 : -1;
+  Ap_BeforeFrame();
   g_last_was_replay = Inst_RunFrame(fi->inputs);
   g_apui00_override = -1;
   g_s.frame++;
@@ -340,6 +353,9 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
   fi->flags = (g_s.ff ? 1 : 0) | (ZeldaIsMusicPlaying() ? 2 : 0) | (g_s.story ? 4 : 0) | (g_s.rando ? 8 : 0) |
               (g_s.full_inv ? 0x10 : 0);
   fi->rando = g_s.rando;
+  fi->ap = Ap_HostBind();
+  if (fi->ap)
+    fi->flags |= 0x20;
   uint8 reserved[kMpMaxPlayers] = { 0 };
   QueueJoinLeave(fi, 0, &g_s.pending_join_mask, &g_s.pending_leave_mask, reserved);
   for (int c = 0; c < kSessionMaxClients; c++) {
@@ -347,6 +363,10 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
     if (hc->used)
       QueueJoinLeave(fi, hc->id, &hc->join_mask, &hc->leave_mask, reserved);
   }
+  // An item from Archipelago (one per frame), or a DeathLink.
+  uint8 ev[4];
+  if (fi->nevents < kSessionMaxEvents && Ap_NextEvent(ev))
+    AddEvent(fi, ev[0], ev[1], ev[2], ev[3]);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     uint8 owner = g_s.slot_owner[p], local = g_s.slot_local[p];
     if (owner == 0xff || local >= kSessionMaxLocal)
@@ -380,7 +400,8 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
 
 // How many bytes WriteFrame writes for fi.
 static int FrameSize(const MpFrameInput *fi) {
-  return kMpMaxPlayers * 2 + 1 + 1 + 4 + (fi->flags & 0x80 ? 4 : 0) + (fi->flags & 8 ? 4 : 0) + fi->nevents * 4;
+  return kMpMaxPlayers * 2 + 1 + 1 + 4 + (fi->flags & 0x80 ? 4 : 0) + (fi->flags & 8 ? 4 : 0) +
+         (fi->flags & 0x20 ? 4 : 0) + fi->nevents * 4;
 }
 
 static void WriteFrame(Writer *w, const MpFrameInput *fi) {
@@ -393,6 +414,8 @@ static void WriteFrame(Writer *w, const MpFrameInput *fi) {
     Wr32(w, fi->hash);
   if (fi->flags & 8)
     Wr32(w, fi->rando);
+  if (fi->flags & 0x20)
+    Wr32(w, fi->ap);
   for (int i = 0; i < fi->nevents; i++)
     WData(w, fi->events[i], 4);
 }
@@ -408,6 +431,8 @@ static void ReadFrame(Reader *r, MpFrameInput *fi) {
     fi->hash = Rd32(r);
   if (fi->flags & 8)
     fi->rando = Rd32(r);
+  if (fi->flags & 0x20)
+    fi->ap = Rd32(r);
   if (fi->nevents > kSessionMaxEvents) {
     r->err = true;
     return;
@@ -941,6 +966,21 @@ static void HostSend() {
         WData(&w, seats[p].name, 16);
       }
       Net_Send(g_s.sock, &hc->addr, w.buf, w.pos);
+      // The latest Archipelago lines, again and again (the client keeps the new ones).
+      if (g_s.notice_seq) {
+        WBegin(&w, kPkt_ApNotice);
+        int n = g_s.notice_seq < 4 ? g_s.notice_seq : 4;
+        Wr8(&w, n);
+        for (int i = n; i > 0; i--) {
+          const char *t = g_s.notice[(g_s.notice_seq - i) % 8].text;
+          int len = (int)strlen(t);
+          Wr32(&w, g_s.notice[(g_s.notice_seq - i) % 8].seq);
+          Wr8(&w, g_s.notice[(g_s.notice_seq - i) % 8].kind);
+          Wr8(&w, len);
+          WData(&w, t, len);
+        }
+        Net_Send(g_s.sock, &hc->addr, w.buf, w.pos);
+      }
     }
     if (hc->loading) {
       WBegin(&w, kPkt_SnapInfo);
@@ -1055,7 +1095,8 @@ static void DumpConfirmed(uint32 f) {
 
 static bool SameFrameInput(const MpFrameInput *a, const MpFrameInput *b) {
   return !memcmp(a->inputs, b->inputs, sizeof(a->inputs)) && (a->flags & 0x7f) == (b->flags & 0x7f) &&
-         a->nevents == 0 && b->nevents == 0 && a->features == b->features && a->rando == b->rando;
+         a->nevents == 0 && b->nevents == 0 && a->features == b->features && a->rando == b->rando &&
+         a->ap == b->ap;
 }
 
 // Our guess at frame f: the other players keep holding what they held in the
@@ -1443,6 +1484,25 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
       memcpy(g_s.roster, seats, sizeof(seats));
       g_s.roster_known = true;
     }
+  } else if (type == kPkt_ApNotice) {
+    int n = Rd8(r);
+    for (int i = 0; i < n && !r->err; i++) {
+      uint32 seq = Rd32(r);
+      uint8 kind = Rd8(r), len = Rd8(r);
+      char text[96] = { 0 };
+      if (len >= sizeof(text) || r->end - r->p < len)
+        break;
+      RData(r, text, len);
+      if (r->err || (int32)(seq - g_s.notice_seq) <= 0)
+        continue;
+      g_s.notice_seq = seq;
+      int k = g_s.notice_wr++ % 8;
+      g_s.notice[k].seq = seq;
+      g_s.notice[k].kind = kind;
+      memcpy(g_s.notice[k].text, text, sizeof(text));
+      if (g_s.notice_wr - g_s.notice_rd > 8)
+        g_s.notice_rd = g_s.notice_wr - 8;
+    }
   } else if (type == kPkt_Reject) {
     char why[64] = { 0 };
     RData(r, why, (int)(r->end - r->p) < 63 ? (int)(r->end - r->p) : 63);
@@ -1627,6 +1687,8 @@ void Session_Disconnect() {
   g_s.token = 0;
   g_s.roster_known = false;
   g_s.in_host_world = false;
+  g_s.notice_seq = 0;
+  g_s.notice_rd = g_s.notice_wr = 0;
   g_s.st.host_addr[0] = 0;
   g_s.st.public_addr[0] = 0;
   // The world we played in as a client is the host's, saves included: it
@@ -1746,6 +1808,28 @@ int Session_Tick(const uint16 *local_inputs, uint32 wanted_features) {
 
 bool Session_LastFrameWasReplay() {
   return g_last_was_replay;
+}
+
+const uint8 *Session_ConfirmedSaveArea() {
+  if (g_s.conf != g_s.frame && g_s.rb[g_s.conf % kRbSize])
+    return Inst_SnapshotSaveArea(g_s.rb[g_s.conf % kRbSize]);
+  return Inst_SaveArea();
+}
+
+void Session_ShareNotice(const char *text, int kind) {
+  int k = g_s.notice_seq % 8;
+  g_s.notice[k].seq = ++g_s.notice_seq;
+  g_s.notice[k].kind = kind;
+  snprintf(g_s.notice[k].text, sizeof(g_s.notice[k].text), "%s", text);
+}
+
+bool Session_PollSharedNotice(char *buf, size_t size, int *kind) {
+  if (g_s.notice_rd == g_s.notice_wr)
+    return false;
+  int k = g_s.notice_rd++ % 8;
+  snprintf(buf, size, "%s", g_s.notice[k].text);
+  *kind = g_s.notice[k].kind;
+  return true;
 }
 
 // --- players, kicking, names ---

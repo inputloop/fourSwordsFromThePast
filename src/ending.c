@@ -1,6 +1,7 @@
 #include "zelda_rtl.h"
 #include "snes/snes_regs.h"
 #include "variables.h"
+#include "archipelago.h"
 #include "load_gfx.h"
 #include "dungeon.h"
 #include "sprite.h"
@@ -343,6 +344,7 @@ void Module18_GanonEmerges() {  // 829edc
 void Module19_TriforceRoom() {  // 829fec
   switch (subsubmodule_index) {
   case 0:  //
+    Ap_OnGoal();  // (Archipelago: Ganon is beaten)
     Link_ResetProperties_A();
     link_last_direction_moved_towards = 0;
     music_control = 0xf1;

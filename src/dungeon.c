@@ -4,6 +4,7 @@
 #include "dungeon.h"
 #include "mp.h"
 #include "randomizer.h"
+#include "archipelago.h"
 #include "nmi.h"
 #include "hud.h"
 #include "load_gfx.h"
@@ -5764,10 +5765,12 @@ uint8 OpenChestForItem(uint8 tile, int *chest_position) {  // 81eb66
             return 0xff;
           }
           dung_savegame_state_bits |= kChestOpenMasks[chest_idx_org];
+          Ap_OnChestOpened(i / 3);
           OpenBigChest(loc, chest_position);
           return data;
         } else {
           dung_savegame_state_bits |= kChestOpenMasks[chest_idx_org];
+          Ap_OnChestOpened(i / 3);
           ptr = SrcPtr(0x14A4);
           pos = loc >> 1;
 

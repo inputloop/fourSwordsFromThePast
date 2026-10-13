@@ -1,6 +1,6 @@
 # How the Four Swords From the Past Mod Works
 
-*Last updated October 12, 2026.* A plain-language guide to how the mod works.
+*Last updated October 13, 2026.* A plain-language guide to how the mod works.
 
 ## What this mod is
 
@@ -292,6 +292,24 @@ The check is careful on purpose. For example, it treats every chest in a dungeon
 
 To be safe, a few chests in unknown or hard-to-reach spots (like the castle basement, which normally opens during the escape) only ever get filler items.
 
+**Chests that aren't there.** The game's chest list has a few entries for rooms that have no chest at all (other randomizers move those chests elsewhere). Older builds could put items there, even important ones, where nobody could ever get them. New files leave those entries out. Each file stores which version of the placement it was made with (save address 7EF4F9), so files made with an older build keep exactly the items they had.
+
+## Archipelago: one game in a multiworld
+
+[Archipelago](https://archipelago.gg) connects randomizers of many different games. All the players' items are shuffled together, so your chest may hold an item for someone playing another game, and theirs may hold your Hookshot. A server keeps track of who found what and sends every item to its owner. The README has the steps for playing; this is how it works inside.
+
+**Our own world.** Archipelago needs a *world* for each game: a small Python package that knows the game's locations, its items and what each location needs. Ours is in `archipelago/fsotp` and is called *Four Swords of the Past*. Its 106 locations are the places the built-in randomizer shuffles: the 100 chests that don't hold dungeon items, plus the uncle's two items, the pedestal, the smiths and the two fairies. Its logic (`rules.py`) is the randomizer's logic written again in Python, and a test feeds thousands of item combinations to both and checks they always agree. The chest names come from Archipelago's own *A Link to the Past* world, so players recognise them.
+
+**An Archipelago save file.** While the game is connected to a room, a new save file becomes a file of that room: it is marked (7EF407) and remembers the room (7EF408). It is randomized like any randomized file (open start, progressive items), but the chests don't know what they hold. Opening one gives the *Archipelago item*, a white crystal that gives nothing, and sets that location's bit in the save (7EF418, one bit per location). The game sends those bits to the server, the server answers who gets what, and messages at the bottom of the screen tell the story.
+
+**Receiving items.** The server keeps a numbered list of everything sent to our slot, our own finds included. The save counts how many of them were received (7EF410). Each frame, the host looks at the next one on the list and puts it into the frame it is about to play. Inside the game, it goes to the first Link who is free to hold it up (on the ground, not in a menu, text box or transition, and no other Link of that world holding up an item), and the count goes up by one. If nobody is free, nothing happens and the host simply offers it again with the next frame. This also makes the items safe with online play: every computer plays the same frames, so every computer gives the same item to the same Link at the same moment, and a rollback that changes who was free just leads to the item being offered again.
+
+**Sending.** What the game sends to the server (checked locations, beating Ganon, a game over for DeathLink) is read from the save as it is after the newest frame that can no longer change. The host never sends anything that a rollback could still undo. Without a connection the save keeps all of it, and connecting sends everything again (the server ignores what it already knew).
+
+**DeathLink.** An optional link between players: when one dies, everyone with DeathLink dies. A death of ours is a game over (the whole team down). A death that comes in is put into a frame like an item; every standing Link goes down at once, the last one falling for real, and that game over isn't sent back.
+
+**The connection.** `src/ap_client.c` talks to the server on its own thread, so the game never waits for the internet and the server's "are you still there?" pings are always answered. Archipelago speaks JSON over a WebSocket; encrypted connections (wss) use the computer's own TLS library, loaded when needed, so the game has no new requirements. Only the host (or the single player) connects; in online co-op the others get everything through the host's frames.
+
 ## Starting with every item (for testing)
 
 *Pause menu > Gameplay > Start new games with all items* (`FullInventory` in `zelda3.ini`) is meant for testing: a save file created while it is on starts with every item at its best. That means the golden sword, the mirror shield, the red mail, the bow with silver arrows, the Titan's Mitt, all rods, canes and medallions, 20 full hearts, four bottles, and the most bombs, arrows and rupees. The shovel and the mushroom share their slots with the flute and the magic powder, so the file gets the flute and the powder. Pendants, crystals and dungeon items are not given. The code is `GiveFullInventory` in `src/select_file.c`.
@@ -357,7 +375,7 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 
 ## How it is tested and built
 
-The mod has 119 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 127 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -416,12 +434,17 @@ The mod has 119 automatic tests that play the game with no window, by following 
 
 **Can I play the same randomized seed as a friend?** Yes. The Gameplay menu shows your game's seed and can make new files with it.
 
+**Can I play in a multiworld with other games?** Yes, through Archipelago. The README explains how to set it up. A co-op team plays one slot together, and online only the host connects to the Archipelago server.
+
+**Why does an Archipelago chest only give a white crystal?** The game doesn't know what the multiworld put there; only the server does. The crystal says "this location is done", and the server then sends the item to whoever it belongs to, maybe you a moment later.
+
 **Why can't I pause during an online game?** Pausing would freeze every other player too, so the pause keys do nothing online.
 
 ## Glossary
 
 | Term | Meaning |
 | --- | --- |
+| Archipelago | A program and website that link the randomizers of many games into one multiworld |
 | Assumed fill | The randomizer's way of placing important items so that each one is reachable |
 | Client | A player who joins someone else's online game |
 | Decompiled | Rebuilt from the original machine code into readable code |
@@ -435,6 +458,7 @@ The mod has 119 automatic tests that play the game with no window, by following 
 | Leader | The player the game treats as Link in a shared world: rooms, doors and menus follow it (the camera follows the group's middle) |
 | Link context | The roughly 315 bytes of memory that describe one Link |
 | Merge | Two worlds becoming one when their players meet |
+| Multiworld | Several players' games randomized together, so one game's chests can hold another player's items |
 | Prediction | The client's guess at what the other players are pressing |
 | Progressive item | An item that always gives the next level of what you have |
 | RAM | The game's working memory; here a 128 KB block called `g_ram` |
@@ -442,6 +466,7 @@ The mod has 119 automatic tests that play the game with no window, by following 
 | Rollback | Going back to the last frame known to be right and replaying with the real buttons |
 | Rubber banding | Your own Link snapping back because a guess about your buttons was used; this mod avoids it |
 | Seed | The number that decides one randomized item placement |
+| Slot | One player's place in an Archipelago multiworld; a co-op team is one slot |
 | Snapshot | A compressed copy of the whole game, sent to players who join online |
 | Split | A player getting their own world when they leave their group |
 | UPnP | A standard way for a program to ask a router to open a port |

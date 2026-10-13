@@ -52,13 +52,18 @@ generated on a computer with the world installed:
    Guide button, or Back+Start).
 2. Go to *Multiplayer > Archipelago*.
 3. Enter the server address (for example `archipelago.gg:38281`, the address
-   the room page shows), your slot name and the password if the room has
-   one, and connect.
+   the room page shows), your slot name exactly as in your YAML (capitals
+   count, even though the menu shows everything in capitals) and the
+   password if the room has one, and connect. The first line of the screen
+   says when you are connected.
+4. Now make a **new** save file: while the game is connected, new files are
+   files of that room (the file select screen says "New files: Archipelago").
 
 Once connected, the items found in the multiworld for you start arriving,
 and every location you check is sent to the server. The save file you play
 belongs to that slot: to continue another day, connect to the same room
-again and load the same file.
+again first and then load the same file. Without a connection the file can
+still be played; what you check is sent when you connect again.
 
 If the game says the room is for another version, the world that generated
 the multiworld and the game don't match: update both to the same release.
@@ -67,4 +72,6 @@ the multiworld and the game don't match: update both to the same release.
 
 Play co-op as usual (see the game's MULTIPLAYER.md): couch players and
 online players together are one team, with one shared inventory, playing the
-one slot of the team's YAML.
+one slot of the team's YAML. Online, only the host connects to the
+Archipelago room; the players who join the host's game get the items at the
+same moment and their checks count like the host's.

@@ -1,0 +1,14 @@
+# Archipelago over netplay, the client (see net_ap_host.txt).
+connect 127.0.0.1:47474
+waitplay
+expect_players 2
+tick 900
+expect_apcount 2
+expect_ram f360 14
+expect_ram f343 3
+tick 400
+# The DeathLink: the host's Link went down, ours was the last (game over).
+expect_downed 1
+expect_module 18
+status
+expect_resyncs 0

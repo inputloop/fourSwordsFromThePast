@@ -1305,13 +1305,15 @@ static void Mp_LetGo(int me) {
   link_position_mode = 0;
 }
 
-bool Mp_OnFatalDamage() {
+// The resident Link takes a fatal hit: it goes down (true) unless it is the
+// last one standing in the whole game (false: the caller ends the game).
+static bool Mp_GoDown(bool fairy_helps) {
   int me = g_mp.resident;
   bool other_alive = g_mp_other_instance_alive && g_mp_other_instance_alive();
   for (int p = 0; p < kMpMaxPlayers; p++) {
     if ((p != me && Mp_IsAlive(p)) || other_alive) {
       // A fairy in a bottle (shared by the team) saves the Link right away.
-      for (int i = 0; i < 4; i++) {
+      for (int i = 0; i < 4 && fairy_helps; i++) {
         if (link_bottle_info[i] == 6) {
           link_bottle_info[i] = 2;
           link_health_current = link_health_capacity < 0x38 ? link_health_capacity : 0x38;
@@ -1344,6 +1346,26 @@ bool Mp_OnFatalDamage() {
     }
   }
   return false;
+}
+
+bool Mp_OnFatalDamage() {
+  return Mp_GoDown(true);
+}
+
+bool Mp_DeathLinkFall() {
+  if (Mp_GoDown(false))
+    return false;
+  // The last Link standing: game over, as when it takes a fatal hit.
+  mapbak_TM = TM_copy;
+  mapbak_TS = TS_copy;
+  saved_module_for_menu = main_module_index;
+  main_module_index = 18;
+  submodule_index = 1;
+  countdown_for_blink = 0;
+  link_hearts_filler = 0;
+  link_health_current = 0;
+  Mp_SetLeader(g_mp.resident);
+  return true;
 }
 
 void Mp_Revive(int p, uint8 health) {

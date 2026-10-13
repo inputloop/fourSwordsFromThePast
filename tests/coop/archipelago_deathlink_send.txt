@@ -1,0 +1,21 @@
+# Archipelago DeathLink: our own game over is sent to the room (once), but
+# only when the room has DeathLink on.
+aproom 12345678 1
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+srun 2
+expect_apdeaths 0
+# A fatal hit.
+hp 1 4
+pram 1 373 10
+srun 10
+expect_module 18
+srun 10
+expect_apdeaths 1
+srun 100
+expect_apdeaths 1

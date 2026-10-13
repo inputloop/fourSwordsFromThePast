@@ -1,0 +1,19 @@
+# The Archipelago screen (Multiplayer > Archipelago): the server, the slot
+# name and DeathLink are typed and set there.
+load 2
+run 30
+menu
+key down
+key enter
+key down
+key enter
+key enter
+type localhost:38281
+key enter
+key down
+key enter
+type Link
+key enter
+key down 3
+key right
+expect_apsettings localhost:38281 Link on

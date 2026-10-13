@@ -1,0 +1,136 @@
+# Archipelago: while connected to a room, a new file is an Archipelago file
+# (randomized: open start, progressive items). Its chests hand out a
+# placeholder and are reported as checked; the room's items arrive one at a
+# time, when Link is free to hold them up.
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_ram f407 41
+expect_ram f408 78
+expect_ram f40b 12
+expect_ram f4f0 52
+expect_apcount 0
+# The chest in Link's house (chest 137 = 0x89): only the placeholder.
+pos 1 2500 8650
+hold 1 U
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 200
+expect_ram f429 02
+expect_ram f34a 0
+srun 2
+expect_apsent 1
+expect_apchecked 89 1
+# Items from the room: 20 rupees, 3 bombs (with their text box, as from a
+# chest), then one this game doesn't know (skipped), then the Lamp.
+apitem 36
+apitem 28
+apitem ff
+srun 200
+expect_module 14
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+expect_apcount 3
+expect_ram f360 14
+expect_ram f343 3
+apitem 12
+srun 100
+expect_module 14
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+expect_module 7
+expect_ram f34a 1
+expect_apcount 4
+# Swords are progressive: two of them make the Master Sword level.
+apitem 49
+srun 150
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+expect_ram f359 1
+# Not connected: nothing arrives, but opened chests are remembered...
+expect_apcount 5
+aproom off
+apitem 28
+srun 100
+expect_apcount 5
+enter 12
+run 300
+pos 1 1246 606
+hold 1 U
+run 4
+hold 1 A
+run 2
+hold 1 -
+run 200
+expect_ram f418 80
+# ... and sent when connected again (with the whole list).
+aproom 12345678
+srun 2
+expect_apsent 2
+expect_apchecked 7 1
+expect_apchecked 89 1
+# A file of another room gets nothing from this one and sends nothing.
+aproom 87654321
+apitem 28
+srun 100
+expect_apcount 5
+expect_apsent 0
+# Ganon beaten: the goal is sent.
+aproom 12345678
+srun 2
+expect_apgoal 0
+poke 10 19
+poke 11 0
+poke b0 0
+run 2
+srun 2
+expect_apgoal 1

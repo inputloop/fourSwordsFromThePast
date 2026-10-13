@@ -1,5 +1,6 @@
 #include "instance.h"
 #include "mp.h"
+#include "archipelago.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "audio.h"
@@ -768,6 +769,13 @@ static bool IsCounter(int addr) {
          (addr >= kKeySlots && addr < kKeySlots + 16);
 }
 
+// Bits that are only ever set, like the room and overworld flags: merged
+// with OR when worlds change them in the same frame.
+static bool IsFlagByte(int addr) {
+  return addr < kFlagsEnd ||
+         (addr >= 0xF000 + kApSave_Checked && addr < 0xF000 + kApSave_Checked + kApSave_CheckedSize);
+}
+
 static bool IsPerWorld(int addr) {
   return addr == 0xF34F || addr == 0xF36D || addr == 0xF36E ||  // personal
          addr == 0xF372 ||
@@ -818,7 +826,7 @@ static void Inst_Sync() {
       if (n > 1 && IsCounter(addr)) {
         if (!born)
           delta[j] += r[j] - base[j];
-      } else if (n > 1 && addr < kFlagsEnd) {
+      } else if (n > 1 && IsFlagByte(addr)) {
         merged[j] |= r[j] & ~TransientBits(addr);
       } else if (!born) {
         merged[j] = r[j];
@@ -1101,6 +1109,14 @@ void Inst_SnapshotSave(InstSnapshot *s) {
   memcpy(s->shared, g_shared, sizeof(g_shared));
   memcpy(s->sram, g_zenv.sram, sizeof(s->sram));
   memcpy(s->last_seen, g_last_seen, sizeof(g_last_seen));
+}
+
+const uint8 *Inst_SnapshotSaveArea(const InstSnapshot *s) {
+  return s->shared;
+}
+
+const uint8 *Inst_SaveArea() {
+  return g_shared;
 }
 
 void Inst_SnapshotLoad(const InstSnapshot *s) {

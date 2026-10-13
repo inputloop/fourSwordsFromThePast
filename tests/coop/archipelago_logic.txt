@@ -1,0 +1,4 @@
+# The APWorld (archipelago/fsotp/rules.py) decides what the game can reach
+# exactly as the randomizer does (src/randomizer.c). The vectors are written
+# by archipelago/tools/logic_vectors.py (see tests/run_coop_tests.sh).
+aplogic tests/out/ap_logic_vectors.txt

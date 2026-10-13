@@ -1,4 +1,5 @@
 #include "randomizer.h"
+#include "archipelago.h"
 #include "mp.h"
 #include "player.h"
 #include "zelda_rtl.h"
@@ -177,6 +178,7 @@ void Link_ControlHandler() {  // 87807f
           countdown_for_blink = 0;
           link_hearts_filler = 0;
           new_dmg = 0;
+          Ap_OnGameOver();
         }
         link_health_current = new_dmg;
       }
@@ -3798,7 +3800,8 @@ void Link_PerformRead() {  // 87b4f2
 }
 
 void Link_PerformOpenChest() {  // 87b574
-  static const uint8 kReceiveItemAlternates[] = { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 68, 255, 255, 255, 255, 255, 53, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 70, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 };
+  // (By item code; the last one is the Archipelago placeholder.)
+  static const uint8 kReceiveItemAlternates[] = { 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 68, 255, 255, 255, 255, 255, 53, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 70, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255 };
   if (link_direction_facing || item_receipt_method || link_auxiliary_state)
     return;
   bitfield_for_a_button = 0;

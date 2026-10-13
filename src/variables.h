@@ -1482,9 +1482,9 @@ extern const uint8 kLayoutQuadrantFlags[];
 extern const uint8 kVariousPacks[16];
 extern const uint8 kMaxBombsForLevel[];
 extern const uint8 kMaxArrowsForLevel[];
-extern const uint8 kReceiveItem_Tab1[76];
+extern const uint8 kReceiveItem_Tab1[77];
 extern const uint8 kHealthAfterDeath[21];
-extern const uint8 kReceiveItemGfx[76];
+extern const uint8 kReceiveItemGfx[77];
 extern const uint16 kOverworld_OffsetBaseY[64];
 extern const uint16 kOverworld_OffsetBaseX[64];
 
