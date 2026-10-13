@@ -1,0 +1,69 @@
+# 3D view: where it draws the original 2D picture instead (and why). Plain
+# play and text boxes are 3D. The item menu, the world map, the title and
+# the spotlight that closes when Link goes into a building are 2D, as are
+# rooms the 3D view can't show: Ganon's room (its background is a dark
+# layer), a room whose floor moves, and the 4x world map (drawn bigger).
+view3d 1
+load 2
+drawrun 30
+expect_3d 1
+# A text box: the world behind it is 3D, the box exactly the 2D one.
+message 20
+drawrun 10
+expect_module 14
+expect_3d 1
+load 2
+drawrun 30
+# The item menu.
+hold 1 S
+run 2
+hold 1 -
+drawrun 60
+expect_module 14
+expect_3d 0 module
+hold 1 S
+run 2
+hold 1 -
+drawrun 60
+expect_3d 1
+# The world map is drawn at 4x (the scale test comes before the mode test).
+hold 1 X
+run 2
+hold 1 -
+drawrun 90
+expect_module 14
+expect_3d 0 scale
+# The spotlight closing as Link walks into his house: a window.
+load 2
+drawrun 30
+hold 1 U
+drawuntil f 1 100
+expect_3d 0 window
+drawuntil 7 0 300
+hold 1 -
+drawrun 30
+expect_3d 1
+# Ganon's room: its BG2 is a dark layer.
+load 2
+drawrun 30
+enter 0
+drawrun 200
+expect_3d 0 room
+# A room whose floor moves (made so: no entrance leads into one).
+load 2
+drawrun 30
+enter 12
+drawrun 200
+expect_3d 1
+poke 46c 03
+expect_3d 0 room
+poke 46c 00
+expect_3d 1
+# The title (the intro module).
+poke 10 00
+poke 11 00
+drawrun 100
+expect_3d 0 module
+# With the 3D view off.
+view3d 0
+expect_3d 0 off

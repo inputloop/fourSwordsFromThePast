@@ -1,0 +1,125 @@
+# 3D view: the camera. The right stick turns it (150 degrees a second at
+# full tilt, eased in and out); with "Camera returns" off it stays where it
+# was turned, with it on it goes back to the classic view 2 s after the
+# stick is let go, exactly. Invert flips up and down; the tilt and the zoom
+# stop at their limits; the camera keys, a right drag and the reset key work
+# for player 1; the menu's owner can't turn it; and entering first person
+# looks where the Link faces.
+load 2
+run 30
+view3d 1
+expect_3d 1
+view3dset returns 0
+stick3d 1 100 0
+cam3dstep 500
+expect_cam3d 1 75 45 10
+stick3d 1 0 0
+cam3dstep 3000
+expect_cam3d 1 75 45 3
+# Camera returns: 2 s after the last input it eases back, then snaps.
+view3dset returns 1
+cam3dstep 3000
+expect_cam3d 1 0 45 0
+# Stick up looks up (the camera comes down toward the horizon); inverted,
+# it looks down.
+view3dset returns 0
+view3dset invert 1
+stick3d 1 0 -100
+cam3dstep 200
+stick3d 1 0 0
+cam3dstep 200
+expect_cam3d 1 0 63 3
+view3dset invert 0
+stick3d 1 0 -100
+cam3dstep 3000
+stick3d 1 0 0
+cam3dstep 200
+expect_cam3d 1 0 30 0.1
+stick3d 1 0 100
+cam3dstep 3000
+stick3d 1 0 0
+cam3dstep 200
+expect_cam3d 1 0 75 0.1
+# Half speed turns half as far.
+cam3d 1 tp 0 45
+view3dset stick 50
+stick3d 1 100 0
+cam3dstep 500
+stick3d 1 0 0
+cam3dstep 500
+expect_cam3d 1 37.5 45 3
+view3dset stick 100
+# Zoom stays within 0.75-2, set or by the wheel.
+cam3d 1 tp 0 45 300
+expect_zoom3d 1 200
+cam3d 1 tp 0 45 10
+expect_zoom3d 1 75
+cam3d 1 tp 0 45
+wheel 50
+cam3dstep 16
+expect_zoom3d 1 200
+wheel -50
+cam3dstep 16
+expect_zoom3d 1 75
+cam3d 1 tp 0 45
+expect_zoom3d 1 100
+# The camera keys (player 1's): turn right for 0.5 s at 120 degrees a second.
+key3d right 1
+cam3dstep 500
+key3d right 0
+expect_cam3d 1 60 45 3
+key3d up 1
+cam3dstep 500
+key3d up 0
+expect_cam3d 1 60 30 3
+# The mouse turns the camera only while dragged with the right button
+# (third person). (The first movement of a drag is the cursor's jump.)
+motion 100 0
+cam3dstep 16
+expect_cam3d 1 60 30 3
+click right down
+cam3dstep 16
+motion 100 0
+cam3dstep 16
+expect_cam3d 1 90 30 3
+click right up
+motion 100 0
+cam3dstep 16
+expect_cam3d 1 90 30 3
+# The reset key: back to the classic view.
+key3d reset
+expect_cam3d 1 0 45 0
+expect_fp 1 0
+# Entering first person looks where the Link faces, a little down.
+hold 1 R
+run 10
+hold 1 -
+run 2
+viewbutton 1
+expect_fp 1 1
+expect_cam3d 1 90 8
+viewbutton 1
+expect_fp 1 0
+hold 1 U
+run 10
+hold 1 -
+run 2
+viewbutton 1
+expect_cam3d 1 0 8
+# In first person the stick looks around (180 degrees a second).
+stick3d 1 100 0
+cam3dstep 500
+stick3d 1 0 0
+cam3dstep 500
+expect_cam3d 1 90 8 4
+viewbutton 1 600
+expect_fp 1 0
+expect_cam3d 1 0 45 0
+# The menu's owner is busy with the menu: its stick doesn't turn the camera.
+menu
+stick3d 1 100 0
+cam3dstep 500
+stick3d 1 0 0
+cam3dstep 500
+expect_cam3d 1 0 45 0
+menu

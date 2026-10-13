@@ -1,0 +1,126 @@
+# 3D view: the controls. The View button (L3 on a controller, Insert on
+# player 1's keys) switches first person; it never reaches the game. The
+# right stick turns the camera, and R3 still pings while it does. An old
+# 13-button controls line that put L3 on another button keeps it there. A
+# left click switches first person too, but not with Shift or Ctrl held, not
+# a double click, not right after the window got the focus. In first person
+# the mouse is captured for mouse look, but not while the menu is open.
+load 2
+run 30
+view3d 1
+expect_3d 1
+expect_keys 1 13 Insert
+# L3 on player 1's controller is the View button, outside the joypad word.
+pad 0 L3 1
+expect_view 1 1
+expect_input 1 -
+tick 3
+pad 0 L3 0
+tick 1
+expect_view 1 0
+expect_fp 1 1
+# R3 still pings with the right stick turned.
+rstick 0 80 0
+pad 0 R3 1
+expect_input 1 P
+pad 0 R3 0
+rstick 0 0 0
+expect_input 1 -
+# Held 0.6 s: back to the classic view.
+pad 0 L3 1
+tick 40
+expect_fp 1 0
+pad 0 L3 0
+tick 1
+expect_fp 1 0
+expect_cam3d 1 0 45
+# Let go between 0.4 and 0.5 s: nothing.
+pad 0 L3 1
+tick 27
+pad 0 L3 0
+tick 1
+expect_fp 1 0
+# Insert is player 1's View key.
+bindline P1Keys Up,Down,Left,Right,X,Z,S,A,C,V,Return,RShift,Q,Insert
+expect_keys 1 13 Insert
+expect_fp 1 0
+viewbutton 1
+expect_fp 1 1
+viewbutton 1 600
+expect_fp 1 0
+# A 13-button line from before, with L3 on Select: L3 stays Select.
+bindline P1Pad DpadUp,DpadDown,DpadLeft,DpadRight,B,A,Y,X,LB,RB,Start,L3,R3
+pad 0 L3 1
+expect_view 1 0
+expect_input 1 s
+tick 3
+pad 0 L3 0
+tick 1
+expect_fp 1 0
+# A 13-button line without L3 (read over the defaults, here put back by a
+# 14-button line): View keeps L3.
+bindline P1Pad DpadUp,DpadDown,DpadLeft,DpadRight,B,A,Y,X,LB,RB,Start,Back,R3,L3
+bindline P1Pad DpadUp,DpadDown,DpadLeft,DpadRight,B,A,Y,X,LB,RB,Start,Back,R3
+pad 0 L3 1
+expect_view 1 1
+expect_input 1 -
+tick 3
+pad 0 L3 0
+tick 1
+expect_fp 1 1
+viewbutton 1 600
+expect_fp 1 0
+# Left clicks.
+click left
+expect_fp 1 1
+click left shift
+expect_fp 1 1
+click left ctrl
+expect_fp 1 1
+click left double
+expect_fp 1 1
+click left touch
+expect_fp 1 1
+click left
+expect_fp 1 0
+# A click that brings the window to the front only does that.
+focus 0
+focus 1
+click left
+expect_fp 1 0
+tick 20
+click left
+expect_fp 1 1
+# Mouse look: captured in first person, not without the focus or in the menu.
+expect_mouse_captured 1
+focus 0
+expect_mouse_captured 0
+focus 1
+expect_mouse_captured 1
+tick 20
+menu
+expect_mouse_captured 0
+click left
+expect_fp 1 1
+menu
+expect_mouse_captured 1
+# Mouse look off: captured only while the right button turns the camera.
+view3dset mouselook 0
+expect_mouse_captured 0
+click right down
+expect_mouse_captured 1
+click right up
+expect_mouse_captured 0
+view3dset mouselook 1
+# The middle button goes back to the classic view.
+click middle
+expect_fp 1 0
+expect_cam3d 1 0 45
+expect_mouse_captured 0
+# With the 3D view off, clicks and View do nothing.
+view3d 0
+click left
+expect_fp 1 0
+viewbutton 1
+expect_fp 1 0
+expect_mouse_captured 0

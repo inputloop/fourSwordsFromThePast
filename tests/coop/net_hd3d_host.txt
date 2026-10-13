@@ -1,0 +1,23 @@
+# Netplay with the 3D view (run together with net_hd3d_client.txt): the
+# client looks east in first person and holds up, so its Link (P2) walks
+# east. Only the turned buttons are sent: both computers see P2 walk east
+# and the worlds stay in sync (no resync). The host draws in 2D, as the game
+# does every frame. (The first picture after loading a save clears the HUD
+# split's irq_flag, which is in the game state: both computers must draw.)
+load 2
+run 30
+clearsprites
+pos 1 3860 1660
+drawrun 10
+drawtick 1
+host 47486
+waitplayers 2
+tick 60
+expect_players 2
+status
+# (The client walks for about 4 s.)
+tick 360
+status
+expect_players 2
+expect_pram 2 2f 06
+expect_resyncs 0

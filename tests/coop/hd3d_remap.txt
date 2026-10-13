@@ -1,0 +1,107 @@
+# 3D view: a turned camera turns the d-pad, so up walks where the camera
+# looks. This is the one thing the 3D view changes in the game. It is done
+# on this computer before the buttons are sent, and only while the player
+# really sees a 3D picture of plain play: not in a text box, not with the
+# 3D view off, not in third person with "Controls turn with camera" off.
+load 2
+run 30
+view3d 1
+expect_3d 1
+# First person: the d-pad turns with the view.
+cam3d 1 fp 90
+expect_remap 1 U R
+expect_remap 1 R D
+expect_remap 1 D L
+expect_remap 1 L U
+expect_remap 1 UR DR
+cam3d 1 fp 45
+expect_remap 1 U UR
+cam3d 1 fp -90
+expect_remap 1 U L
+cam3d 1 fp 180
+expect_remap 1 U D
+cam3d 1 fp 270
+expect_remap 1 U L
+# Only the d-pad turns: other buttons are kept, opposite directions cancel.
+cam3d 1 fp 90
+expect_remap 1 UB RB
+expect_remap 1 UD UD
+expect_remap 1 YAX YAX
+expect_remap 1 - -
+# Held up while the view turns: the direction changes 30 degrees past the
+# middle between two directions, and comes back 30 degrees past it too.
+cam3d 1 fp 20
+expect_remap 1 U U
+cam3d 1 fp 28
+expect_remap 1 U U
+cam3d 1 fp 31
+expect_remap 1 U UR
+cam3d 1 fp 16
+expect_remap 1 U UR
+cam3d 1 fp 14
+expect_remap 1 U U
+expect_remap 1 - -
+# Third person: the turn when a direction was first pressed is kept until
+# every direction is let go (the camera springing back never steers).
+cam3d 1 tp 90
+expect_remap 1 U R
+cam3d 1 tp 0
+expect_remap 1 U R
+expect_remap 1 - -
+expect_remap 1 U U
+# With "Controls turn with camera" off, third person leaves the d-pad alone
+# (first person still turns it).
+view3dset turn 0
+cam3d 1 tp 90
+expect_remap 1 U U
+expect_remap 1 - -
+cam3d 1 fp 90
+expect_remap 1 U R
+expect_remap 1 - -
+view3dset turn 1
+# The classic view (under half a degree) leaves every button alone.
+cam3d 1 tp 0
+expect_remap 1 UL UL
+cam3d 1 fp 0.4
+expect_remap 1 UL UL
+expect_remap 1 - -
+# A text box: no turning (the menus get the buttons as pressed).
+cam3d 1 fp 90
+message 20
+run 10
+expect_module 14
+expect_3d 1
+expect_remap 1 U U
+expect_remap 1 - -
+# The 3D view off: no turning.
+load 2
+run 30
+cam3d 1 fp 90
+expect_3d 1
+expect_remap 1 U R
+expect_remap 1 - -
+view3d 0
+expect_3d 0 off
+expect_remap 1 U U
+# End to end: in first person looking east, holding up walks east (on the
+# open grass in front of the house).
+view3d 1
+clearsprites
+pos 1 3860 1690
+cam3d 1 fp 90
+drawrun 2
+markpos 1
+hold 1 U
+drawrun 30
+hold 1 -
+expect_moved 1 east
+expect_pram 1 2f 06
+# remap3d 0: run passes the keys as held (down walks south).
+remap3d 0
+drawrun 2
+markpos 1
+hold 1 D
+drawrun 20
+hold 1 -
+expect_moved 1 south
+remap3d 1

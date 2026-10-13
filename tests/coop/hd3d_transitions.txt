@@ -1,0 +1,66 @@
+# 3D view: screen changes. Walking through a door to the next room scrolls
+# in 3D (the old room frozen, the new one rising once it is loaded); so does
+# the scroll to another part of a big room. Stairs to another floor and the
+# scroll to the next overworld area are drawn in 2D (with a short fade), and
+# the view is 3D again once they are done.
+view3d 1
+# Through the Sanctuary's north door into the next room.
+load 2
+drawrun 30
+enter 12
+drawrun 150
+clearsprites
+hold 1 U
+drawuntil 7 2 500
+expect_3d 1
+drawrun 20
+expect_module 7
+expect_3d 1
+drawuntil 7 0 200
+hold 1 -
+drawrun 30
+expect_3d 1
+# The scroll to another quarter of a big room (castle, 4a).
+load 2
+drawrun 30
+enter 4a
+drawrun 150
+clearsprites
+hold 1 U
+drawuntil 7 1 300
+expect_3d 1
+drawrun 5
+expect_3d 1
+drawuntil 7 0 200
+hold 1 -
+drawrun 30
+expect_3d 1
+# Straight stairs to the floor above (castle hall 61 to 51): 2D on the
+# stairs, 3D again above.
+load 2
+drawrun 30
+enter 61
+drawrun 150
+clearsprites
+hold 1 U
+drawuntil 7 12 400
+expect_3d 0 module
+drawuntil 7 0 300
+hold 1 -
+drawrun 30
+expect_3d 1
+# The scroll to the next overworld area: 2D while it scrolls, then 3D.
+load 2
+drawrun 30
+clearsprites
+pos 1 3110 2450
+drawrun 400
+pos 1 3082 2450
+hold 1 L
+drawuntil 9 6 100
+expect_3d 0 module
+drawuntil 9 7 200
+hold 1 -
+drawrun 120
+expect_module 9
+expect_3d 1

@@ -1,0 +1,31 @@
+# See net_hd3d_host.txt. The client draws every tick (as the game does), so
+# its pane is known to be 3D and its d-pad turns with its camera.
+connect 127.0.0.1:47486
+waitplay
+expect_players 2
+view 2
+view3d 1
+drawtick 1
+tick 30
+status
+# A few steps down, out of the house's doorway (the camera not turned yet).
+hold 1 D
+tick 30
+hold 1 -
+tick 10
+cam3d 1 fp 90
+tick 10
+expect_3d 1
+markpos 2
+hold 1 U
+tick 120
+hold 1 -
+tick 30
+status
+expect_moved 2 east
+expect_pram 2 2f 06
+expect_resyncs 0
+# (Stay until the host has checked too.)
+drawtick 0
+tick 600
+disconnect

@@ -1,0 +1,31 @@
+# 3D view: dark rooms stay as dark as in the original. In a dark cave with
+# the 2D-HD look off, the game's own darkness applies: the far part of the
+# room is black and only the Lamp lights the floor around Link; without the
+# Lamp it is black there too. With the 2D-HD lighting on, its rule applies
+# instead: the room is dim, not black. (Areas in picture pixels: the cave's
+# far right part, and the floor just above Link, who stands at the door.)
+view3d 1
+hd2d 0
+load 2
+drawrun 30
+poke f34a 1
+enter f0
+drawrun 200
+expect_module 7
+expect_3d 1
+expect_luma 176 64 256 144 0 12
+expect_luma 104 150 152 196 40 255
+# Without the Lamp.
+load 2
+drawrun 30
+poke f34a 0
+enter f0
+drawrun 200
+expect_3d 1
+expect_luma 176 64 256 144 0 12
+expect_luma 104 150 152 196 0 12
+# The 2D-HD lighting: dim but not black.
+hd2d 1 70
+expect_3d 1
+expect_luma 176 64 256 144 10 60
+hd2d 0

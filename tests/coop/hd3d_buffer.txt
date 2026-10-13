@@ -1,0 +1,68 @@
+# 3D view: drawing never writes outside the picture it was given. Each
+# frame is drawn into the middle of a buffer three times as wide (and two
+# rows higher and lower) filled with a pattern, in the two phases split
+# screen uses, then the overlay on top; no pattern pixel may change. At
+# every widescreen width, with a video chip that still has an old width, with
+# the camera turned and in first person, on the world map (4x), through a
+# door, in the Sanctuary and in a dark cave.
+view3d 1
+load 2
+drawrun 120
+drawguard 60
+widescreen 71
+drawrun 30
+drawguard 60
+widescreen 96
+drawrun 30
+drawguard 60
+# The video chip still set for 40 columns a side (drawing must use the setting).
+stalewidth 1 40
+drawguard 30
+widescreen 0
+stalewidth 1 96
+drawguard 30
+widescreen 71
+# Turned, then in first person.
+cam3d 1 tp -60 30
+drawguard 60
+cam3d 1 tp 120 75 200
+drawguard 30
+cam3d 1 fp
+drawguard 60
+cam3d 1 fp 200 -60
+drawguard 30
+cam3d 1 tp 0 45
+# The world map (X), drawn at 4x, and back.
+hold 1 X
+run 2
+hold 1 -
+drawguard 90
+expect_module 14
+hold 1 X
+run 2
+hold 1 -
+drawguard 90
+# Through Link's house door, and the Sanctuary's north door.
+load 2
+drawrun 30
+hold 1 U
+drawguard 150
+hold 1 -
+enter 12
+drawrun 150
+hold 1 U
+drawguard 400
+hold 1 -
+cam3d 1 fp
+drawguard 30
+cam3d 1 tp 0 45
+# A dark cave, wide, turned.
+load 2
+drawrun 30
+enter f0
+drawrun 150
+widescreen 96
+drawguard 60
+cam3d 1 tp 70 40
+drawguard 30
+widescreen 0

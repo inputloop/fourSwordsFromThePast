@@ -1,0 +1,65 @@
+# 3D view: split screen. Two players on one computer in one world share a
+# pane (and its camera) in third person. A player who switches to first
+# person gets a pane of their own; switching back merges the panes again.
+# Every stick in a shared pane turns that pane's camera. A downed player
+# watching a teammate sees the teammate in third person (no pane of its own)
+# and keeps its first-person choice for later.
+load 2
+run 30
+localjoin 2
+tick 30
+expect_players 2
+expect_panes 1
+view3d 1
+expect_panes 1
+expect_3d 1
+viewbutton 2
+expect_fp 2 1
+expect_panes 2
+# Split screen draws in two phases (the worlds read, then the 3D panes).
+splitshot tests/out/hd3d_panes_split.ppm 1 2
+viewbutton 2
+expect_fp 2 0
+expect_panes 1
+# The View button held: back to the classic view.
+cam3d 1 tp 40 50
+viewbutton 1 600
+expect_cam3d 1 0 45 0
+# A shared pane: player 2's stick turns player 1's camera (the pane's).
+stick3d 2 100 0
+cam3dstep 300
+stick3d 2 0 0
+cam3dstep 300
+expect_cam3d 1 45 45 10
+expect_cam3d 2 0 45 0
+viewbutton 1 600
+# Both in first person: two panes; one of them back in third person: still
+# two; both back: one.
+viewbutton 1
+viewbutton 2
+expect_fp 1 1
+expect_fp 2 1
+expect_panes 2
+viewbutton 1
+expect_panes 2
+viewbutton 2
+expect_fp 1 0
+expect_fp 2 0
+expect_panes 1
+# Player 2 down, watching player 1: no first-person pane, the choice kept.
+viewbutton 2
+expect_panes 2
+down 2
+tick 2
+hold 2 r
+tick 2
+hold 2 -
+tick 2
+expect_fp 2 1
+expect_panes 1
+revive 2
+tick 2
+expect_panes 2
+# With the 3D view off: one pane per world, as always.
+view3d 0
+expect_panes 1

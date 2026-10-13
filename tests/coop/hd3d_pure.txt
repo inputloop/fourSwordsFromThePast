@@ -1,0 +1,52 @@
+# 3D view: drawing only reads the game. After one draw to settle, five more
+# 3D draws of the same frame change nothing the game keeps: no RAM, no
+# co-op state (the state hash), no video chip state or DMA channel, in any
+# world. Checked outdoors, in the Sanctuary, in a dark cave, in a room with
+# two floors and in a room with a far background layer.
+view3d 1
+load 2
+drawrun 30
+expect_3d 1
+expect_drawpure 5
+# The Sanctuary.
+enter 12
+drawrun 200
+expect_module 7
+expect_drawpure 5
+# A dark cave (lit by the Lamp).
+load 2
+drawrun 30
+enter f0
+drawrun 200
+expect_module 7
+expect_drawpure 5
+# Two floors (the lower one on BG1).
+load 2
+drawrun 30
+enter 77
+drawrun 200
+expect_module 7
+expect_drawpure 5
+# A far background (parallax).
+load 2
+drawrun 30
+enter e8
+drawrun 200
+expect_module 7
+expect_drawpure 5
+# With the 2D-HD look on top.
+hd2d 1
+expect_drawpure 3
+hd2d 0
+# Two players in two worlds (P1 walks into the house alone): drawing one
+# world changes neither.
+load 2
+drawrun 30
+join 2
+hold 1 U
+drawrun 300
+hold 1 -
+expect_instances 2
+expect_drawpure 3
+view 2
+expect_drawpure 3

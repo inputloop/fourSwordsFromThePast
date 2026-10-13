@@ -12,7 +12,7 @@
 //   fullinv <0|1>       new save files start with every item
 //   join <p> / leave <p>
 //   hold <p> <keys>     keys held by player p (B Y s=select S=start U D L R A X l r, P=ping, "-" for none)
-//   run <frames>
+//   run <frames>        (with the 3D view on, held keys turn with local p's camera first: see remap3d)
 //   pos <p> <x> <y>     put player p there (no collision check)
 //   hp <p> <health>     set a player's health (1/8 hearts)
 //   pram <p> <hexaddr> <hexval>  change a byte of player p's own Link state
@@ -68,7 +68,8 @@
 //   aproom <hexbind|off> [deathlink 0|1]  new files are Archipelago files of that room
 //   apitem <hexcode>    the room sends an item (item id = base + code; ff: one the game doesn't know)
 //   apdeathlink         someone else in the room died
-//   srun <n>            run n frames the way the game does (session frames: Archipelago events, then Ap_Tick)
+//   srun <n>            run n frames the way the game does (session frames: Archipelago events, then Ap_Tick;
+//                       first the 3D view's cameras, View buttons and camera-turned d-pad, as tick)
 //   expect_apcount <n>  the file has received n of the room's items
 //   expect_apsent <n>   the game has sent n checked locations
 //   expect_apchecked <hexloc> <0|1>  location base+hexloc (chest number, or 100+n for special place n) was sent
@@ -79,7 +80,7 @@
 //   apwait <connected|items n> [seconds]  run in real time until connected / n items received (default 20 s)
 //   apnotices           print the lines the game would show
 //   expect_apnotices <n>  print them: there must be n (a netplay client: the host's)
-// Pictures:
+// Pictures (with the 3D view on, a picture of the viewed player uses the camera of the local player playing it):
 //   shot <file.ppm>     render the current frame
 //   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
 //   splitshot3 <file.ppm> <p> <q> <r>  three players' worlds in a 2x2 window, the team panel in the fourth quarter
@@ -91,9 +92,50 @@
 //   runcheckseen <a> <b> <n>  run n frames; on every one, a and b are drawn on each other's screen (same world or not)
 //                       where they really are, and can have a name tag or arrow
 //   runcheckobjowner <n> <hextype> <p>  run up to n frames: the first new object of that type in p's world belongs to p
+// 3D view (beta). Here <p> of a camera, button or stick is a local player 1..4 (offline: local p plays player p),
+// <c> a controller 0..3.
+//   view3d <0|1>        the 3D view (like hd2d)
+//   view3dset <returns|turn|mouselook|fade|stick|mouse|invert|fov|perspective> <value>
+//   cam3d <p> <tp|fp> [yaw] [pitch] [zoom%]  local p-1's camera right away (degrees; pitch below the horizon;
+//                       defaults tp 0 45 100, fp: the Link's facing, 8)
+//   cam3dstep <ms>      advance the cameras (Hd3d_Update) in 16 ms steps
+//   stick3d <p> <x%> <y%>  local p-1's right stick (-100..100) until changed
+//   viewbutton <p> [hold ms]  a tap (or hold) of local p-1's View button
+//   click <left|middle> [shift|ctrl|double]  a mouse click for player 1 (through Hd3d_OnMouseButton)
+//                       (also: right, alt, touch, and down / up: only the press / the release)
+//   wheel <steps> / motion <dx> <dy> / focus <0|1>  player 1's mouse wheel and mouse moves; the window's focus
+//   key3d <toggle|left|right|up|down|reset> [0|1]  a 3D view hotkey (F11 Delete PageDown Home End PageUp)
+//                       pressed (1), let go (0) or both
+//   pad <c> <button> <0|1>  controller c's button through the bindings (A B X Y Back Start L3 R3 LB RB ...)
+//   rstick <c> <x%> <y%>  controller c's right stick through the bindings
+//   remap3d <0|1>       run/drawrun pass held keys through the camera remap (default 1)
+//   drawtick <0|1>      tick also draws the viewed world (netplay tests with 3D)
+//   widescreen <0-96>   columns per side for later pictures (g_draw_extra_left_right and the width)
+//   drawuntil <hexmodule> <hexsub> <max>  run and draw frame by frame until the viewed world is there (fails after max)
+//   mark / rewind       snapshot / restore every world (Inst_SnapshotSave/Load)
+//   markpos <p>         remember player p's position
+//   hashmark <name>     remember Inst_HashState
+//   dump3d <file.ppm>   (debug) the viewed world's classes and heights
+//   expect_3d <0|1> [reason]  draw view 0: drawn in 3D (1) / fell back (0, optionally for that reason)
+//   expect_exact3d <max %> <tolerance>  draw in 2D, then in 3D with the oblique test camera; compare
+//   expect_drawpure <n>  after one settling draw, n 3D draws change no RAM, g_mp or any world's PPU state
+//   drawguard <n>       run n frames, drawing view 0 into the middle of a sentinel buffer (pitch 3 x width)
+//   expect_hashmark <name>  Inst_HashState is what hashmark remembered
+//   expect_remap <p> <keys> <keys>  local p-1's remap of the first keys gives the second (gating included; stateful)
+//   expect_moved <p> <north|south|east|west>  at least 8 px that way since markpos, under 4 px across
+//   expect_fp <p> <0|1>  local p-1's camera is in first person
+//   expect_cam3d <p> <yaw> [pitch] [tolerance]  local p-1's camera (degrees, default tolerance 0.5)
+//   expect_zoom3d <p> <zoom%> [tolerance%]  local p-1's third-person zoom (default tolerance 1%)
+//   expect_panes <n>    Hd3d_ComputeViews gives n panes
+//   expect_input <p> <keys>  Bindings_GetInput of local p-1 (letters as hold)
+//   expect_view <p> <0|1>  local p-1's View button is down
+//   expect_luma <x0> <y0> <x1> <y1> <min> <max>  draw view 0: average luma (0-255) of pixels x0..x1-1, y0..y1-1
+//   expect_mouse_captured <0|1>  Hd3d_WantsRelativeMouse
+//   expect_3dstats <min quads> <min cards>  draw view 0: at least that many quads and cards were drawn
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
-//   tick <n>            run n session ticks in real time (16ms apart)
+//   tick <n>            run n session ticks in real time (16ms apart), as the game's loop: the overlay, then the
+//                       3D view's cameras, View buttons and camera-turned d-pad, then the session (srun too)
 //   waitplay            tick until connected and playing (max 15s)
 //   waitplayers <n>     tick until n players are in the game (max 15s)
 //   waitseat <p> <open|playing|reconnecting>  tick until seat p is so (max 25s)
@@ -111,7 +153,7 @@
 //   expect_fullinv <0|1>  new save files start with every item (a client: as the host's frames say)
 //   removefile <path>
 //   bindline <key> <value>  a controls line of the settings file (value without spaces)
-//   expect_keys <p> <button 0-12> <text>  the keys of a button as the Controls screen shows them
+//   expect_keys <p> <button 0-13> <text>  the keys of a button as the Controls screen shows them (12 Ping, 13 View)
 //   tickwander <n> <seed>  tick n times with local players walking around randomly
 //   inputdelay <frames> online input delay
 //   netsim <delay ms> <jitter ms> <loss %>  simulate a bad link (before host/connect), like ZELDA3_NETSIM
@@ -136,6 +178,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 #include <SDL.h>
 #include "types.h"
 #include "zelda_rtl.h"
@@ -158,6 +201,7 @@
 #include "misc.h"
 #include "net.h"
 #include "snes/ppu.h"
+#include "snes/dma.h"
 #include "sprite.h"
 #include "overworld.h"
 #include "dungeon.h"
@@ -407,6 +451,154 @@ static void PrintStatus(int frame) {
              Sprite_GetX(k), Sprite_GetY(k), sprite_z[k], sprite_ai_state[k], sprite_floor[k], player_is_indoors ? sprite_N[k] : sprite_N_word[k]);
 }
 
+// --- 3D view (beta) ---
+static bool g_remap3d = true;  // run and drawrun turn held keys with the camera (remap3d)
+static bool g_drawtick;        // tick draws too, as the game's loop (drawtick)
+static InstSnapshot *g_mark;   // mark / rewind
+static uint16 g_markpos[kMpMaxPlayers][2];
+static bool g_markpos_set[kMpMaxPlayers];
+typedef struct HashMark { char name[32]; uint32 hash; } HashMark;
+static HashMark g_hashmarks[16];
+static int g_nhashmarks;
+
+// The local player playing player p on this computer: its camera draws p's
+// view. (Offline tests without one: local p, the convention of run.)
+static int LocalOfPlayer(int p) {
+  const SessionStatus *st = Session_GetStatus();
+  for (int i = 0; i < kSessionMaxLocal; i++)
+    if (st->local_slot[i] == p)
+      return i;
+  return p >= 0 && p < kSessionMaxLocal ? p : 0;
+}
+
+// The player local i plays (offline tests without one: player i).
+static int PlayerOfLocal(int i) {
+  int p = Session_GetStatus()->local_slot[i];
+  return p >= 0 ? p : i;
+}
+
+// The next pictures show player p's view as one pane, with the camera of
+// the local player playing p (as the game draws a single view).
+static void UsePane(int p) {
+  int8 local = (int8)LocalOfPlayer(p);
+  Hd3d_SetPanes(&local, 1);
+  Hd3d_BeginPanes(false);
+}
+
+// What the game gets for the held keys in run and drawrun: turned with each
+// local player's camera (local i plays player i, as offline), unless remap3d 0.
+static void HeldInputs(const uint16 *held, uint16 *in) {
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    in[p] = g_remap3d ? Hd3d_RemapLocal(p, p, held[p]) : held[p];
+}
+
+// Draws what player p sees as a single pane into buf (room for the 4x world
+// map), without the overlay. Returns the render scale (pitch: width * scale).
+static int DrawView(int p, uint32 *buf, int width, uint32 render_flags) {
+  int home = Inst_Current(), w = Inst_ViewOfPlayer(p);
+  if (w >= 0)
+    Inst_Switch(w);
+  int scale = PpuGetCurrentRenderScale(g_zenv.ppu, render_flags);
+  g_mp_local_mask = 1 << p;
+  UsePane(p);
+  Hd2d_DrawFrame((uint8 *)buf, (size_t)width * scale * 4, render_flags, 0);
+  Inst_Switch(home);
+  return scale;
+}
+
+// tick's drawing (drawtick 1), as the game's loop draws: a pane per world
+// seen and per local player in first person; split screen in two phases.
+static void DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags) {
+  int views[kInstMax];
+  int8 pane_local[kInstMax];
+  int n = Hd3d_ComputeViews(views, pane_local, kInstMax);
+  if (n < 1)
+    return;
+  n = n > 4 ? 4 : n;
+  Hd3d_SetPanes(pane_local, n);
+  const SessionStatus *st = Session_GetStatus();
+  g_mp_local_mask = 0;
+  for (int i = 0; i < kSessionMaxLocal; i++)
+    if (st->local_slot[i] >= 0)
+      g_mp_local_mask |= 1 << st->local_slot[i];
+  UiView uv[4];
+  for (int v = 0; v < n; v++)
+    uv[v] = (UiView){ n > 1 ? (v & 1) * width : 0, n > 1 ? (v >> 1) * height : 0, width, height,
+                      pane_local[v] >= 0 ? Ui_WatchedPlayer(pane_local[v]) : -1 };
+  Ui_SetViews(uv, n);
+  int home = Inst_Current();
+  if (n == 1) {
+    Inst_Switch(views[0]);
+    int scale = PpuGetCurrentRenderScale(g_zenv.ppu, render_flags);
+    Hd3d_BeginPanes(false);
+    Hd2d_DrawFrame((uint8 *)buf, (size_t)width * scale * 4, render_flags, 0);
+    Ui_Draw((uint8 *)buf, width * scale * 4, width * scale, height * scale, scale);
+  } else {
+    Hd3d_BeginPanes(true);
+    for (int v = 0; v < n; v++) {
+      Inst_Switch(views[v]);
+      uint32 *dst = buf + (v & 1) * width + (v >> 1) * height * width * 2;
+      Hd2d_DrawFrame((uint8 *)dst, (size_t)width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7, v);
+    }
+    Hd3d_FinishPanes();
+    Ui_Draw((uint8 *)buf, width * 2 * 4, width * 2, n > 2 ? height * 2 : height, 1);
+  }
+  Inst_Switch(home);
+}
+
+static void HashBytes(void *ctx, void *data, size_t size) {
+  uint32 *h = (uint32 *)ctx;
+  const uint8 *d = (const uint8 *)data;
+  for (size_t i = 0; i < size; i++)
+    *h = (*h ^ d[i]) * 16777619u;
+}
+
+// What drawing may never change: every world's RAM and g_mp (the state
+// hash), its video chip as a save state holds it, its DMA channels and the
+// video registers the game set.
+static uint32 DrawPureHash(void) {
+  uint32 h = Inst_HashState();
+  int home = Inst_Current();
+  for (int i = 0; i < kInstMax; i++) {
+    if (!Inst_IsActive(i))
+      continue;
+    Inst_Switch(i);
+    Ppu *ppu = g_zenv.ppu;
+    HashBytes(&h, &i, sizeof(i));
+    dma_saveload(g_zenv.dma, &HashBytes, &h);
+    ppu_saveload(ppu, &HashBytes, &h);
+    uint8 regs[] = {
+      ppu->screenEnabled[0], ppu->screenEnabled[1], ppu->screenWindowed[0], ppu->screenWindowed[1],
+      ppu->mosaicEnabled, ppu->mosaicSize, ppu->objSize, ppu->window1left, ppu->window1right, ppu->window2left,
+      ppu->window2right, ppu->clipMode, ppu->preventMathMode, ppu->addSubscreen, ppu->subtractColor,
+      ppu->halfColor, ppu->mathEnabled, ppu->fixedColorR, ppu->fixedColorG, ppu->fixedColorB, ppu->forcedBlank,
+      ppu->brightness, ppu->mode, ppu->scrollPrev, ppu->scrollPrev2, ppu->m7prev, ppu->numExtraSpriteSets,
+    };
+    HashBytes(&h, regs, sizeof(regs));
+    uint32 words[] = { ppu->objTileAdr1, ppu->objTileAdr2, ppu->windowsel };
+    HashBytes(&h, words, sizeof(words));
+    for (int k = 0; k < 4; k++) {
+      const BgLayer *bg = &ppu->bgLayer[k];
+      uint16 b[] = { bg->hScroll, bg->vScroll, bg->tilemapWider, bg->tilemapHigher, bg->tilemapAdr, bg->tileAdr };
+      HashBytes(&h, b, sizeof(b));
+    }
+    HashBytes(&h, ppu->m7matrix, sizeof(ppu->m7matrix));
+    HashBytes(&h, ppu->oam, sizeof(ppu->oam));
+    HashBytes(&h, ppu->extraPalettes, sizeof(ppu->extraPalettes));
+    HashBytes(&h, ppu->extraSprites, sizeof(ppu->extraSprites));
+  }
+  Inst_Switch(home);
+  return h;
+}
+
+// Degrees into [-180, 180).
+static float Wrap180(float a) {
+  if (!(a > -1e6f && a < 1e6f))
+    return 0.0f;
+  a -= 360.0f * floorf((a + 180.0f) * (1.0f / 360.0f));
+  return a >= 180.0f ? a - 360.0f : a;
+}
+
 int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   FILE *f = fopen(script, "r");
   if (!f) {
@@ -419,13 +611,20 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   Ui_Init(NULL);
   // (A 3D setting saved from the menu must not change the tests.)
   Hd3d_ResetForTests();
-  uint32 *pixels = calloc(width * height * 4 * 16, 1);
+  g_remap3d = true, g_drawtick = false, g_nhashmarks = 0;
+  memset(g_markpos_set, 0, sizeof(g_markpos_set));
+  // (Room for a picture at 4x, or 2x2 panes.)
+  size_t pixels_size = (size_t)width * height * 16;
+  uint32 *pixels = calloc(pixels_size, 4);
   char line[256];
   int frame = 0;
   g_failures = 0;
   while (fgets(line, sizeof(line), f)) {
-    char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[64] = { 0 }, arg3[64] = { 0 }, arg4[64] = { 0 }, arg5[64] = { 0 };
-    if (sscanf(line, "%31s %199s %63s %63s %63s %63s", cmd, arg1, arg2, arg3, arg4, arg5) < 1 || cmd[0] == '#')
+    // (arg2 is long enough for a 14-button controls line.)
+    char cmd[32] = { 0 }, arg1[200] = { 0 }, arg2[200] = { 0 }, arg3[64] = { 0 }, arg4[64] = { 0 }, arg5[64] = { 0 };
+    char arg6[64] = { 0 };
+    if (sscanf(line, "%31s %199s %199s %63s %63s %63s %63s", cmd, arg1, arg2, arg3, arg4, arg5, arg6) < 1 ||
+        cmd[0] == '#')
       continue;
     // Commands about the game look at the world the viewed player sees (its
     // menu, if it has one open; commands about a player use where its Link is).
@@ -531,6 +730,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // scenery it showed, and whether it lit a dark room itself.
       bool on = g_hd2d.enabled;
       g_hd2d.enabled = true;
+      UsePane(view);
       Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
       g_hd2d.enabled = on;
       int n = Hd2d_HiddenPixels();
@@ -549,7 +749,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         g_hd2d.see_through = atoi(arg3);
     } else if (!strcmp(cmd, "run")) {
       for (int n = atoi(arg1); n > 0; n--, frame++) {
-        Inst_RunFrame(held);
+        uint16 in[kMpMaxPlayers];
+        HeldInputs(held, in);
+        Inst_RunFrame(in);
       }
     } else if (!strcmp(cmd, "drawrun")) {
       // drawrun <n>: runs n frames and draws each the way the game does on
@@ -557,7 +759,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // the HD world map), with a guard after it. Fails if drawing wrote past
       // the buffer (the OpenGL output's buffer is exactly that big).
       for (int n = atoi(arg1); n > 0; n--, frame++) {
-        Inst_RunFrame(held);
+        uint16 in[kMpMaxPlayers];
+        HeldInputs(held, in);
+        Inst_RunFrame(in);
         int home = Inst_Current();
         Inst_Switch(Inst_ViewOfPlayer(view));
         int scale = PpuGetCurrentRenderScale(g_zenv.ppu, render_flags);
@@ -567,6 +771,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           buf[i] = 0xdeadbeef;
         g_mp_local_mask = 1 << view;
         Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+        UsePane(view);
         Hd2d_DrawFrame((uint8 *)buf, width * scale * 4, render_flags, 0);
         Ui_Draw((uint8 *)buf, width * scale * 4, width * scale, height * scale, scale);
         size_t bad = 0;
@@ -591,12 +796,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "shot")) {
       g_mp_local_mask = 1 << view;
       Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+      UsePane(view);
       Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
     } else if (!strcmp(cmd, "benchdraw")) {
       // benchdraw <n>: times n frames drawn (with the current 2D-HD setting)
+      UsePane(view);
       uint64 t0 = SDL_GetPerformanceCounter();
       for (int n = atoi(arg1); n > 0; n--)
         Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
@@ -612,6 +819,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // (changed pixels in red) show what changed.
       g_mp_local_mask = 1 << view;
       Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+      UsePane(view);
       Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       char base[256], out[256];
@@ -619,8 +827,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       snprintf(out, sizeof(out), "tests/out/%s.ppm", arg1);
       uint32 *ref = malloc(width * height * 4);
       if (getenv("ZELDA3_UPDATE_BASELINES") || !ReadPpm(base, width, height, ref)) {
-        WritePpm(base, width, height, pixels, width);
-        printf("expect_shot %s: baseline written\n", arg1);
+        // (Not from a script that already failed: the picture may be wrong.)
+        if (g_failures && !getenv("ZELDA3_UPDATE_BASELINES")) {
+          printf("FAIL: no baseline %s, and none written after a failure\n", base);
+          g_failures++;
+        } else {
+          WritePpm(base, width, height, pixels, width);
+          printf("expect_shot %s: baseline written\n", arg1);
+        }
       } else {
         int diff = 0, tol = arg3[0] ? atoi(arg3) : 0;
         for (int i = 0; i < width * height; i++) {
@@ -890,10 +1104,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "splitshot")) {
       int r = Inst_Current();
       uint32 *wide = calloc(width * 2 * height * 4, 1);
+      // (As the game draws split screen: the worlds are read first, 3D panes drawn after.)
+      int8 locals[2] = { (int8)LocalOfPlayer(atoi(arg2) - 1), (int8)LocalOfPlayer(atoi(arg3) - 1) };
+      Hd3d_SetPanes(locals, 2);
+      Hd3d_BeginPanes(true);
       for (int v = 0; v < 2; v++) {
         Inst_Switch(Inst_ViewOfPlayer(atoi(v ? arg3 : arg2) - 1));
         Hd2d_DrawFrame((uint8 *)(wide + v * width), width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7, v);
       }
+      Hd3d_FinishPanes();
       Inst_Switch(r);
       Ui_Draw((uint8 *)wide, width * 2 * 4, width * 2, height, 1);
       WritePpm(arg1, width * 2, height, wide, width * 2);
@@ -906,6 +1125,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       uint32 *quad = calloc(width * 2 * height * 2 * 4, 1);
       UiView uv[3];
       g_mp_local_mask = 0;
+      int8 locals[3];
+      for (int v = 0; v < 3; v++)
+        locals[v] = (int8)LocalOfPlayer(ps[v]);
+      Hd3d_SetPanes(locals, 3);
+      Hd3d_BeginPanes(true);
       for (int v = 0; v < 3; v++) {
         Inst_Switch(Inst_ViewOfPlayer(ps[v]));
         uint32 *dst = quad + (v & 1) * width + (v >> 1) * height * width * 2;
@@ -913,6 +1137,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         uv[v] = (UiView){ (v & 1) * width, (v >> 1) * height, width, height, ps[v] };
         g_mp_local_mask |= 1 << ps[v];
       }
+      Hd3d_FinishPanes();
       Inst_Switch(r0);
       Ui_SetViews(uv, 3);
       Ui_Draw((uint8 *)quad, width * 2 * 4, width * 2, height * 2, 1);
@@ -1085,12 +1310,19 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         uint16 in[kMpMaxPlayers];
         memcpy(in, held, sizeof(in));
         Ui_Update(in, 0);
+        // As in the game's loop: the 3D view's cameras and View buttons, and
+        // a turned camera turns the d-pad before the input is sent.
+        Hd3d_Update(1.0f / 60);
+        Hd3d_HandleViewButtons();
+        Hd3d_RemapInputs(in);
         // As in the game's loop: the world of our first player is heard, and
         // is the current one between frames (so it differs between computers).
         Inst_SetAudioPlayer(Ui_WatchedPlayer(0));
         if (!Ui_PausesGame())
           frame += Session_Tick(in, g_wanted_zelda_features);
         Ap_Tick();
+        if (g_drawtick)
+          DrawLikeGame(pixels, width, height, render_flags);
         TrackSprites(frame, view);
         SDL_Delay(16);
         SessionPlayer seats[kMpMaxPlayers];
@@ -1192,7 +1424,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Ap_TestDeathLink();
     } else if (!strcmp(cmd, "srun")) {
       for (int n = atoi(arg1); n > 0; n--) {
-        frame += Session_Tick(held, g_wanted_zelda_features);
+        uint16 in[kMpMaxPlayers];
+        memcpy(in, held, sizeof(in));
+        Hd3d_Update(1.0f / 60);
+        Hd3d_HandleViewButtons();
+        Hd3d_RemapInputs(in);
+        frame += Session_Tick(in, g_wanted_zelda_features);
         Ap_Tick();
       }
     } else if (!strcmp(cmd, "apconnect")) {
@@ -1319,11 +1556,17 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       char value[256];
       snprintf(value, sizeof(value), "%s", arg2);
       Bindings_ParseConfig(arg1, value);
-      Bindings_ResolvePingClashes();
+      Bindings_ResolveLateClashes();
     } else if (!strcmp(cmd, "expect_keys")) {
       // expect_keys <p> <button index> <description>: as the Controls screen shows it
       char keys[64];
-      Bindings_DescribeKeys(PlayerArg(arg1), atoi(arg2), keys, sizeof(keys));
+      int b = atoi(arg2);
+      if (b < 0 || b >= kBindButtons) {
+        printf("FAIL: no button %s (0-%d)\n", arg2, kBindButtons - 1);
+        g_failures++;
+        continue;
+      }
+      Bindings_DescribeKeys(PlayerArg(arg1), b, keys, sizeof(keys));
       if (strcmp(keys, arg3)) {
         printf("FAIL: P%s button %s keys are '%s', expected '%s'\n", arg1, arg2, keys, arg3);
         g_failures++;
@@ -1850,6 +2093,464 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: P%s's camera y is %d, expected %s at frame %d\n", arg1, BG2VOFS_copy2, arg2, frame);
         g_failures++;
       }
+    } else if (!strcmp(cmd, "view3d")) {
+      // view3d <0|1>: the 3D view (as the menu and F11 turn it on and off)
+      Hd3d_SetEnabled(atoi(arg1) != 0);
+    } else if (!strcmp(cmd, "view3dset")) {
+      // view3dset <setting> <value>: a 3D view setting, clamped as the settings file is
+      int v = atoi(arg2);
+      if (!arg2[0]) {
+        printf("FAIL: view3dset %s needs a value\n", arg1);
+        g_failures++;
+      } else if (!strcmp(arg1, "returns")) {
+        g_hd3d.camera_returns = v != 0;
+      } else if (!strcmp(arg1, "turn")) {
+        g_hd3d.turn_controls = v != 0;
+      } else if (!strcmp(arg1, "mouselook")) {
+        g_hd3d.mouse_look = v != 0;
+      } else if (!strcmp(arg1, "fade")) {
+        g_hd3d.fade_scenery = v != 0;
+      } else if (!strcmp(arg1, "invert")) {
+        g_hd3d.invert_y = v != 0;
+      } else if (!strcmp(arg1, "stick")) {
+        g_hd3d.stick_speed = (uint8)IntMin(IntMax(v, 25), 200);
+      } else if (!strcmp(arg1, "mouse")) {
+        g_hd3d.mouse_speed = (uint8)IntMin(IntMax(v, 0), 100);
+      } else if (!strcmp(arg1, "fov")) {
+        g_hd3d.fov = (uint8)IntMin(IntMax(v, 50), 90);
+      } else if (!strcmp(arg1, "perspective")) {
+        g_hd3d.perspective = (uint8)IntMin(IntMax(v, 0), 100);
+      } else {
+        printf("FAIL: no 3D view setting '%s'\n", arg1);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "cam3d")) {
+      // cam3d <p> <tp|fp> [yaw] [pitch] [zoom%]: local p-1's camera, right away
+      int i = PlayerArg(arg1);
+      Hd3dCamState c = { 0.0f, 45.0f, 1.0f, false };
+      if (!strcmp(arg2, "fp")) {
+        // (By default it looks where the Link faces, a little down.)
+        static const float kFacingYaw[4] = { 0.0f, 180.0f, -90.0f, 90.0f };  // RAM 0x2F: up, down, left, right
+        int p = PlayerOfLocal(i);
+        SwitchToPlayer(p);
+        c.first_person = true;
+        c.yaw = Inst_OfPlayer(p) >= 0 ? kFacingYaw[*Mp_PlayerRam(p, 0x2F) >> 1 & 3] : 0.0f;
+        c.pitch = 8.0f;
+      } else if (strcmp(arg2, "tp")) {
+        printf("FAIL: cam3d wants tp or fp, not '%s'\n", arg2);
+        g_failures++;
+        continue;
+      }
+      if (arg3[0])
+        c.yaw = (float)atof(arg3);
+      if (arg4[0])
+        c.pitch = (float)atof(arg4);
+      if (arg5[0])
+        c.zoom = (float)atof(arg5) / 100.0f;
+      Hd3d_SetCamera(i, &c);
+    } else if (!strcmp(cmd, "cam3dstep")) {
+      // cam3dstep <ms>: the cameras move on (springs, sticks) in 16 ms steps
+      for (int ms = atoi(arg1); ms > 0; ms -= 16)
+        Hd3d_Update(0.016f);
+    } else if (!strcmp(cmd, "stick3d")) {
+      // stick3d <p> <x%> <y%>: local p-1's right stick, until set back to 0 0
+      Hd3d_SetRightStick(PlayerArg(arg1), IntMin(IntMax(atoi(arg2), -100), 100) / 100.0f,
+                         IntMin(IntMax(atoi(arg3), -100), 100) / 100.0f);
+    } else if (!strcmp(cmd, "viewbutton")) {
+      // viewbutton <p> [hold ms]: local p-1 taps its View button (or holds it that long)
+      Hd3d_PressViewButton(PlayerArg(arg1), arg2[0] ? atoi(arg2) : 100);
+    } else if (!strcmp(cmd, "click")) {
+      // click <left|middle|right> [shift|ctrl|alt|double|touch|down|up]: a mouse
+      // click for player 1 (down / up: only the press / the release)
+      int b = !strcmp(arg1, "left") ? SDL_BUTTON_LEFT : !strcmp(arg1, "middle") ? SDL_BUTTON_MIDDLE :
+              !strcmp(arg1, "right") ? SDL_BUTTON_RIGHT : -1;
+      uint32 mods = !strcmp(arg2, "shift") ? KMOD_LSHIFT : !strcmp(arg2, "ctrl") ? KMOD_LCTRL :
+                    !strcmp(arg2, "alt") ? KMOD_LALT : 0;
+      bool touch = !strcmp(arg2, "touch"), press = strcmp(arg2, "up") != 0, release = strcmp(arg2, "down") != 0;
+      int clicks = !strcmp(arg2, "double") ? 2 : 1;
+      if (b < 0 || (arg2[0] && !mods && !touch && clicks == 1 && press && release)) {
+        printf("FAIL: click %s %s?\n", arg1, arg2);
+        g_failures++;
+        continue;
+      }
+      if (press)
+        Hd3d_OnMouseButton(b, true, clicks, mods, touch);
+      if (release)
+        Hd3d_OnMouseButton(b, false, clicks, mods, touch);
+    } else if (!strcmp(cmd, "wheel")) {
+      // wheel <steps>: player 1's mouse wheel (+ zooms in)
+      Hd3d_OnMouseWheel(atoi(arg1));
+    } else if (!strcmp(cmd, "motion")) {
+      // motion <dx> <dy>: player 1's mouse moves
+      Hd3d_OnMouseMotion(atoi(arg1), atoi(arg2));
+    } else if (!strcmp(cmd, "focus")) {
+      // focus <0|1>: the window loses or gets the focus
+      Hd3d_OnWindowFocus(atoi(arg1) != 0);
+    } else if (!strcmp(cmd, "key3d")) {
+      // key3d <toggle|left|right|up|down|reset> [0|1]: a 3D view hotkey pressed (1), let go (0) or both
+      static const char *const kNames[6] = { "toggle", "left", "right", "up", "down", "reset" };
+      int k = 0;
+      while (k < 6 && strcmp(arg1, kNames[k]))
+        k++;
+      if (k == 6) {
+        printf("FAIL: no 3D view hotkey '%s'\n", arg1);
+        g_failures++;
+        continue;
+      }
+      if (!arg2[0] || atoi(arg2))
+        Hd3d_OnKeyCommand(kKeys_View3d + k, true);
+      if (!arg2[0] || !atoi(arg2))
+        Hd3d_OnKeyCommand(kKeys_View3d + k, false);
+    } else if (!strcmp(cmd, "pad")) {
+      // pad <c> <button> <0|1>: a button of controller c, through the bindings
+      int b = -1;
+      for (int k = 0; k < kGamepadBtn_Count; k++)
+        if (!SDL_strcasecmp(Bindings_GamepadButtonName(k), arg2))
+          b = k;
+      if (b < 0 || !arg3[0]) {
+        printf("FAIL: pad %s %s %s: no such button (A B X Y Back Guide Start L3 R3 LB RB DpadUp ... LT RT)\n",
+               arg1, arg2, arg3);
+        g_failures++;
+        continue;
+      }
+      Bindings_OnPadButton(atoi(arg1), b, atoi(arg3) != 0);
+    } else if (!strcmp(cmd, "rstick")) {
+      // rstick <c> <x%> <y%>: controller c's right stick, through the bindings
+      int x = IntMin(IntMax(atoi(arg2), -100), 100), y = IntMin(IntMax(atoi(arg3), -100), 100);
+      Bindings_OnPadRightAxis(atoi(arg1), x * 32767 / 100, y * 32767 / 100);
+    } else if (!strcmp(cmd, "remap3d")) {
+      g_remap3d = atoi(arg1) != 0;
+    } else if (!strcmp(cmd, "drawtick")) {
+      g_drawtick = atoi(arg1) != 0;
+    } else if (!strcmp(cmd, "widescreen")) {
+      // widescreen <0-96>: later pictures are that many columns wider on each side
+      int n = atoi(arg1);
+      if (n < 0 || n > kPpuExtraLeftRight) {
+        printf("FAIL: widescreen %s: 0 to %d columns\n", arg1, kPpuExtraLeftRight);
+        g_failures++;
+        continue;
+      }
+      g_draw_extra_left_right = n;
+      width = 256 + 2 * n;
+      if ((size_t)width * height * 16 > pixels_size) {
+        free(pixels);
+        pixels_size = (size_t)width * height * 16;
+        pixels = calloc(pixels_size, 4);
+      }
+    } else if (!strcmp(cmd, "drawuntil")) {
+      // drawuntil <hexmodule> <hexsub> <max>: runs and draws frame by frame
+      // (as drawrun) until the viewed world is in that module and submodule
+      int m = (int)strtol(arg1, NULL, 16), sub = (int)strtol(arg2, NULL, 16), max = atoi(arg3), k = 0;
+      bool there = false;
+      for (;; k++, frame++) {
+        int home = Inst_Current(), w = Inst_ViewOfPlayer(view);
+        if (w >= 0)
+          Inst_Switch(w);
+        there = w >= 0 && main_module_index == m && submodule_index == sub;
+        Inst_Switch(home);
+        if (there || k >= max)
+          break;
+        uint16 in[kMpMaxPlayers];
+        HeldInputs(held, in);
+        Inst_RunFrame(in);
+        DrawView(view, pixels, width, render_flags);
+      }
+      if (!there) {
+        printf("FAIL: the viewed world didn't get to module %s/%s in %s frames (at frame %d)\n", arg1, arg2, arg3,
+               frame);
+        g_failures++;
+      } else {
+        printf("drawuntil %s %s: after %d frames\n", arg1, arg2, k);
+      }
+    } else if (!strcmp(cmd, "mark")) {
+      // mark: a snapshot of every world (rewind goes back to it)
+      if (!g_mark)
+        g_mark = Inst_SnapshotNew();
+      Inst_SnapshotSave(g_mark);
+    } else if (!strcmp(cmd, "rewind")) {
+      if (!g_mark) {
+        printf("FAIL: rewind without mark\n");
+        g_failures++;
+        continue;
+      }
+      Inst_SnapshotLoad(g_mark);
+    } else if (!strcmp(cmd, "markpos")) {
+      // markpos <p>: where player p is now (expect_moved compares)
+      int p = PlayerArg(arg1);
+      g_markpos_set[p] = Inst_PlayerPos(p, &g_markpos[p][0], &g_markpos[p][1]) >= 0;
+      if (!g_markpos_set[p]) {
+        printf("FAIL: P%d isn't playing (markpos) at frame %d\n", p + 1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_moved")) {
+      // expect_moved <p> <north|south|east|west>: at least 8 pixels that way
+      // since markpos, and less than 4 pixels sideways
+      int p = PlayerArg(arg1), dir = !strcmp(arg2, "north") ? 0 : !strcmp(arg2, "south") ? 1 :
+                                      !strcmp(arg2, "east") ? 2 : !strcmp(arg2, "west") ? 3 : -1;
+      uint16 x, y;
+      if (dir < 0 || !g_markpos_set[p] || Inst_PlayerPos(p, &x, &y) < 0) {
+        printf("FAIL: expect_moved %s %s: no such direction, no markpos or not playing\n", arg1, arg2);
+        g_failures++;
+        continue;
+      }
+      int dx = (int16)(x - g_markpos[p][0]), dy = (int16)(y - g_markpos[p][1]);
+      int along = dir == 0 ? -dy : dir == 1 ? dy : dir == 2 ? dx : -dx, across = dir < 2 ? dx : dy;
+      printf("P%d moved %d,%d since markpos\n", p + 1, dx, dy);
+      if (along < 8 || abs(across) >= 4) {
+        printf("FAIL: P%d moved %d,%d, expected 8 or more %s (under 4 across) at frame %d\n", p + 1, dx, dy, arg2,
+               frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "hashmark") || !strcmp(cmd, "expect_hashmark")) {
+      // hashmark <name>: remember the state hash; expect_hashmark <name>: it is the same now
+      int k = 0;
+      while (k < g_nhashmarks && strcmp(g_hashmarks[k].name, arg1))
+        k++;
+      uint32 h = Inst_HashState();
+      if (!strcmp(cmd, "hashmark")) {
+        if (k == g_nhashmarks && k < (int)countof(g_hashmarks))
+          snprintf(g_hashmarks[g_nhashmarks++].name, sizeof(g_hashmarks[0].name), "%s", arg1);
+        if (k < g_nhashmarks)
+          g_hashmarks[k].hash = h;
+        printf("hashmark %s: %08x\n", arg1, h);
+      } else if (k == g_nhashmarks) {
+        printf("FAIL: no hashmark %s\n", arg1);
+        g_failures++;
+      } else if (g_hashmarks[k].hash != h) {
+        printf("FAIL: state hash %08x, hashmark %s was %08x at frame %d\n", h, arg1, g_hashmarks[k].hash, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "dump3d")) {
+      // dump3d <file.ppm>: (debug) what the 3D view made of the viewed world
+      Hd3d_DumpScene(arg1);
+      printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "expect_3d")) {
+      // expect_3d <0|1> [reason]: draws the viewed player's view as one pane
+      int scale = DrawView(view, pixels, width, render_flags);
+      bool is3d = Hd3d_PaneIs3D(0);
+      const char *why = Hd3d_LastWhy2D(0);
+      printf("expect_3d: %s (%s, scale %d)\n", is3d ? "3D" : "2D", why, scale);
+      if (is3d != (atoi(arg1) != 0) || (!is3d && arg2[0] && strcmp(why, arg2))) {
+        printf("FAIL: the view was drawn in %s (why 2D: %s), expected %s %s at frame %d\n", is3d ? "3D" : "2D", why,
+               atoi(arg1) ? "3D" : "2D", arg2, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_exact3d")) {
+      // expect_exact3d <max %> <tolerance>: at most that many percent of the
+      // pixels differ by more than the tolerance (any channel) between the 2D
+      // picture and the 3D one seen through the parallel oblique test camera
+      bool hd2d_on = g_hd2d.enabled, hd3d_on = g_hd3d.enabled;
+      size_t npx = (size_t)width * height;
+      uint32 *a = calloc(npx * 16, 4), *b = calloc(npx * 16, 4);
+      g_hd2d.enabled = false;
+      Hd3d_SetEnabled(false);
+      // (The 2D picture as the PPU draws it.)
+      int home = Inst_Current();
+      if (Inst_ViewOfPlayer(view) >= 0)
+        Inst_Switch(Inst_ViewOfPlayer(view));
+      if (g_draw_extra_left_right >= 0)
+        g_zenv.ppu->extraLeftRight = g_draw_extra_left_right;
+      int scale = PpuGetCurrentRenderScale(g_zenv.ppu, render_flags);
+      g_mp_local_mask = 1 << view;
+      Hd2d_Draw2D((uint8 *)a, (size_t)width * scale * 4, render_flags, 0);
+      Inst_Switch(home);
+      Hd3d_SetEnabled(true);
+      Hd3d_SetTestCamera(true);
+      DrawView(view, b, width, render_flags);
+      bool is3d = Hd3d_PaneIs3D(0);
+      const char *why = Hd3d_LastWhy2D(0);
+      Hd3d_SetTestCamera(false);
+      Hd3d_SetEnabled(hd3d_on);
+      g_hd2d.enabled = hd2d_on;
+      int diff = 0, tol = atoi(arg2);
+      for (size_t k = 0; k < npx && scale == 1; k++) {
+        uint32 p = a[k], q = b[k];
+        diff += abs((int)(p >> 16 & 0xff) - (int)(q >> 16 & 0xff)) > tol ||
+                abs((int)(p >> 8 & 0xff) - (int)(q >> 8 & 0xff)) > tol || abs((int)(p & 0xff) - (int)(q & 0xff)) > tol;
+      }
+      double pct = 100.0 * diff / (double)npx;
+      printf("expect_exact3d: %s, %.2f%% of the pixels differ\n", is3d ? "3D" : "2D", pct);
+      if (!is3d || scale != 1 || pct > atof(arg1)) {
+        if (!is3d || scale != 1)
+          printf("FAIL: the test camera's picture wasn't drawn in 3D (why 2D: %s) at frame %d\n", why, frame);
+        else
+          printf("FAIL: the 3D picture differs from the 2D one in %.2f%% of the pixels (limit %s%%) at frame %d; "
+                 "see tests/out/exact3d_diff.ppm\n", pct, arg1, frame);
+        g_failures++;
+        if (scale == 1) {
+          WritePpm("tests/out/exact3d_2d.ppm", width, height, a, width);
+          WritePpm("tests/out/exact3d_3d.ppm", width, height, b, width);
+          for (size_t k = 0; k < npx; k++) {
+            uint32 p = a[k], q = b[k];
+            int l = ((p >> 16 & 0xff) + (p >> 8 & 0xff) + (p & 0xff)) / 6;
+            bool changed = abs((int)(p >> 16 & 0xff) - (int)(q >> 16 & 0xff)) > tol ||
+                           abs((int)(p >> 8 & 0xff) - (int)(q >> 8 & 0xff)) > tol ||
+                           abs((int)(p & 0xff) - (int)(q & 0xff)) > tol;
+            a[k] = changed ? 0xff0000 : (uint32)(l << 16 | l << 8 | l);
+          }
+          WritePpm("tests/out/exact3d_diff.ppm", width, height, a, width);
+        }
+      }
+      free(a);
+      free(b);
+    } else if (!strcmp(cmd, "expect_drawpure")) {
+      // expect_drawpure <n>: after one settling draw, n more draws of the
+      // viewed player's view (in 3D when it is on) change nothing of the game
+      DrawView(view, pixels, width, render_flags);
+      uint32 before = DrawPureHash();
+      int n = atoi(arg1), drawn3d = 0;
+      for (int k = 0; k < n; k++) {
+        DrawView(view, pixels, width, render_flags);
+        drawn3d += Hd3d_PaneIs3D(0);
+      }
+      uint32 after = DrawPureHash();
+      printf("expect_drawpure: %d of %d draws in 3D, %08x -> %08x\n", drawn3d, n, before, after);
+      if (before != after) {
+        printf("FAIL: drawing changed the game's state or its video chip (%08x -> %08x) at frame %d\n", before, after,
+               frame);
+        g_failures++;
+      }
+      if (g_hd3d.enabled && drawn3d != n) {
+        printf("FAIL: only %d of %d draws were in 3D (why 2D: %s) at frame %d\n", drawn3d, n, Hd3d_LastWhy2D(0), frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "drawguard")) {
+      // drawguard <n>: runs n frames, drawing each into the middle of a buffer
+      // three times as wide (and 2 rows higher and lower) filled with a
+      // pattern, the way split screen draws (the world read first, 3D drawn
+      // after), then the overlay. Fails if anything was written outside the pane.
+      for (int n = atoi(arg1); n > 0; n--, frame++) {
+        uint16 in[kMpMaxPlayers];
+        HeldInputs(held, in);
+        Inst_RunFrame(in);
+        int home = Inst_Current();
+        Inst_Switch(Inst_ViewOfPlayer(view));
+        int scale = PpuGetCurrentRenderScale(g_zenv.ppu, render_flags);
+        int w = width * scale, h = height * scale, pitch = 3 * w;
+        size_t total = (size_t)pitch * (h + 4), bad = 0;
+        uint32 *buf = malloc(total * 4);
+        for (size_t k = 0; k < total; k++)
+          buf[k] = 0xdeadbeef;
+        uint32 *pane = buf + 2 * pitch + w;
+        g_mp_local_mask = 1 << view;
+        Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+        int8 local = (int8)LocalOfPlayer(view);
+        Hd3d_SetPanes(&local, 1);
+        Hd3d_BeginPanes(true);
+        Hd2d_DrawFrame((uint8 *)pane, (size_t)pitch * 4, render_flags, 0);
+        Hd3d_FinishPanes();
+        Ui_Draw((uint8 *)pane, pitch * 4, w, h, scale);
+        for (int y = 0; y < h + 4; y++)
+          for (int x = 0; x < pitch; x++)
+            bad += (y < 2 || y >= h + 2 || x < w || x >= 2 * w) && buf[(size_t)y * pitch + x] != 0xdeadbeef;
+        free(buf);
+        if (bad) {
+          printf("FAIL: drawing frame %d (module %d/%d, scale %d, %s) wrote %d pixels outside the pane\n", frame,
+                 main_module_index, submodule_index, scale, Hd3d_PaneIs3D(0) ? "3D" : "2D", (int)bad);
+          g_failures++;
+        }
+        Inst_Switch(home);
+        if (bad)
+          break;
+      }
+    } else if (!strcmp(cmd, "expect_remap")) {
+      // expect_remap <p> <keys> <keys>: local p-1's d-pad as its camera turns
+      // it (with every check the game does; it remembers, as in the game)
+      int i = PlayerArg(arg1);
+      uint16 in = ParseKeys(arg2), want = ParseKeys(arg3);
+      uint16 got = Hd3d_RemapLocal(i, Session_GetStatus()->local_slot[i], in);
+      if (got != want) {
+        printf("FAIL: local P%d's %s turned into %03x, expected %s (%03x) at frame %d\n", i + 1, arg2, got, arg3, want,
+               frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_fp") || !strcmp(cmd, "expect_cam3d") || !strcmp(cmd, "expect_zoom3d")) {
+      // expect_fp <p> <0|1> / expect_cam3d <p> <yaw> [pitch] [tolerance] /
+      // expect_zoom3d <p> <zoom%> [tolerance%]: local p-1's camera
+      Hd3dCamState c;
+      Hd3d_GetCamera(PlayerArg(arg1), &c);
+      bool ok;
+      if (!strcmp(cmd, "expect_fp")) {
+        ok = c.first_person == (atoi(arg2) != 0);
+      } else if (!strcmp(cmd, "expect_zoom3d")) {
+        ok = fabsf(c.zoom * 100.0f - (float)atof(arg2)) <= (arg3[0] ? (float)atof(arg3) : 1.0f);
+      } else {
+        float tol = arg4[0] ? (float)atof(arg4) : 0.5f;
+        ok = fabsf(Wrap180(c.yaw - (float)atof(arg2))) <= tol &&
+             (!arg3[0] || fabsf(c.pitch - (float)atof(arg3)) <= tol);
+      }
+      printf("%s: P%s's camera %s yaw %.2f pitch %.2f zoom %.3f\n", cmd, arg1, c.first_person ? "fp" : "tp",
+             c.yaw, c.pitch, c.zoom);
+      if (!ok) {
+        printf("FAIL: %s %s %s %s %s doesn't hold at frame %d\n", cmd, arg1, arg2, arg3, arg4, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_panes")) {
+      // expect_panes <n>: the panes the game would draw now (a pane per world
+      // seen, and one for each local player in first person)
+      int views[kInstMax];
+      int8 pane_local[kInstMax];
+      int n = Hd3d_ComputeViews(views, pane_local, kInstMax);
+      printf("panes:");
+      for (int v = 0; v < n; v++)
+        printf(" world %d (local P%d)", views[v], pane_local[v] + 1);
+      printf("\n");
+      if (n != atoi(arg1)) {
+        printf("FAIL: %d panes, expected %s at frame %d\n", n, arg1, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_input")) {
+      // expect_input <p> <keys>: what local p-1's keys and controller give the game
+      int i = PlayerArg(arg1);
+      uint16 got = Bindings_GetInput(i), want = ParseKeys(arg2);
+      if (got != want) {
+        printf("FAIL: local P%d's input is %04x, expected %s (%04x) at frame %d\n", i + 1, got, arg2, want, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_view")) {
+      // expect_view <p> <0|1>: local p-1's View button (first person) is held
+      int i = PlayerArg(arg1);
+      bool down = Bindings_ButtonDown(i, kBind_View);
+      if (down != (atoi(arg2) != 0)) {
+        printf("FAIL: local P%d's View button is %s at frame %d\n", i + 1, down ? "down" : "up", frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_luma")) {
+      // expect_luma <x0> <y0> <x1> <y1> <min> <max>: draws the viewed player's
+      // view; the average brightness of pixels x0..x1-1, y0..y1-1 (0-255)
+      int scale = DrawView(view, pixels, width, render_flags);
+      int x0 = IntMax(atoi(arg1), 0), y0 = IntMax(atoi(arg2), 0);
+      int x1 = IntMin(atoi(arg3), width), y1 = IntMin(atoi(arg4), height);
+      int64 sum = 0, n = 0;
+      for (int y = y0; y < y1; y++) {
+        for (int x = x0; x < x1; x++, n++) {
+          uint32 c = pixels[(size_t)y * scale * width * scale + (size_t)x * scale];
+          sum += ((c >> 16 & 0xff) * 299 + (c >> 8 & 0xff) * 587 + (c & 0xff) * 114) / 1000;
+        }
+      }
+      int luma = n ? (int)(sum / n) : -1;
+      printf("expect_luma %d,%d-%d,%d: %d (%s)\n", x0, y0, x1, y1, luma, Hd3d_PaneIs3D(0) ? "3D" : "2D");
+      if (!n || luma < atoi(arg5) || luma > atoi(arg6)) {
+        printf("FAIL: average luma %d, expected %s-%s at frame %d\n", luma, arg5, arg6, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_mouse_captured")) {
+      // expect_mouse_captured <0|1>: the game would capture the mouse (mouse look, right drag)
+      if (Hd3d_WantsRelativeMouse() != (atoi(arg1) != 0)) {
+        printf("FAIL: the mouse is %scaptured at frame %d\n", Hd3d_WantsRelativeMouse() ? "" : "not ", frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_3dstats")) {
+      // expect_3dstats <min quads> <min cards>: draws the viewed player's view
+      DrawView(view, pixels, width, render_flags);
+      int quads = 0, cards = 0;
+      Hd3d_GetStats(0, &quads, &cards);
+      printf("expect_3dstats: %d quads, %d cards (%s)\n", quads, cards, Hd3d_PaneIs3D(0) ? "3D" : Hd3d_LastWhy2D(0));
+      if (quads < atoi(arg1) || cards < atoi(arg2)) {
+        printf("FAIL: %d quads and %d cards drawn, expected at least %s and %s at frame %d\n", quads, cards, arg1, arg2,
+               frame);
+        g_failures++;
+      }
     } else {
       printf("FAIL: unknown command %s\n", cmd);
       g_failures++;
@@ -1857,6 +2558,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   }
   fclose(f);
   free(pixels);
+  Inst_SnapshotFree(g_mark);
+  g_mark = NULL;
   printf(g_failures ? "MPTEST FAILED\n" : "MPTEST OK\n");
   return g_failures != 0;
 }

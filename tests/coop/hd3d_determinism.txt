@@ -1,0 +1,112 @@
+# 3D view: the game plays exactly the same with it on. The same walk is
+# played three times from the same snapshot: with the 3D view off, on in
+# third person at the classic angle, and on in first person looking north
+# (where the d-pad isn't turned); the game's state hash must come out the
+# same each time. Outdoors, through the Sanctuary's door into the next room
+# (the 3D view keeps the old room while the new one loads) and in a dark cave.
+#
+# Outdoors.
+load 2
+drawrun 30
+clearsprites
+pos 1 3860 1690
+mark
+view3d 0
+hold 1 R
+drawrun 120
+hold 1 D
+drawrun 60
+hold 1 -
+hashmark out
+rewind
+view3d 1
+cam3d 1 tp 0
+hold 1 R
+drawrun 120
+hold 1 D
+drawrun 60
+hold 1 -
+expect_hashmark out
+rewind
+cam3d 1 fp 0
+hold 1 R
+drawrun 120
+hold 1 D
+drawrun 60
+hold 1 -
+expect_hashmark out
+# The Sanctuary, through the door to the north.
+view3d 0
+load 2
+drawrun 30
+enter 12
+drawrun 150
+mark
+hold 1 U
+drawrun 400
+hold 1 -
+drawrun 60
+expect_module 7
+hashmark sanctuary
+rewind
+view3d 1
+cam3d 1 tp 0
+hold 1 U
+drawrun 400
+hold 1 -
+drawrun 60
+expect_hashmark sanctuary
+rewind
+cam3d 1 fp 0
+hold 1 U
+drawrun 400
+hold 1 -
+drawrun 60
+expect_hashmark sanctuary
+# A dark cave.
+view3d 0
+load 2
+drawrun 30
+enter f0
+drawrun 150
+mark
+hold 1 R
+drawrun 90
+hold 1 U
+drawrun 90
+hold 1 -
+hashmark cave
+rewind
+view3d 1
+cam3d 1 tp 0
+hold 1 R
+drawrun 90
+hold 1 U
+drawrun 90
+hold 1 -
+expect_hashmark cave
+rewind
+cam3d 1 fp 0
+hold 1 R
+drawrun 90
+hold 1 U
+drawrun 90
+hold 1 -
+expect_hashmark cave
+# (For comparison, printed only: a turned camera does change the walk.)
+rewind
+cam3d 1 fp 90
+hold 1 R
+drawrun 90
+hold 1 U
+drawrun 90
+hold 1 -
+hashmark turned
+rewind
+cam3d 1 fp 0
+hold 1 R
+drawrun 90
+hold 1 U
+drawrun 90
+hold 1 -
+expect_hashmark cave
