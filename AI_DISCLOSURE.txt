@@ -24,7 +24,8 @@ WHAT THE AI WROTE
   game changes (src/mp.c, src/instance.c, src/session.c, src/net.c,
   src/upnp.c and changes throughout the game code in src/).
 - The menus and on-screen displays (src/ui.c), controls (src/bindings.c),
-  the 2D-HD look (src/hd2d.c), the Four Swords story and title
+  the 2D-HD look (src/hd2d.c), the 3D view with first person
+  (src/hd3d*.c, src/r3d.c, src/cam3d.c), the Four Swords story and title
   (src/story.c), the item randomizer (src/randomizer.c) and the full
   inventory option.
 - Archipelago support: the game side (src/archipelago.c), the network

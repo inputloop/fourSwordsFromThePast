@@ -18,7 +18,7 @@ spare quarter of a three-way split screen,
 private item menus and maps, rollback netcode, spectating while you're down
 (and sending teammates hearts), name tags, color-blind friendly colors,
 rumble, toggleable friendly fire, native widescreen, an optional 2D-HD look,
-an in-game options menu, a built-in item randomizer and
+a 3D view with first person (beta), an in-game options menu, a built-in item randomizer and
 [Archipelago](https://archipelago.gg) multiworld support.
 
 Built on the [snesrev/zelda3](https://github.com/snesrev/zelda3) C
@@ -406,6 +406,90 @@ every pixel came from. It only changes the picture, so it is safe in netplay
 and each player can choose. It costs about 1-2 ms per frame. The code is in
 `src/hd2d.c`.
 
+## 3D view and first person (beta)
+
+<p align="center"><img src="docs/screenshots/3d-compare.png" width="100%" alt="The same courtyard twice: on the left the original picture, on the right the 3D view at its starting angle, where walls, cliffs, pillars and statues have real height"></p>
+
+*The original picture (left) and the 3D view at its starting angle (right).*
+
+The 3D view builds the world as a little diorama from the game's own tiles:
+walls, cliffs, pillars, statues and trees get real height, and Links,
+enemies and items stand in it as flat cards that always face you, like the
+sprites of HD-2D games. At its starting angle it looks almost exactly like
+the original screen, with depth. Turn the camera and the room turns with
+it; switch to first person and you walk through it at Link's eye height.
+
+<p align="center"><img src="docs/screenshots/3d-turned.png" width="49%" alt="The 3D view with the camera turned: the courtyard seen at an angle, the walls and pillars standing, Link between two soldiers"> <img src="docs/screenshots/3d-split.png" width="49%" alt="Split screen in the Sanctuary: player 1 in third person on the left, player 2 in first person on the right looking down the red carpet"></p>
+
+*The camera turned (left). Split screen: a player in first person gets a pane of their own (right).*
+
+<p align="center"><img src="docs/screenshots/3d-first-person.png" width="100%" alt="First person: on the left the Sanctuary's red carpet between brick walls, on the right the castle courtyard with a soldier standing close by as a flat card"></p>
+
+*First person in the Sanctuary (left) and in the castle courtyard (right).*
+
+**Turning it on.** *Pause menu > Video and HD options > 3D view (beta)*, or
+`Hd3d = 1` in the `[Graphics]` section of `zelda3.ini`. It is off by
+default. **F11** turns it on or off for a while, to compare (not saved).
+*Video > 3D view settings* has everything else. The 3D view and the 2D-HD
+look are separate options. Together they give the full HD-2D diorama: depth
+of field from the real depth, bloom, color grade and the 2D-HD lighting.
+
+**Controls.**
+
+| | Keyboard and mouse (player 1) | Controller (any player) |
+|---|---|---|
+| First person on/off | **Left click**, or **Insert** | **L3** (click the left stick) |
+| Turn and tilt the camera | Hold the **right mouse button** and move the mouse; or **Delete** / **Page Down** (turn), **Home** / **End** (tilt) | **Right stick** |
+| Look around in first person | **The mouse** (while the cursor is captured), or the same keys | **Right stick** |
+| Zoom (third person) | **Mouse wheel** (Ctrl + wheel still sizes the window) | |
+| Back to the starting angle | **Middle click** or **Page Up** | **Hold L3** for half a second |
+
+- **Moving.** Once the camera is turned, Up walks where the camera looks
+  (in first person always): Left and Right go sideways, Down goes back.
+  *Controls turn with camera* switches this off in third person. Link still
+  faces and swings his sword in the game's four directions.
+- **First person.** The view is at Link's eye height and starts facing where
+  he faces. Your own Link is hidden; teammates, enemies and items are cards.
+  *First-person view* sets the field of view (50-90 degrees). In split
+  screen a player in first person always gets a pane of their own.
+- **Third person.** *Camera returns* (on by default) eases the camera back to
+  the starting angle two seconds after you let go. Once it is turned, your
+  own Link shows as a faint silhouette where scenery hides him, and scenery
+  right between the camera and Link is thinned out (*Fade scenery near
+  Link*).
+- **Faithful by default.** The game only runs what is on its own screen (and
+  a little around it): enemies further away don't exist. So the world
+  fades into mist where the original screen ends, a little further in first
+  person. Dark rooms stay as dark as in the original (pitch black without
+  the Lamp), or are lit by the 2D-HD lighting when that is on.
+- **What stays 2D.** The item menu, the maps, the title and file select,
+  the world map, game over, and moments the game draws with special screen
+  effects (the spotlight when you enter a house, the mirror's wave, mosaic
+  fades, Swamp Palace's water) show the normal picture, with a short
+  crossfade. Overworld area changes, stairs between floors and falls are 2D
+  for their moment too. Text boxes are drawn over the 3D view, as they are.
+- **The View button and Ping.** L3 is the new View button for every player
+  (*Controls* lets you move it; Insert for player 1's keys). R3, the right
+  stick's click, is still Ping: pressing the stick in while you turn the
+  camera pings. If that gets in the way, move Ping in *Pause menu > Controls*.
+- **Online.** Each player picks their own view; only the picture changes,
+  and for a turned camera which way the d-pad walks, which is worked out
+  on your computer before your buttons are sent, so the game stays in sync.
+- **Cost.** About 1-1.5 ms more per pane and frame than the flat picture
+  (measured on a 4-core 2.1 GHz machine; with the 2D-HD look on, about 1 ms
+  more than the 2D-HD look alone). It all runs on the CPU, so it works with
+  every output method.
+- **Known limits (beta).** Heights are worked out from the tiles, so some
+  spots look odd: cliffs are blocks, stairs and ledges are flat, diagonal
+  walls are steps, and the far side of a turned wall shows what the art
+  drew there. Rooms whose floor or water moves, and a few boss rooms, stay
+  2D.
+
+The code is in `src/hd3d*.c` (scene, sprites, camera input, drawing),
+`src/r3d.c` (the software rasterizer) and `src/cam3d.c` (the camera and
+camera-relative movement). `tools/readme_shots.sh` makes the screenshots
+above from your own ROM.
+
 ## Quick start (Linux / macOS)
 
 ```sh
@@ -440,11 +524,15 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
   Multiplayer, Video and HD options (widescreen 16:9/16:10/18:9, HD world map,
   smooth scaling, no sprite flicker, 2D-HD look, ...) and Gameplay options.
 - Extra controllers press START to drop in as P2-P4.
+- 3D view (when it is on): the right stick (or a right mouse drag) turns
+  the camera, and a left click or L3 switches first person. See
+  [3D view and first person](#3d-view-and-first-person-beta).
 
 ## Where to mod
 
 - `src/` holds the game logic as C: `player.c` (Link), `sprite_main.c` (enemies/NPCs), `dungeon.c`, `overworld.c`, `ancilla.c` (projectiles/effects), `hud.c`.
 - `src/mp.c` (multi-Link engine), `src/session.c` (netplay), `src/ui.c` (overlay and menus).
+- `src/hd2d.c` (the 2D-HD look), `src/hd3d*.c`, `src/r3d.c` and `src/cam3d.c` (the 3D view).
 - `assets/` holds the extracted resources (overworld/dungeon YAML, images, text). Edit these, then rebuild them with `python3 assets/restool.py` (see BUILDING.md).
 - `zelda3.ini` holds the runtime options. The in-game menu saves its changes to `zelda3.coop.ini`.
 - `tests/run_coop_tests.sh` runs headless co-op and netplay regression tests.

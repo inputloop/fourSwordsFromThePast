@@ -349,7 +349,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 | Menu screen | What it does |
 | --- | --- |
 | Multiplayer | Host a game, join by address, find LAN games, add or remove local players, friendly fire, name tags, color-blind friendly colors |
-| Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen, the 2D-HD look and its settings |
+| Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen, the 2D-HD look and its settings, the 3D view and its settings |
 | Gameplay | Randomizer, starting with all items, the Four Swords story and title, plus the original project's extras (switch items with L/R, bug fixes and more) |
 | Controls | Set up each of the four players (keys, buttons, controller, stick, rumble) |
 | Controls help | A short list of the default keys |
@@ -373,11 +373,20 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 To keep Link, the enemies and the hearts and item box crisp, the drawing code (`snes/ppu.c`) also writes down, for every pixel, which layer it came from (background, sprite or HUD), and the colors of Link's pixels when a background tile hides them. The filter skips the HUD completely and never blurs sprites. It reads where the players, torches and fire are from the game's memory, but never changes the game, so online players can each turn it on or off. To stay fast (about 1-2 milliseconds a frame), the blurry copies are made at half and a quarter of the size, and the work is shared by up to four processor cores.
 
+**The 3D view (beta).** An option that shows the world as a small 3D model instead of a flat picture, with a camera you can turn and a first-person view (*Video > 3D view*; the right stick or a right mouse drag turns the camera, a left click or L3 switches first person). The game itself stays exactly as it is: it still thinks in its flat screen, and the 3D view is only a new way of drawing what it would have shown. Each frame it:
+
+- builds the room or area from the game's own tiles. The game knows for every 8x8 tile what it is (floor, wall, pit, water, bush...), and the art is drawn as if seen from above and slightly south, so a point that stands h pixels high is painted h pixels higher up on the screen. Reading the picture that way back gives the height of walls, pillars, statues, trees and cliffs, and their front faces are exactly the painted walls. Seen from the starting angle the 3D view therefore looks almost exactly like the original screen. A room's outer walls are hinged panels: the ones facing the camera stand up, the others lie flat like in the picture until the camera turns toward them,
+- turns Link, the enemies and the items into flat cards standing on their feet, which always face the camera (like the sprites of HD-2D games). To know which little sprite pieces belong to which object, the game's own drawing code marks which object drew which pieces, in a list kept outside the game's memory, and their shadows are laid on the ground,
+- draws all of it with a small software renderer (`src/r3d.c`) on the processor, split over up to four cores, and then puts the HUD and text boxes on top exactly as the game drew them,
+- falls back to the flat picture whenever the game does something only the flat picture can show: menus, maps, the title, the world map, special screen effects (the spotlight when entering a house, the mirror's wave, mosaic fades), area changes, stairs between floors and falls, with a short crossfade.
+
+The game only runs what is on its own screen and a little around it (enemies further away don't exist), so the 3D view fades into mist there. Dark rooms stay dark as in the original. In first person, pressing Up walks where you look: that is the one thing the 3D view changes in the game, and it does it on your own computer, by turning the direction buttons before they are sent, so online play stays in sync. Each player chooses their own view, and in split screen a player in first person gets a pane of their own. It costs about 1-1.5 milliseconds a frame. The code is in `src/hd3d*.c`, `src/r3d.c` and `src/cam3d.c`.
+
 **Settings files.** `zelda3.ini` holds all default settings with explanations. Changes made in the menu are saved to `zelda3.coop.ini`, which overrides the defaults. They are saved automatically when the menu closes, and right away when you host or join a game, so the address you last joined, UPnP, the input delay and the other network settings are remembered.
 
 ## How it is tested and built
 
-The mod has 150 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 164 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -401,6 +410,7 @@ The mod has 150 automatic tests that play the game with no window, by following 
 - the Ping key giving way to another player's key in an old controls line,
 - the polish pass: a Link frozen by a sprite walks again, carrying a teammate through exits and merges, leaving and rejoining (hearts kept, nothing stale), five open menus at once, room flags kept across an exit, the dam staying per world, the item box always showing the leader's item, enemies a teammate killed staying dead across a merge, the group camera (walking together, walking away, dungeon bounds, tethers, text boxes, area edges, menus handing the lead back, rejoining on the way in), and every rewritten story line fitting the text box,
 - the 2D-HD look: a dark room is lit by the filter, and a Link in a doorway stays hidden unless see-through is on,
+- the 3D view: drawing in 3D changes nothing in the game (the game's memory and its fingerprint are the same with the 3D view on or off, also online with one player in 3D), it never writes outside the picture it was given (in every widescreen size), at its test angle it shows exactly the original picture, the direction buttons turn with the camera only when they should (never in menus or text boxes), first person, the camera controls and the View button, split-screen panes, dark rooms and the moments it falls back to the flat picture; its renderer and camera also have their own tests that run on GitHub,
 - menus: the world keeps running (and the Link stands still) while a player is in the item menu, even alone; the options menu stops only its player; the map button goes mini map, full map, no map,
 - screenshots: a few scenes (the HUD, the co-op HUD, the pause menu, the 2D-HD look) are compared with reference screenshots. Those are made from your own copy of the game the first time, and are never uploaded, because the game's graphics belong to Nintendo; so this check runs on your computer, not on GitHub. When something looks different, the test saves the new picture and one with the changed pixels in red.
 
@@ -448,9 +458,11 @@ The mod has 150 automatic tests that play the game with no window, by following 
 | --- | --- |
 | Archipelago | A program and website that link the randomizers of many games into one multiworld |
 | Assumed fill | The randomizer's way of placing important items so that each one is reachable |
+| Card (billboard) | In the 3D view, a flat picture of a sprite standing in the 3D world and always turned toward the camera |
 | Client | A player who joins someone else's online game |
 | Decompiled | Rebuilt from the original machine code into readable code |
 | Deterministic | Same start plus same inputs always gives the same result |
+| First person | In the 3D view, seeing the world through Link's eyes instead of from above |
 | Frame | One step of the game; it runs 60 per second |
 | Ghost | A player with no hearts, waiting to be revived |
 | Hash | One number that sums up a lot of data; it changes if any part changes |

@@ -129,7 +129,15 @@ Players can drop in and drop out at any time.
   overworld, dungeon or house sees it for three seconds: on screen, as an
   arrow at the edge when it's off screen, and on the mini map. The game
   itself never sees the button. A ghost alone in its frozen world can still
-  call for help.
+  call for help. With the 3D view on, the right stick also turns the camera,
+  so pressing it in while turning pings; move Ping to another button in
+  *Pause menu > Controls* if that gets in the way.
+- **3D view (beta).** Each player chooses it for themselves (*Video > 3D
+  view*); the right stick turns the camera and L3 (or a left click for player
+  1) switches first person. In split screen a player in first person gets a
+  pane of their own. Only the picture changes, plus which way the d-pad walks
+  for a turned camera, which is worked out before the buttons are sent, so
+  mixed 2D and 3D players stay in sync online. See the README.
 - **Colors**: P1 green, P2 red, P3 blue, P4 purple. These replace the armor
   colors, so mail upgrades still reduce damage but don't change the tunic.
   *Multiplayer > Player colors > color-blind* switches to colors told apart
@@ -233,6 +241,23 @@ addresses. `src/mp.c` gives each player a private copy of those RAM ranges
   in a dark room it draws the room without the subscreen darkness layer and
   lights it itself. Blurs run at half and quarter resolution on up to 3
   worker threads. It never touches game state, so it is safe in netplay.
+- The optional 3D view (`src/hd3d*.c`, `src/r3d.c`, `src/cam3d.c`, `Hd3d` in
+  `zelda3.ini`) is display-only too. `Hd2d_DrawFrame` asks `Hd3d_DrawFrame`
+  first. In phase A (with the world bound, under the audio lock in split
+  screen) it runs `ZeldaDrawPpuFrame` exactly once (for the HUD, and because
+  that call writes `irq_flag`, which is hashed), copies the sprite state
+  through `g_ppu_frame_hook` inside that call, and reads the room or area's
+  tilemaps, attributes and VRAM into a scene cache; in phase B (outside the
+  lock, on the worker pool) it builds and rasterizes the 3D picture. An OAM
+  tag recorder (`Hd3d_TagBegin/End` around the sprite, ancilla, garnish,
+  follower, push block and Link draw loops) remembers which object drew
+  which OAM entries, per world, outside `g_ram`, snapshots and the hash; a
+  tag counts only while its 4 bytes are still in OAM. All camera state lives
+  outside `g_ram`, `g_mp`, the snapshots and the joypad word. The one effect
+  on the game is the camera-relative d-pad of a local player in first person
+  or with a turned camera: `Hd3d_RemapInputs` in `main.c`, after `Ui_Update`
+  and before `Session_Tick`, so only the remapped word is ever sent,
+  recorded or replayed.
 
 ### World instances (free roaming)
 
