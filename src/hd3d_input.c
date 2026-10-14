@@ -160,7 +160,13 @@ int Hd3dInput_PaneLocal(int view) {
   if (view < 0 || view >= kHd3dMaxPanes)
     return 0;
   int i = g_in.panes_set ? g_in.pane_local[view] : view;
+  if (i == kHd3dPaneFlat)
+    return -1;  // (no camera: never a local player's, so never the d-pad's)
   return ValidLocal(i) ? i : 0;  // (-1: nobody plays here; local 0's camera)
+}
+
+bool Hd3dInput_PaneFlat(int view) {
+  return view >= 0 && view < kHd3dMaxPanes && g_in.panes_set && g_in.pane_local[view] == kHd3dPaneFlat;
 }
 
 int Hd3dInput_PaneCount(void) {

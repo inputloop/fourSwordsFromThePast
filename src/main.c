@@ -205,6 +205,10 @@ static void DrawPpuFrameWithPerf() {
   int8 pane_local[kInstMax];
   // With the 3D view, a player in first person has a pane of their own.
   int nviews = g_hd3d.enabled ? Hd3d_ComputeViews(views, pane_local, kInstMax) : GetViews(views, pane_local);
+  // "Watch everyone": then a pane for each other player's world, always in
+  // 2D (only the players here have 3D cameras).
+  int players[kInstMax];
+  nviews = Ui_AddWatchedPanes(views, pane_local, players, nviews, kInstMax);
   Hd3d_SetPanes(pane_local, nviews);
   // Each screen shows the HUD item of a player playing on this computer.
   const SessionStatus *st = Session_GetStatus();
@@ -218,8 +222,8 @@ static void DrawPpuFrameWithPerf() {
     uv[v].x = nviews > 1 ? (v & 1) * g_snes_width : 0;
     uv[v].y = nviews > 1 ? (v >> 1) * g_snes_height : 0;
     uv[v].w = g_snes_width, uv[v].h = g_snes_height;
-    uv[v].player = pane_local[v] >= 0 ? Ui_WatchedPlayer(pane_local[v]) : -1;
-    uv[v].local = pane_local[v];
+    uv[v].player = players[v];
+    uv[v].local = pane_local[v] >= 0 ? pane_local[v] : -1;
   }
   Ui_SetViews(uv, nviews);
   int cols = nviews >= 2 ? 2 : 1, rows = nviews >= 3 ? 2 : 1;
@@ -872,6 +876,11 @@ static void HandleCommand(uint32 j, bool pressed) {
   if (j == kKeys_Screenshot || j == kKeys_ScreenshotClean) {
     if (pressed)  // (display only too)
       Screenshot_Request(j == kKeys_Screenshot ? kScreenshot_AsSeen : kScreenshot_Clean);
+    return;
+  }
+  if (j == kKeys_WatchEveryone) {
+    if (pressed)
+      Ui_ToggleWatchEveryone();  // (display only: allowed online)
     return;
   }
 

@@ -540,6 +540,12 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
   Multiplayer, Video and HD options (widescreen 16:9/16:10/18:9, HD world map,
   smooth scaling, no sprite flicker, 2D-HD look, ...) and Gameplay options.
 - Extra controllers press START to drop in as P2-P4.
+- **Ctrl+F11** ("Watch everyone", also *Multiplayer > Watch everyone*) shows every
+  joined player's world at once, online players too: side by side for two
+  worlds, 2x2 for three or four, each pane with its own name tags, pings,
+  arrows and mini map. Press it again for your own screen. It only changes
+  the picture (handy for streaming or keeping an eye on a teammate far
+  away); you still hear your own world.
 - 3D view (when it is on): the right stick (or a right mouse drag) turns
   the camera, and a left click or L3 switches first person. See
   [3D view and first person](#3d-view-and-first-person-beta).
@@ -643,6 +649,7 @@ Additionally, the following commands are available:
 | Alt+Enter | Toggle Fullscreen     |
 | F12 | Save a screenshot (in `screenshots/`) |
 | Ctrl+F12 | Save a screenshot without the mod's overlay |
+| Ctrl+F11 | Watch everyone (every player's world on screen) |
 | Shift+F1-F10 | Save snapshot |
 | Ctrl+F1-F10 | Replay the snapshot |
 | 1-9 | Load a dungeons playthrough snapshot |

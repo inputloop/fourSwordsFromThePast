@@ -144,6 +144,17 @@ Players can drop in and drop out at any time.
   with any kind of color blindness (bluish green, orange, blue, reddish
   purple), everywhere: tunics, corner HUD, arrows and tags.
 - **Name tags**: *Multiplayer > Name tags* shows a small P1-P4 over each Link.
+- **Watch everyone**: **Ctrl+F11** (KeyMap `WatchEveryone`) or *Multiplayer >
+  Watch everyone* gives every joined player's world a pane, also the worlds
+  of players on other computers (every computer runs every world anyway):
+  1x2 for two worlds, 2x2 for three or four, one pane per world. Each pane
+  has its own name tags, pings, arrows and mini map; press it again to go
+  back. Display only: the game, its inputs and what you hear (your own
+  world) don't change, so it is safe online, where a remote pane simply
+  shows rollback corrections as they happen. With the 3D view on, your own
+  pane keeps it; the other players' panes are always drawn flat in 2D (this
+  computer has no camera for them), and only your own camera turns your
+  d-pad.
 - **Rumble**: each player's own controller tells them what happens to their
   Link: hurt (harder for bigger hits), down, up again, lifted, thrown and
   landing, lifting someone, and a heartbeat while low on hearts. Turn it off

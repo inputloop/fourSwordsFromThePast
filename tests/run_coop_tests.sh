@@ -30,8 +30,9 @@ unset ZELDA3_NETSIM
 # client that loses its connection, restarts and is removed (net_reconnect).
 # Archipelago items and DeathLinks over netplay (net_ap, net_ap_worlds).
 # The 3D view's turned d-pad over netplay: the client's Link walks where its
-# camera looks and both stay in sync (net_hd3d).
-for pair in net_combat net_combat_slow net_reconnect net_ap net_ap_worlds net_hd3d; do
+# camera looks and both stay in sync (net_hd3d). "Watch everyone" online:
+# both computers draw every player's world and stay in sync (net_multiview).
+for pair in net_combat net_combat_slow net_reconnect net_ap net_ap_worlds net_hd3d net_multiview; do
   ./zelda3 --mptest tests/coop/${pair}_host.txt > tests/out/${pair}_host.log 2>&1 &
   host=$!
   sleep 1

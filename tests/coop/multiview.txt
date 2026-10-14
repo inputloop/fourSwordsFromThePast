@@ -1,0 +1,65 @@
+# "Watch everyone" (Ctrl+F11, Multiplayer menu): every joined player's world gets
+# a pane of its own, also players who don't play on this computer (here
+# P2-P4 are joined without a local seat, as players of other computers).
+# One pane per world: 1x2 for two worlds, 2x2 for three or four. Toggled off,
+# the screen is the local player's again. It only changes the picture: the
+# state hash after running with every pane drawn is the one without.
+load 2
+run 30
+join 2
+run 20
+pos 2 3920 1900
+run 120
+expect_apart 1 2
+expect_panes 1
+watch 1
+expect_panes 2
+gameshot tests/out/multiview_2.ppm
+watch 0
+expect_panes 1
+# Four players in four worlds.
+join 3
+join 4
+run 20
+pos 3 3600 1900
+pos 4 3600 1579
+run 120
+expect_instances 4
+expect_panes 1
+watch 1
+expect_panes 4
+gameshot tests/out/multiview_4.ppm
+# Two of them together again: their world gets one pane.
+pos 4 3610 1890
+run 120
+expect_same 3 4
+expect_panes 3
+gameshot tests/out/multiview_3.ppm
+pos 4 3600 1579
+run 120
+expect_panes 4
+# Display only: the same frames with and without the extra panes drawn.
+watch 0
+gamerun 2
+mark
+gamerun 120
+hashmark single
+rewind
+watch 1
+gamerun 120
+expect_hashmark single
+# The 3D view: the local player's pane stays 3D; the others are always 2D
+# (nobody here has a camera for them), and the d-pad turns with the local
+# player's own camera only.
+view3d 1
+expect_panes 4
+cam3d 1 tp 35 55
+gamerun 30
+gameshot tests/out/multiview_3d.ppm
+cam3d 1 fp 90
+gamerun 30
+expect_panes 4
+expect_remap 1 U R
+watch 0
+expect_panes 1
+view3d 0

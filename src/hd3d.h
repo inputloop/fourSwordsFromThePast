@@ -41,6 +41,9 @@ void Hd3d_FinishPanes(void);
 // camera each pane uses. With 3D off it is exactly the old one-pane-per-world list.
 int Hd3d_ComputeViews(int *views, int8 *pane_local, int max);
 void Hd3d_SetPanes(const int8 *pane_local, int n);   // before drawing (default: pane v uses local v)
+// A pane_local for a pane that is always drawn in 2D through nobody's camera
+// ("Watch everyone": the world of a player on another computer).
+enum { kHd3dPaneFlat = -2 };
 bool Hd3d_PaneIs3D(int view);                        // the last picture of pane view was 3D
 
 // --- Input (main.c once per loop; mptest's tick does the same) ---

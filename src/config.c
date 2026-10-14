@@ -46,6 +46,8 @@ static const uint16 kDefaultKbdControls[kKeys_Total] = {
   _(SDLK_F11), _(SDLK_DELETE), _(SDLK_PAGEDOWN), _(SDLK_HOME), _(SDLK_END), _(SDLK_PAGEUP),
   // Screenshot, ScreenshotClean
   _(SDLK_F12), C(SDLK_F12),
+  // WatchEveryone
+  C(SDLK_F11),
 };
 #undef _
 #undef A
@@ -68,6 +70,7 @@ static const KeyNameId kKeyNameId[] = {
   S(Pause), S(PauseDimmed), S(Turbo), S(ReplayTurbo), S(WindowBigger), S(WindowSmaller), S(VolumeUp), S(VolumeDown), S(DisplayPerf), S(ToggleRenderer),
   S(View3d), S(View3dTurnLeft), S(View3dTurnRight), S(View3dTiltUp), S(View3dTiltDown), S(View3dReset),
   S(Screenshot), S(ScreenshotClean),
+  S(WatchEveryone),
 };
 #undef S
 #undef M
@@ -545,6 +548,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return true;
     } else if (StringEqualsNoCase(key, "NameTags")) {
       return ParseBool(value, &g_config.mp_name_tags);
+    } else if (StringEqualsNoCase(key, "WatchEveryone")) {
+      return ParseBool(value, &g_config.mp_watch_everyone);
     } else if (StringEqualsNoCase(key, "ColorBlindColors")) {
       return ParseBool(value, &g_config.mp_colorblind);
     } else if (StringEqualsNoCase(key, "UseUpnp")) {

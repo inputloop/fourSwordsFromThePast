@@ -596,6 +596,11 @@ static void ScreenMultiplayer() {
     g_config.mp_name_tags ^= 1;
     g_ui.dirty_settings = true;
   }
+  Item("Watch everyone", OnOff(g_config.mp_watch_everyone));
+  if (Act() != kAct_None) {
+    Ui_ToggleWatchEveryone();
+    g_ui.dirty_settings = true;
+  }
   Item("Player colors", g_config.mp_colorblind ? "color-blind" : "standard");
   if (Act() != kAct_None) {
     g_config.mp_colorblind ^= 1;
@@ -1608,6 +1613,35 @@ void Ui_SetViews(const UiView *views, int n) {
   memcpy(g_views, views, g_nviews * sizeof(UiView));
 }
 
+bool Ui_WatchEveryone() {
+  return g_config.mp_watch_everyone;
+}
+
+void Ui_ToggleWatchEveryone() {
+  g_config.mp_watch_everyone ^= 1;
+  Toast(g_config.mp_watch_everyone ? "Watching everyone" : "Watching your own world");
+}
+
+int Ui_AddWatchedPanes(int *views, int8 *pane_local, int *players, int n, int max) {
+  for (int v = 0; v < n; v++)
+    players[v] = pane_local[v] >= 0 ? Ui_WatchedPlayer(pane_local[v]) : -1;
+  if (!g_config.mp_watch_everyone || Inst_NumJoined() == 0)
+    return n;
+  // Nobody plays on this computer: its one pane (of the current world) makes
+  // way for the players' own.
+  int k = n == 1 && pane_local[0] < 0 ? 0 : n;
+  max = IntMin(max, 4);
+  for (int p = 0; p < kMpMaxPlayers && k < max; p++) {
+    int w = Inst_IsJoined(p) ? Inst_ViewOfPlayer(p) : -1;
+    bool seen = w < 0;
+    for (int v = 0; v < k && !seen; v++)
+      seen = views[v] == w;
+    if (!seen)
+      views[k] = w, pane_local[k] = kHd3dPaneFlat, players[k] = p, k++;
+  }
+  return k ? k : n;
+}
+
 // A filled triangle with its tip at (px, py), pointing along (ux, uy).
 static void DrawArrow(int px, int py, float ux, float uy, int size, uint32 color) {
   for (int y = py - size; y <= py + size; y++) {
@@ -2471,6 +2505,7 @@ void Ui_SaveSettings() {
   fprintf(f, "Port = %d\n", g_config.mp_port);
   fprintf(f, "InputDelay = %d\n", g_config.mp_input_delay);
   fprintf(f, "NameTags = %d\n", g_config.mp_name_tags);
+  fprintf(f, "WatchEveryone = %d\n", g_config.mp_watch_everyone);
   fprintf(f, "ColorBlindColors = %d\n", g_config.mp_colorblind);
   if (g_config.mp_player_name)
     fprintf(f, "PlayerName = %s\n", g_config.mp_player_name);

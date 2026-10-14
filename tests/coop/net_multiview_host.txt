@@ -1,0 +1,31 @@
+# "Watch everyone" online (run together with net_multiview_client.txt): the
+# client's player (P2) starts in a world of its own (at its house) and walks
+# around there. Both computers watch everyone and draw every pane each tick,
+# as the game does: the host gets a 2D pane for P2 (who plays on the other
+# computer), the client one for P1. Only the picture changes: the computers
+# stay in sync (no resync), rollback corrections just show in the panes.
+load 2
+run 30
+clearsprites
+drawrun 10
+drawtick 1
+watch 1
+host 47487
+waitplayers 2
+tick 60
+expect_players 2
+expect_apart 1 2
+expect_panes 2
+# (The client walks north for about 6 s.)
+tick 480
+status
+expect_apart 1 2
+expect_panes 2
+gameshot tests/out/net_multiview_host.ppm
+tick 120
+expect_resyncs 0
+watch 0
+expect_panes 1
+tick 60
+expect_players 2
+expect_resyncs 0

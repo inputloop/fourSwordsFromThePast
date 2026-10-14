@@ -33,9 +33,11 @@ enum {
 enum {
   kHd3dWhy_None, kHd3dWhy_Off, kHd3dWhy_Renderer, kHd3dWhy_Scale, kHd3dWhy_Mode, kHd3dWhy_Blank,
   kHd3dWhy_Mosaic, kHd3dWhy_Window, kHd3dWhy_Module, kHd3dWhy_Room, kHd3dWhy_Size, kHd3dWhy_Memory,
+  kHd3dWhy_Flat,
   kHd3dWhy_Count,
 };
-// "none", "off", "renderer", "scale", "mode", "blank", "mosaic", "window", "module", "room", "size", "memory"
+// "none", "off", "renderer", "scale", "mode", "blank", "mosaic", "window", "module", "room", "size", "memory",
+// "flat" (a kHd3dPaneFlat pane)
 extern const char *const kHd3dWhyNames[kHd3dWhy_Count];
 
 // What a dungeon room's BG1 is (from dung_hdr_bg2_properties, never TM/TS).
@@ -159,7 +161,8 @@ void Hd3dLinkPose_Read(Hd3dSpriteFrame *sf, const Cam3d *cam);
 // ---- hd3d_input.c: cameras, input, panes ----
 extern Cam3d g_hd3d_cam[kHd3dMaxLocal];
 void Hd3dInput_Tuning(Cam3dTuning *t);           // from g_hd3d
-int Hd3dInput_PaneLocal(int view);               // whose camera pane view uses (Hd3d_SetPanes)
+int Hd3dInput_PaneLocal(int view);               // whose camera pane view uses (Hd3d_SetPanes; -1: a flat pane)
+bool Hd3dInput_PaneFlat(int view);               // pane view is always drawn in 2D (kHd3dPaneFlat)
 int Hd3dInput_PaneCount(void);
 void Hd3dInput_ResetAll(void);
 // First person: local's view turns to where its Link faces (RAM 0x2F) when

@@ -45,6 +45,16 @@ typedef struct UiView {
   int local;
 } UiView;
 void Ui_SetViews(const UiView *views, int n);
+// "Watch everyone" (display only): every joined player's world on screen,
+// up to four panes. F12 (KeyMap WatchEveryone) and the Multiplayer menu.
+bool Ui_WatchEveryone();
+void Ui_ToggleWatchEveryone();
+// The panes to draw, given those of the players on this computer (n of them,
+// from Hd3d_ComputeViews): with "Watch everyone" on, after them one pane for
+// each other joined player's world that no pane shows yet (up to 4 in all),
+// with pane_local kHd3dPaneFlat (always drawn in 2D). players[] gets whose
+// eyes each pane looks through (UiView.player). Returns the new count.
+int Ui_AddWatchedPanes(int *views, int8 *pane_local, int *players, int n, int max);
 // Draws the overlay into a 32-bit XRGB buffer. scale is the render scale (1 or 4).
 void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale);
 // Writes the settings changed through the menu to zelda3.coop.ini.

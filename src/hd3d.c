@@ -32,7 +32,7 @@
 Hd3dSettings g_hd3d;
 
 const char *const kHd3dWhyNames[kHd3dWhy_Count] = {
-  "none", "off", "renderer", "scale", "mode", "blank", "mosaic", "window", "module", "room", "size", "memory",
+  "none", "off", "renderer", "scale", "mode", "blank", "mosaic", "window", "module", "room", "size", "memory", "flat",
 };
 
 enum {
@@ -1057,6 +1057,13 @@ bool Hd3d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int 
   bool same_world;
   int step = Tick(p, &same_world);
   p->pending = false;
+  // A flat pane ("Watch everyone": another computer's player) has no camera
+  // here, and nothing of a 3D picture to fade out of.
+  if (Hd3dInput_PaneFlat(view)) {
+    p->why = kHd3dWhy_Flat;
+    p->last_ok = false;
+    return false;
+  }
   Ppu *ppu = g_zenv.ppu;
   int w = 256 + 2 * ppu->extraLeftRight, h = render_flags & kPpuRenderFlags_Height240 ? 240 : 224;
   int why = Why2D(ppu, render_flags, w, h, pixel_buffer, pitch);

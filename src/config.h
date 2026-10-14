@@ -45,6 +45,8 @@ enum {
   // Screenshots (display only too): as on screen, and without the overlay.
   kKeys_Screenshot,
   kKeys_ScreenshotClean,
+  // "Watch everyone": every joined player's world on screen (display only).
+  kKeys_WatchEveryone,
   kKeys_Total,
 };
 
@@ -95,6 +97,7 @@ typedef struct Config {
   bool mp_use_upnp;
   int mp_input_delay;  // frames (online only)
   bool mp_name_tags;   // P1-P4 over each Link
+  bool mp_watch_everyone;  // every joined player's world on screen (display only)
   bool mp_colorblind;  // color-blind friendly player colors
   uint16 mp_port;
   const char *mp_player_name;

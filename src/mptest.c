@@ -84,6 +84,9 @@
 //   shot <file.ppm>     render the current frame
 //   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
 //   splitshot3 <file.ppm> <p> <q> <r>  three players' worlds in a 2x2 window, the team panel in the fourth quarter
+//   watch <0|1>         "Watch everyone": every joined player's world gets a pane (as Ctrl+F11)
+//   gameshot <file.ppm> the window as the game's loop draws it (every pane, the overlay)
+//   gamerun <n>         run n frames, drawing each as the game's loop does (gameshot without the file)
 //   expect_shot <name> [max % of pixels that may differ] [channel tolerance]  compare with tests/baseline/<name>.ppm
 //   screenshot <folder> <seen|clean> [overlay]  the screenshot keys (F12 / Ctrl+F12) on the frame "shot" draws:
 //                       the PNG written to that folder must read back as the frame as seen / without the
@@ -130,7 +133,7 @@
 //   expect_fp <p> <0|1>  local p-1's camera is in first person
 //   expect_cam3d <p> <yaw> [pitch] [tolerance]  local p-1's camera (degrees, default tolerance 0.5)
 //   expect_zoom3d <p> <zoom%> [tolerance%]  local p-1's third-person zoom (default tolerance 1%)
-//   expect_panes <n>    Hd3d_ComputeViews gives n panes
+//   expect_panes <n>    the game would draw n panes (Hd3d_ComputeViews, then Watch everyone's)
 //   expect_input <p> <keys>  Bindings_GetInput of local p-1 (letters as hold)
 //   expect_view <p> <0|1>  local p-1's View button is down
 //   expect_luma <x0> <y0> <x1> <y1> <min> <max>  draw view 0: average luma (0-255) of pixels x0..x1-1, y0..y1-1
@@ -514,14 +517,18 @@ static int DrawView(int p, uint32 *buf, int width, uint32 render_flags) {
 }
 
 // tick's drawing (drawtick 1), as the game's loop draws: a pane per world
-// seen and per local player in first person; split screen in two phases.
-static void DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags) {
-  int views[kInstMax];
+// seen and per local player in first person (and with "Watch everyone" one
+// per other player's world); split screen in two phases. *pic_w, *pic_h get
+// the picture's size (pitch: *pic_w). Returns the number of panes.
+static int DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags, int *pic_w, int *pic_h) {
+  int views[kInstMax], players[kInstMax];
   int8 pane_local[kInstMax];
+  *pic_w = width, *pic_h = height;
   int n = Hd3d_ComputeViews(views, pane_local, kInstMax);
   if (n < 1)
-    return;
+    return 0;
   n = n > 4 ? 4 : n;
+  n = Ui_AddWatchedPanes(views, pane_local, players, n, 4);
   Hd3d_SetPanes(pane_local, n);
   const SessionStatus *st = Session_GetStatus();
   g_mp_local_mask = 0;
@@ -531,7 +538,7 @@ static void DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags
   UiView uv[4];
   for (int v = 0; v < n; v++)
     uv[v] = (UiView){ n > 1 ? (v & 1) * width : 0, n > 1 ? (v >> 1) * height : 0, width, height,
-                      pane_local[v] >= 0 ? Ui_WatchedPlayer(pane_local[v]) : -1, pane_local[v] };
+                      players[v], pane_local[v] >= 0 ? pane_local[v] : -1 };
   Ui_SetViews(uv, n);
   int home = Inst_Current();
   if (n == 1) {
@@ -540,6 +547,7 @@ static void DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags
     Hd3d_BeginPanes(false);
     Hd2d_DrawFrame((uint8 *)buf, (size_t)width * scale * 4, render_flags, 0);
     Ui_Draw((uint8 *)buf, width * scale * 4, width * scale, height * scale, scale);
+    *pic_w = width * scale, *pic_h = height * scale;
   } else {
     Hd3d_BeginPanes(true);
     for (int v = 0; v < n; v++) {
@@ -549,8 +557,10 @@ static void DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags
     }
     Hd3d_FinishPanes();
     Ui_Draw((uint8 *)buf, width * 2 * 4, width * 2, n > 2 ? height * 2 : height, 1);
+    *pic_w = width * 2, *pic_h = n > 2 ? height * 2 : height;
   }
   Inst_Switch(home);
+  return n;
 }
 
 static void HashBytes(void *ctx, void *data, size_t size) {
@@ -618,6 +628,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   Ui_Init(NULL);
   // (A 3D setting saved from the menu must not change the tests.)
   Hd3d_ResetForTests();
+  g_config.mp_watch_everyone = false;  // (nor "Watch everyone")
   g_remap3d = true, g_drawtick = false, g_nhashmarks = 0;
   memset(g_markpos_set, 0, sizeof(g_markpos_set));
   // (Room for a picture at 4x, or 2x2 panes.)
@@ -759,6 +770,30 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         uint16 in[kMpMaxPlayers];
         HeldInputs(held, in);
         Inst_RunFrame(in);
+      }
+    } else if (!strcmp(cmd, "watch")) {
+      // watch <0|1>: "Watch everyone" (as Ctrl+F11 or the Multiplayer menu)
+      if (Ui_WatchEveryone() != (atoi(arg1) != 0))
+        Ui_ToggleWatchEveryone();
+    } else if (!strcmp(cmd, "gamerun") || !strcmp(cmd, "gameshot")) {
+      // gamerun <n>: run n frames, drawing each as the game's loop does (every
+      // pane and the overlay); gameshot <file.ppm>: draw the window that way
+      bool shot = !strcmp(cmd, "gameshot");
+      for (int n = shot ? 1 : atoi(arg1); n > 0; n--) {
+        if (!shot) {
+          uint16 in[kMpMaxPlayers];
+          HeldInputs(held, in);
+          Inst_RunFrame(in);
+          frame++;
+        }
+        int pic_w, pic_h, panes = DrawLikeGame(pixels, width, height, render_flags, &pic_w, &pic_h);
+        if (shot) {
+          WritePpm(arg1, pic_w, pic_h, pixels, pic_w);
+          printf("wrote %s (%d panes:", arg1, panes);
+          for (int v = 0; v < panes; v++)
+            printf(" %s", Hd3d_PaneIs3D(v) ? "3D" : Hd3d_LastWhy2D(v));
+          printf(")\n");
+        }
       }
     } else if (!strcmp(cmd, "drawrun")) {
       // drawrun <n>: runs n frames and draws each the way the game does on
@@ -1410,7 +1445,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           frame += Session_Tick(in, g_wanted_zelda_features);
         Ap_Tick();
         if (g_drawtick)
-          DrawLikeGame(pixels, width, height, render_flags);
+          DrawLikeGame(pixels, width, height, render_flags, &(int){ 0 }, &(int){ 0 });
         TrackSprites(frame, view);
         SDL_Delay(16);
         SessionPlayer seats[kMpMaxPlayers];
@@ -2577,13 +2612,19 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
     } else if (!strcmp(cmd, "expect_panes")) {
       // expect_panes <n>: the panes the game would draw now (a pane per world
-      // seen, and one for each local player in first person)
-      int views[kInstMax];
+      // seen, one for each local player in first person, and with "Watch
+      // everyone" one for each other player's world)
+      int views[kInstMax], players[kInstMax];
       int8 pane_local[kInstMax];
       int n = Hd3d_ComputeViews(views, pane_local, kInstMax);
+      n = Ui_AddWatchedPanes(views, pane_local, players, n, kInstMax);
       printf("panes:");
-      for (int v = 0; v < n; v++)
-        printf(" world %d (local P%d)", views[v], pane_local[v] + 1);
+      for (int v = 0; v < n; v++) {
+        if (pane_local[v] == kHd3dPaneFlat)
+          printf(" world %d (P%d, flat)", views[v], players[v] + 1);
+        else
+          printf(" world %d (local P%d)", views[v], pane_local[v] + 1);
+      }
       printf("\n");
       if (n != atoi(arg1)) {
         printf("FAIL: %d panes, expected %s at frame %d\n", n, arg1, frame);
