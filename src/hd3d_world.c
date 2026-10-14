@@ -1229,6 +1229,13 @@ static void BuildProps(Hd3dScene *s, int L) {
     // (The marks stay: a piece too big is a relief, and is not tried again.)
     if (big || r1 + 1 >= n)
       continue;
+    // A chest stays a block: its lid and front read better as a box than as
+    // a picture turning to face the camera.
+    bool chest = false;
+    for (int k = 0; k < tail; k++)
+      chest |= (ly->attr[g_list[k]] & 0xf8) == 0x58;
+    if (chest)
+      continue;
     // The box may hold only this piece, floor and pits.
     for (int k = 0; k < tail; k++)
       g_mark[g_list[k]] = 2;
