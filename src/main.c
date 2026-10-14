@@ -645,9 +645,11 @@ int main(int argc, char** argv) {
           }
         }
         // The 3D view: left click first person, middle click the classic
-        // view, right drag turns the camera.
-        Hd3d_OnMouseButton(event.button.button, event.button.state == SDL_PRESSED, event.button.clicks,
-                           SDL_GetModState(), event.button.which == SDL_TOUCH_MOUSEID);
+        // view, right drag turns the camera. (Paused, only letting go of the
+        // right button: a click would change a picture that isn't drawn.)
+        if (!g_paused || (event.button.button == SDL_BUTTON_RIGHT && event.button.state != SDL_PRESSED))
+          Hd3d_OnMouseButton(event.button.button, event.button.state == SDL_PRESSED, event.button.clicks,
+                             SDL_GetModState(), event.button.which == SDL_TOUCH_MOUSEID);
         break;
       case SDL_MOUSEMOTION:
         // (Only while the 3D view has the mouse: moves of the free cursor,

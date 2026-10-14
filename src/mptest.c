@@ -2342,8 +2342,10 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       bool hd2d_on = g_hd2d.enabled, hd3d_on = g_hd3d.enabled;
       size_t npx = (size_t)width * height;
       uint32 *a = calloc(npx * 16, 4), *b = calloc(npx * 16, 4);
+      // (The flags alone: Hd3d_SetEnabled would also leave first person, as
+      // F11 does, and a check must not change the cameras.)
       g_hd2d.enabled = false;
-      Hd3d_SetEnabled(false);
+      g_hd3d.enabled = false;
       // (The 2D picture as the PPU draws it.)
       int home = Inst_Current();
       if (Inst_ViewOfPlayer(view) >= 0)
@@ -2354,13 +2356,13 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       g_mp_local_mask = 1 << view;
       Hd2d_Draw2D((uint8 *)a, (size_t)width * scale * 4, render_flags, 0);
       Inst_Switch(home);
-      Hd3d_SetEnabled(true);
+      g_hd3d.enabled = true;
       Hd3d_SetTestCamera(true);
       DrawView(view, b, width, render_flags);
       bool is3d = Hd3d_PaneIs3D(0);
       const char *why = Hd3d_LastWhy2D(0);
       Hd3d_SetTestCamera(false);
-      Hd3d_SetEnabled(hd3d_on);
+      g_hd3d.enabled = hd3d_on;
       g_hd2d.enabled = hd2d_on;
       int diff = 0, tol = atoi(arg2);
       for (size_t k = 0; k < npx && scale == 1; k++) {

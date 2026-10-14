@@ -1,9 +1,12 @@
 # 3D view, first person: the view starts where it should. Switching to
 # first person while walking keeps the Link walking the same way (the d-pad
-# is not turned under a held direction until it is let go). Turning the 3D
-# view off and on again in first person looks the way the Link now faces.
+# is not turned under a held direction until it is let go), also when the
+# 3D view comes back on during the walk, when first person is entered again
+# during it, and with "Controls turn with camera" off. Turning the 3D view
+# off and on again in first person looks the way the Link now faces.
 # Straight stairs to another floor turn the view to where the Link comes
-# out facing.
+# out facing. Where the picture is 2D the d-pad isn't turned, also through
+# the game's scrolls. A check (expect_exact3d) leaves the camera alone.
 load 2
 run 30
 view3d 1
@@ -59,3 +62,101 @@ hold 1 -
 drawrun 10
 expect_cam3d 1 180 8 5
 expect_3d 1
+# First person, F11 off, a walk south in 2D, F11 on again while walking:
+# still south (the view looks south too).
+cam3d 1 tp 0 45
+load 2
+run 30
+view3d 1
+drawtick 1
+tick 3
+clearsprites
+click left
+tick 30
+expect_fp 1 1
+key3d toggle
+tick 3
+expect_3d 0 off
+hold 1 D
+tick 20
+markpos 1
+key3d toggle
+tick 12
+expect_fp 1 1
+expect_cam3d 1 180 8
+expect_moved 1 south
+expect_3d 1
+hold 1 -
+tick 2
+# First person looking north, walking back (south); out of first person and
+# in again during the walk: still south.
+load 2
+run 30
+tick 3
+cam3d 1 fp 0 8
+tick 3
+hold 1 D
+tick 10
+markpos 1
+click left
+tick 10
+expect_fp 1 0
+expect_moved 1 south
+markpos 1
+click left
+tick 12
+expect_fp 1 1
+expect_moved 1 south
+hold 1 -
+tick 2
+# A check draws in 2D and with the test camera: the camera is as it was.
+cam3d 1 fp 45 8
+drawrun 2
+expect_exact3d 100 255
+drawrun 2
+expect_cam3d 1 45 8 1
+# A room with a moving floor is 2D: looking east in first person, up stays
+# up, also through the scroll to the next room.
+view3d 1
+load 2
+drawrun 30
+enter 4a
+drawrun 150
+clearsprites
+poke 46c 03
+cam3d 1 fp 90 8
+drawrun 2
+expect_3d 0 room
+expect_remap 1 U U
+expect_remap 1 - -
+hold 1 U
+drawuntil 7 1 300
+expect_3d 0 room
+expect_remap 1 U U
+hold 1 -
+expect_remap 1 - -
+# "Controls turn with camera" off: first person entered walking south keeps
+# south; once let go, down walks back from the view (north).
+cam3d 1 tp 0 45
+load 2
+run 30
+view3d 1
+view3dset turn 0
+drawtick 1
+tick 3
+clearsprites
+hold 1 D
+tick 20
+markpos 1
+click left
+tick 30
+expect_fp 1 1
+expect_moved 1 south
+hold 1 -
+tick 2
+hold 1 D
+markpos 1
+tick 20
+expect_moved 1 north
+hold 1 -
+view3dset turn 1

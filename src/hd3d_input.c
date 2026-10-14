@@ -311,30 +311,44 @@ void Hd3d_HandleViewButtons(void) {
   }
 }
 
+// The d-pad reaches the game as it is. A walk in progress is latched
+// unturned, so the remap coming on under it (the 3D view back on, first
+// person entered with "Controls turn with camera" off) keeps its way until
+// the d-pad is let go.
+static uint16 Unturned(Cam3dRemap *r, uint16 input) {
+  if (input & 0xf0)
+    r->latched = true, r->latched_yaw = 0.0f, r->latched_fp = false;
+  else
+    Cam3d_RemapReset(r);
+  return input;
+}
+
 uint16 Hd3d_RemapLocal(int local, int player, uint16 input) {
   if (!ValidLocal(local))
     return input;
   Cam3dRemap *r = &g_in.remap[local];
   // A ghost watching a teammate is never turned.
-  if (!g_hd3d.enabled || player < 0 || Ui_WatchedPlayer(local) != player) {
-    Cam3d_RemapReset(r);
-    return input;
-  }
+  if (!g_hd3d.enabled || player < 0 || Ui_WatchedPlayer(local) != player)
+    return Unturned(r, input);
   SyncFirstPerson(local);
   int cl = CameraLocal(local);
   SyncFirstPerson(cl);
   const Cam3d *c = &g_hd3d_cam[cl];
   uint8 m = Inst_PlayerViewModule(player), s = Inst_PlayerViewSubmodule(player);
-  // Only in the world's own modules (not in menus or text boxes), where the
-  // camera was really seen in 3D while walking around, and in third person
-  // only with "Controls turn with camera". (Through the game's own scrolls
-  // and transitions it keeps turning: they ignore the d-pad until their last
-  // frame, whose word the game then plays on the first frame of plain play.)
-  if (!(m == 7 || m == 9 || m == 11) || (s == 0 && !Hd3d_LocalSees3D(cl)) ||
-      !(c->first_person || g_hd3d.turn_controls)) {
+  // Only in the world's own modules (not in menus or text boxes: a direction
+  // held through one turns with the camera afterwards).
+  if (!(m == 7 || m == 9 || m == 11)) {
     Cam3d_RemapReset(r);
     return input;
   }
+  // Where the camera was really seen in 3D while walking around, and in
+  // third person only with "Controls turn with camera". (Through the game's
+  // own scrolls and transitions a walk keeps its way, also where they are
+  // 2D: they ignore the d-pad until their last frame, whose word the game
+  // then plays on the first frame of plain play.)
+  bool sees = Hd3d_LocalSees3D(cl);
+  if ((s == 0 ? !sees : !sees && !r->latched) || !(c->first_person || g_hd3d.turn_controls))
+    return Unturned(r, input);
   // The left stick's own direction when it moves Link (a single rounding to
   // 8 directions); keys and the d-pad as they are.
   float mx = 0.0f, my = 0.0f;

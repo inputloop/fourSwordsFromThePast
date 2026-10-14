@@ -375,9 +375,11 @@ uint16 Cam3d_Remap(Cam3dRemap *r, const Cam3d *c, uint16 input, float move_x, fl
     yaw = c->fp_yaw;
     r->latched_yaw = yaw, r->latched = true, r->latched_fp = true;
   } else {
-    // A turning (or returning) camera never steers a walk in progress.
+    // A turning (or returning) camera never steers a walk in progress (nor
+    // does first person entered again during it).
     if (!r->latched)
       r->latched_yaw = c->yaw, r->latched = true;
+    r->latched_fp = false;
     yaw = r->latched_yaw;
   }
   return Cam3d_Rotate(r, input, move_x, move_y, yaw);

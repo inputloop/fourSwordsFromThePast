@@ -481,7 +481,7 @@ static void ReadPose(Pane *p, int player, float dt, bool snap) {
   int cam_x = (int)BG2HOFS_copy2 - e, cam_y = (int)BG2VOFS_copy2;
   bool lower = player_is_indoors && *Mp_PlayerRam(player, 0xEE) != 0;  // link_is_on_lower_level
   // (Outdoors the ground has terraces: the height under the Link's feet.)
-  int g = Hd3dScene_GroundZ(p->scene, lower, Mp_PlayerX(player) + 8, Mp_PlayerY(player) + 20);
+  int g = Hd3dScene_StandZ(p->scene, lower, Mp_PlayerX(player) + 8, Mp_PlayerY(player) + 20);
   SmoothTo(&p->tz, (float)g, dt, 0.15f, snap);
   Cam3dPose *pose = &p->pose;
   pose->w = p->w, pose->h = p->h;
@@ -1054,9 +1054,12 @@ bool Hd3d_Project(int view, int x, int y, int above, int *sx, int *sy, bool *beh
   const Pane *p = PaneOf(view);
   if (!p || !p->is3d || !p->cam_ok || !g_hd3d.enabled)
     return false;
-  // (The ground is taken at the upper floor's level.)
+  // (The ground is taken at the upper floor's level; outdoors at its terrace,
+  // where the cards stand. Ui_Draw runs after Hd3d_FinishPanes, so the
+  // pane's scene is still the one it drew.)
+  int g = Hd3dScene_StandZ(p->scene, 0, x, y);
   float pt[3], fx, fy, depth;
-  pt[0] = (float)x, pt[1] = (float)y, pt[2] = (float)above;
+  pt[0] = (float)x, pt[1] = (float)(y + g), pt[2] = (float)(g + above);
   bool front = R3d_Project(&p->cam, pt, &fx, &fy, &depth);
   fx = Clampf(fx, -1e6f, 1e6f), fy = Clampf(fy, -1e6f, 1e6f);
   *sx = (int)floorf(fx), *sy = (int)floorf(fy);
@@ -1068,8 +1071,9 @@ float Hd3d_ScaleAt(int view, int x, int y) {
   const Pane *p = PaneOf(view);
   if (!p || !p->is3d || !p->cam_ok || !g_hd3d.enabled)
     return 1.0f;
+  int g = Hd3dScene_StandZ(p->scene, 0, x, y);
   float pt[3], fx, fy, depth;
-  pt[0] = (float)x, pt[1] = (float)y, pt[2] = 0.0f;
+  pt[0] = (float)x, pt[1] = (float)(y + g), pt[2] = (float)g;
   if (!R3d_Project(&p->cam, pt, &fx, &fy, &depth))
     return 1.0f;
   return R3d_ScaleAt(&p->cam, depth);

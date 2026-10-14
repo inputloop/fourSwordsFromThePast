@@ -66,6 +66,9 @@ int Hd3dScene_WalkZ(const Hd3dScene *s, int layer);
 // there (on a cliff face below a ledge, partway down it); else as WalkZ.
 // Something standing there is drawn at (x, y + z, z) (the relief rule).
 int Hd3dScene_GroundZ(const Hd3dScene *s, int layer, int x, int y);
+// Where something standing at picture point (x, y) stands: the ground, or a
+// higher ground just north that the relief puts on the same spot.
+int Hd3dScene_StandZ(const Hd3dScene *s, int layer, int x, int y);
 // Heights grow in (0 to 1 over 0.3 s) once a scene that was drawn flat
 // becomes ready; a scene first drawn when already ready starts at 1.
 float Hd3dScene_StepRise(Hd3dScene *s, float dt, bool drawn);

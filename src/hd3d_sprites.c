@@ -470,6 +470,9 @@ static int SprUsePoses(const Hd3dSpriteFrame *sf, SprEnt *ents, int n, bool any_
     const Hd3dLinkPose *ps = &sf->poses[p];
     for (int i = 0; body[p] && i < ps->count && m < kSprMaxEntries; i++) {
       SprEnt *e = &ents[m];
+      // (Every field: the slot holds an old entry, or nothing yet. A pose is
+      // never the hidden first-person Link's, so never his weapon.)
+      memset(e, 0, sizeof(*e));
       e->x = ps->x[i] + sf->cam_x;
       e->y = ps->y[i] + sf->cam_y + 1;
       e->oam1 = ps->oam1[i];
@@ -664,7 +667,7 @@ int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, const R
       int gx = obj ? obj->x : (g->box[0] + g->box[2]) / 2, gy = obj ? obj->y : g->box[3];
       if (!obj && g->sbox[2] > g->sbox[0])
         gx = (g->sbox[0] + g->sbox[2]) / 2, gy = (g->sbox[1] + g->sbox[3]) / 2;
-      int zw = scene ? Hd3dScene_GroundZ(scene, layer, gx, gy) : 0;
+      int zw = scene ? Hd3dScene_StandZ(scene, layer, gx, gy) : 0;
 
       // The shadows: a ground decal, and the foot.
       int sbb[4] = { 0, 0, 0, 0 };

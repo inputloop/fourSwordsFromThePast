@@ -1566,13 +1566,21 @@ static int OwFaceDrop(const Hd3dScene *s, int i) {
   return -1;
 }
 
+// A corner of a raised platform (a diagonal ledge).
+static bool LedgeDiagonal(uint8 a) {
+  return a >= 0x2c && a <= 0x2f;
+}
+
 // Bridges the gaps in straight lines of ledges that drop the same way.
+// (Not from or to a corner, and not a row right above a ledge that drops
+// the same way: that is the threshold of a platform, not a gap in a line,
+// and bridging it would leave the ledge below without a high side.)
 static void OwBridge(Hd3dScene *s) {
   const Layer *ly = &s->layer[0];
   int n = s->n;
   for (int i = 0; i < n * n; i++) {
     int d = LedgeDrop(ly->attr[i]);
-    if (!(g_ow[i] & kOw_Ledge) || d < 0)
+    if (!(g_ow[i] & kOw_Ledge) || d < 0 || LedgeDiagonal(ly->attr[i]))
       continue;
     // Along the line: east for north and south drops, south for west and east ones.
     int sx = d <= kDrop_S ? 1 : 0, sy = 1 - sx, r = i / n, c = i % n;
@@ -1588,11 +1596,17 @@ static void OwBridge(Hd3dScene *s) {
       }
       int j = rr * n + cc;
       if (g_ow[j] & kOw_Ledge) {
-        if (LedgeDrop(ly->attr[j]) != d)
+        if (LedgeDrop(ly->attr[j]) != d || LedgeDiagonal(ly->attr[j]))
           k = 99;
         break;
       }
       if (ly->cls[j] == kCls_Empty || ly->cls[j] == kCls_Pit) {
+        k = 99;
+        break;
+      }
+      int dr = rr + kDropY[d], dc = cc + kDropX[d];
+      if (dr >= 0 && dr < n && dc >= 0 && dc < n && (g_ow[dr * n + dc] & kOw_Ledge) &&
+          LedgeDrop(ly->attr[dr * n + dc]) == d) {
         k = 99;
         break;
       }
@@ -2408,6 +2422,28 @@ int Hd3dScene_GroundZ(const Hd3dScene *s, int layer, int x, int y) {
     int z2 = s->ow_level[r2 * n + c];
     if (z2 != z && abs(z2 - z) <= 8)
       z += (z2 - z) * (f >= 4 ? 2 * f - 7 : 7 - 2 * f) / 16;
+  }
+  return z;
+}
+
+int Hd3dScene_StandZ(const Hd3dScene *s, int layer, int x, int y) {
+  int z = Hd3dScene_GroundZ(s, layer, x, y);
+  if (!s || s->indoors || !s->ready)
+    return z;
+  // A row a little north lands at world y + its height: when it is higher
+  // and lands on the foot (at the top of stairs, the ground and the wall over
+  // a doorway climb as fast as the rows go north), it is in front of the foot
+  // and would cut through what stands there. Standing on it instead moves
+  // the foot along the test camera's line of sight: the picture stays the
+  // same. (Only for a foot on walkable ground: in a doorway, the game draws
+  // the wall over the Link.)
+  int n = s->n, c = (x - s->origin_x) >> 3, r0 = (y - s->origin_y) >> 3;
+  if (c < 0 || c >= n || r0 < 0 || r0 >= n || !OwWalk(&s->layer[0], r0 * n + c))
+    return z;
+  for (int k = 1; k <= 4; k++) {
+    int yn = (y & ~7) - 8 * k, zn = Hd3dScene_GroundZ(s, layer, x, yn + 4);
+    if (zn > z && yn + zn <= y + z && y + z < yn + 8 + zn)
+      z = zn;
   }
   return z;
 }

@@ -252,8 +252,13 @@ addresses. `src/mp.c` gives each player a private copy of those RAM ranges
   tag recorder (`Hd3d_TagBegin/End` around the sprite, ancilla, garnish,
   follower, push block and Link draw loops) remembers which object drew
   which OAM entries, per world, outside `g_ram`, snapshots and the hash; a
-  tag counts only while its 4 bytes are still in OAM. All camera state lives
-  outside `g_ram`, `g_mp`, the snapshots and the joypad word. The one effect
+  tag counts only while its 4 bytes are still in OAM. To show each Link from
+  the side a turned camera sees, phase A runs the game's own
+  `LinkOam_MainOne` once more for that facing (`src/hd3d_linkpose.c`) and
+  then puts the first 4 KB of RAM and `g_mp` back byte for byte
+  (`tests/coop/hd3d_linkpose.txt` checks the state hash is unchanged). All
+  camera state lives outside `g_ram`, `g_mp`, the snapshots and the joypad
+  word. The one effect
   on the game is the camera-relative d-pad of a local player in first person
   or with a turned camera: `Hd3d_RemapInputs` in `main.c`, after `Ui_Update`
   and before `Session_Tick`, so only the remapped word is ever sent,
