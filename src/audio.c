@@ -7,6 +7,8 @@
 #include "third_party/opus-1.3.1-stripped/opus.h"
 #include "config.h"
 #include "assets.h"
+#include "instance.h"
+#include <math.h>
 
 // This needs to hold a lot more things than with just PCM
 typedef struct MsuPlayerResumeInfo {
@@ -400,8 +402,15 @@ void MsuPlayer_Mix(MsuPlayer *mp, int16 *audio_buffer, int audio_samples) {
 struct ApuWriteEnt {
   uint8 ports[4];
 };
-static struct ApuWriteEnt g_apu_write_ents[16], g_apu_write;
-static uint8 g_apu_write_ent_pos, g_apu_write_count, g_apu_total_write;
+// One frame's port values per entry, pushed by the game thread, popped by
+// the audio thread. The main driver has one; so has each extra sound effect
+// driver (below).
+typedef struct ApuQueue {
+  struct ApuWriteEnt ents[16];
+  uint8 pos, count, total;
+} ApuQueue;
+static struct ApuWriteEnt g_apu_write;
+static ApuQueue g_apu_queue;
 void zelda_apu_write(uint32_t adr, uint8_t val) {
   g_apu_write.ports[adr & 0x3] = val;
 }
@@ -415,33 +424,193 @@ void ZeldaSetApuPorts(const uint8 *in) {
   memcpy(g_apu_write.ports, in, 4);
 }
 
-void ZeldaPushApuState() {
-  ZeldaApuLock();
-  g_apu_write_ents[g_apu_write_ent_pos++ & 0xf] = g_apu_write;
-  if (g_apu_write_count < 16)
-    g_apu_write_count++;
-  g_apu_total_write++;
-  ZeldaApuUnlock();
+static void ApuQueue_Push(ApuQueue *q, const struct ApuWriteEnt *e) {
+  q->ents[q->pos++ & 0xf] = *e;
+  if (q->count < 16)
+    q->count++;
+  q->total++;
 }
 
-static void ZeldaPopApuState() {
-  if (g_apu_write_count != 0)
-    memcpy(g_zenv.player->input_ports, &g_apu_write_ents[(g_apu_write_ent_pos - g_apu_write_count--) & 0xf], 4);
+static void ApuQueue_Pop(ApuQueue *q, SpcPlayer *p) {
+  if (q->count != 0)
+    memcpy(p->input_ports, &q->ents[(q->pos - q->count--) & 0xf], 4);
 }
 
-void ZeldaDiscardUnusedAudioFrames() {
-  if (g_apu_write_count != 0 && memcmp(g_zenv.player->input_ports, &g_apu_write_ents[(g_apu_write_ent_pos - g_apu_write_count) & 0xf], 4) == 0) {
-    if (g_apu_total_write >= 16) {
-      g_apu_total_write = 14;
-      g_apu_write_count--;
+// The game runs a little ahead of the sound: a frame whose ports are the
+// same as the ones playing is dropped now and then, so the queue stays short.
+static void ApuQueue_Discard(ApuQueue *q, SpcPlayer *p) {
+  if (q->count != 0 && memcmp(p->input_ports, &q->ents[(q->pos - q->count) & 0xf], 4) == 0) {
+    if (q->total >= 16) {
+      q->total = 14;
+      q->count--;
     }
   } else {
-    g_apu_total_write = 0;
+    q->total = 0;
   }
 }
 
+static void ApuQueue_Reset(ApuQueue *q) {
+  q->pos = q->total = q->count = 0;
+}
+
+void ZeldaPushApuState() {
+  ZeldaApuLock();
+  ApuQueue_Push(&g_apu_queue, &g_apu_write);
+  ZeldaApuUnlock();
+}
+
+// Couch co-op: the worlds of the other local players are heard too, for
+// their sound effects. Each such world gets a sound driver of its own (an
+// SPC player with its DSP, like the main one) that is fed that world's sound
+// effect ports only (ports 2 and 3; the music and the ambient sounds of
+// port 0 and 1 play from the main world alone), with the music voices left
+// out of its mix as for "music off". Its output is added to the main
+// driver's a little quieter. The drivers live outside the game's state:
+// nothing here is hashed, saved or rolled back, the game never reads them,
+// and the main driver runs exactly as it does without them.
+typedef struct SfxSource {
+  SpcPlayer *player;
+  int world;  // the world instance heard, -1: none
+  ApuQueue queue;
+  struct ApuWriteEnt write;  // the ports pushed for it (ports 0 and 1 stay 0)
+} SfxSource;
+enum { kSfxSourceMax = kInstMax - 1 };
+enum { kSfxGain = 205 };  // 0.8 in 1/256ths
+static SfxSource g_sfx[kSfxSourceMax];
+static int16 *g_sfx_buffer;  // one block of one source
+static int g_sfx_buffer_size;
+// The song bank the main driver holds (NULL: not known, as after a reset).
+static const uint8 *g_main_bank;
+// For the tests: the energy of the main driver and of the extra ones.
+static double g_audio_stats_main, g_audio_stats_sfx;
+static uint64 g_audio_stats_samples;
+
+// A fresh driver for a world: the sound program and samples of the intro
+// bank (the sound effects live in the part every bank shares), no music,
+// and the world's current ports as what it last saw, so a sound that ended
+// a while ago isn't played again.
+static void SfxSource_Bind(SfxSource *s, int world, const uint8 *ports) {
+  SpcPlayer *p = s->player;
+  if (!p)
+    s->player = p = SpcPlayer_Create();
+  SpcPlayer_Initialize(p);  // (also clears its ram)
+  SpcPlayer_Upload(p, kSoundBank_intro);
+  p->sfx_voices = 0;
+  SpcPlayer_SetMusicOff(p, true);
+  s->world = world;
+  memset(&s->write, 0, sizeof(s->write));
+  s->write.ports[2] = ports[2];
+  s->write.ports[3] = ports[3];
+  memcpy(p->input_ports, s->write.ports, 4);
+  memcpy(p->last_value_from_snes, s->write.ports, 4);
+  ApuQueue_Reset(&s->queue);
+}
+
+// The other worlds heard this frame and their ports, from Inst_RunFrame (the
+// main world's frame was pushed just before). Called with the same n == 0
+// when the feature is off: every driver is then let go.
+void ZeldaPushSfxWorlds(int n, const int *worlds, const uint8 (*ports)[4]) {
+  ZeldaApuLock();
+  for (int k = 0; k < kSfxSourceMax; k++) {
+    SfxSource *s = &g_sfx[k];
+    bool keep = false;
+    for (int i = 0; i < n; i++)
+      keep |= worlds[i] == s->world;
+    if (!keep)
+      s->world = -1;
+  }
+  for (int i = 0; i < n; i++) {
+    SfxSource *s = NULL, *unused = NULL;
+    for (int k = 0; k < kSfxSourceMax; k++) {
+      if (g_sfx[k].world == worlds[i])
+        s = &g_sfx[k];
+      else if (g_sfx[k].world < 0 && !unused)
+        unused = &g_sfx[k];
+    }
+    if (!s) {
+      if (!unused)
+        continue;
+      SfxSource_Bind(s = unused, worlds[i], ports[i]);
+    }
+    s->write.ports[2] = ports[i][2];
+    s->write.ports[3] = ports[i][3];
+    ApuQueue_Push(&s->queue, &s->write);
+  }
+  ZeldaApuUnlock();
+}
+
+static void ResetSfxSources_Locked() {
+  for (int k = 0; k < kSfxSourceMax; k++)
+    g_sfx[k].world = -1;
+}
+
+static void AudioStats_Add(double *sum, const int16 *buf, size_t n) {
+  double acc = 0;
+  for (size_t i = 0; i < n; i++)
+    acc += (double)buf[i] * buf[i];
+  *sum += acc;
+}
+
+// Renders the extra drivers' sound and adds it to the main driver's.
+static void MixSfxSources(int16 *audio_buffer, int samples, int channels) {
+  int n = samples * channels;
+  for (int k = 0; k < kSfxSourceMax; k++) {
+    SfxSource *s = &g_sfx[k];
+    if (s->world < 0)
+      continue;
+    if (g_sfx_buffer_size < n) {
+      free(g_sfx_buffer);
+      g_sfx_buffer = (int16 *)malloc(n * sizeof(int16));
+      g_sfx_buffer_size = n;
+    }
+    ApuQueue_Pop(&s->queue, s->player);
+    SpcPlayer_GenerateSamples(s->player);
+    dsp_getSamples(s->player->dsp, g_sfx_buffer, samples, channels);
+    for (int i = 0; i < n; i++) {
+      int v = g_sfx_buffer[i] * kSfxGain >> 8;
+      g_sfx_buffer[i] = (int16)v;
+      v += audio_buffer[i];
+      audio_buffer[i] = (int16)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+    }
+    AudioStats_Add(&g_audio_stats_sfx, g_sfx_buffer, n);
+  }
+}
+
+void ZeldaDiscardUnusedAudioFrames() {
+  ApuQueue_Discard(&g_apu_queue, g_zenv.player);
+  for (int k = 0; k < kSfxSourceMax; k++)
+    if (g_sfx[k].world >= 0)
+      ApuQueue_Discard(&g_sfx[k].queue, g_sfx[k].player);
+}
+
 static void ZeldaResetApuQueue() {
-  g_apu_write_ent_pos = g_apu_total_write = g_apu_write_count = 0;
+  ApuQueue_Reset(&g_apu_queue);
+  for (int k = 0; k < kSfxSourceMax; k++)
+    ApuQueue_Reset(&g_sfx[k].queue);
+}
+
+void ZeldaResetAudioStats() {
+  ZeldaApuLock();
+  g_audio_stats_main = g_audio_stats_sfx = 0;
+  g_audio_stats_samples = 0;
+  ZeldaApuUnlock();
+}
+
+// The RMS (0..32767) of what the main driver and the extra sound effect
+// drivers (after their gain) rendered since the last reset.
+void ZeldaGetAudioStats(double *main_rms, double *sfx_rms) {
+  ZeldaApuLock();
+  double n = g_audio_stats_samples ? (double)g_audio_stats_samples : 1;
+  *main_rms = sqrt(g_audio_stats_main / n);
+  *sfx_rms = sqrt(g_audio_stats_sfx / n);
+  ZeldaApuUnlock();
+}
+
+int ZeldaNumSfxSources() {
+  int n = 0;
+  for (int k = 0; k < kSfxSourceMax; k++)
+    n += g_sfx[k].world >= 0;
+  return n;
 }
 
 uint8_t zelda_read_apui00() {
@@ -458,9 +627,12 @@ uint8_t zelda_apu_read(uint32_t adr) {
 
 void ZeldaRenderAudio(int16 *audio_buffer, int samples, int channels) {
   ZeldaApuLock();
-  ZeldaPopApuState();
+  ApuQueue_Pop(&g_apu_queue, g_zenv.player);
   SpcPlayer_GenerateSamples(g_zenv.player);
   dsp_getSamples(g_zenv.player->dsp, audio_buffer, samples, channels);
+  AudioStats_Add(&g_audio_stats_main, audio_buffer, (size_t)samples * channels);
+  g_audio_stats_samples += (size_t)samples * channels;
+  MixSfxSources(audio_buffer, samples, channels);
   if (g_msu_player.f && channels == 2 && !g_zenv.player->music_off)
     MsuPlayer_Mix(&g_msu_player, audio_buffer, samples);
   ZeldaApuUnlock();
@@ -514,6 +686,7 @@ void ZeldaRestoreMusicAfterLoad_Locked(bool is_reset) {
   if (is_reset) {
     SpcPlayer_Initialize(g_zenv.player);
   }
+  g_main_bank = is_reset ? NULL : ZeldaSongBankOf(g_ram);
 
   MsuPlayer *mp = &g_msu_player;
   if (mp->enabled) {
@@ -537,6 +710,8 @@ void ZeldaRestoreMusicAfterLoad_Locked(bool is_reset) {
       zelda_apu_write(APUI00, 0xf0);  // pause spc player
   }
   ZeldaResetApuQueue();
+  // (The extra sound effect drivers start afresh with the next frame.)
+  ResetSfxSources_Locked();
 }
 
 void ZeldaSaveMusicStateToRam_Locked() {
@@ -570,8 +745,38 @@ void ZeldaEnableMsu(uint8 enable) {
   }
 }
 
+// Only the heard world's songs go to the driver: another local player's world
+// loading its dungeon songs used to cut the music off. A world's bank is
+// uploaded when it becomes the heard one (ZeldaUseSongBank).
+static void UploadSongBank_Locked(const uint8 *p) {
+  if (p == g_main_bank)
+    return;
+  SpcPlayer_Upload(g_zenv.player, p);
+  g_main_bank = p;
+}
+
 void LoadSongBank(const uint8 *p) {  // 808888
   ZeldaApuLock();
-  SpcPlayer_Upload(g_zenv.player, p);
+  if (Inst_HearsCurrent())
+    UploadSongBank_Locked(p);
+  ZeldaApuUnlock();
+}
+
+// The songs a world's game has loaded: the dungeon ones or the others
+// (flag_which_music_type), the credits' once there.
+const uint8 *ZeldaSongBankOf(const uint8 *ram) {
+  if (ram[0x10] == 0x19 || ram[0x10] == 0x1a)
+    return kSoundBank_ending;
+  return ram[0x136] ? kSoundBank_indoor : kSoundBank_intro;
+}
+
+// The world heard changed to one with these songs: the driver takes them,
+// and plays the world's song afresh (its port is read as new).
+void ZeldaUseSongBank(const uint8 *p) {
+  ZeldaApuLock();
+  if (p != g_main_bank) {
+    UploadSongBank_Locked(p);
+    g_zenv.player->last_value_from_snes[0] = 0;
+  }
   ZeldaApuUnlock();
 }

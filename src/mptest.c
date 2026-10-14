@@ -101,6 +101,15 @@
 //                       twice the game's size) and its sound into <dir>/audio.raw (s16le stereo, 32040 Hz at 60 fps);
 //                       <dir>/info.txt says the sizes. The directory must exist. tools/trailer.sh makes videos of it
 //   musicoff <0|1>      silence the music, keep the sound effects (the music still runs, unheard)
+// Sound (the main driver plays the first local player's world; with "Everyone's sound effects" on, the
+// other local players' worlds get a sound effect driver each, music off; offline every joined player is local):
+//   coopsfx <0|1>       the "Everyone's sound effects" option (on to begin with)
+//   audioreset          the loudness and the time below count from here
+//   audiorun <n>        run n frames, rendering each one's sound headless (as record does, without files); prints
+//                       the loudness (RMS, 0-32767) of the main driver and of the extra drivers, and the time the sound took
+//   audiotick <0|1>     tick renders the sound too
+//   expect_audio <main|sfx> <min> <max>  the loudness of that part since audioreset
+//   audiomark <name> / expect_audiomark <name>  remember the main driver's loudness / it is exactly that again
 //   drawrun <n>         run n frames, drawing each into a buffer exactly the size the renderer asks for (fails on an overrun)
 //   stalewidth <p> <n>  p's world's video chip keeps n widescreen columns per side (drawing must use the setting)
 //   runcheckdraw <p> <n>  run n frames; player p (not its world's leader) must never be drawn with shrunken body pieces
@@ -480,6 +489,46 @@ typedef struct HashMark { char name[32]; uint32 hash; } HashMark;
 static HashMark g_hashmarks[16];
 static int g_nhashmarks;
 
+// --- Sound ---
+static bool g_coop_sfx = true;  // "Everyone's sound effects" (coopsfx)
+static bool g_audiotick;        // tick renders the sound too (audiotick)
+static double g_audio_main_rms, g_audio_sfx_rms;  // of the last audiorun (or since it)
+static double g_audio_ms;       // time spent rendering the sound since the last audiorun began
+static int g_audio_frames;
+typedef struct AudioMark { char name[32]; double main_rms; } AudioMark;
+static AudioMark g_audiomarks[8];
+static int g_naudiomarks;
+
+// The players whose worlds are heard for their sound effects, as in the
+// game's loop: what the local players watch (offline tests: every joined
+// player is a local one, local p playing player p, the convention of run).
+static void UpdateSfxPlayers(void) {
+  uint8 mask = 0;
+  if (g_coop_sfx) {
+    const SessionStatus *st = Session_GetStatus();
+    for (int i = 0; i < kSessionMaxLocal; i++) {
+      int p = st->local_slot[i] < 0 ? -1 : Ui_WatchedPlayer(i);
+      if (p >= 0 && p < kMpMaxPlayers)
+        mask |= 1 << p;
+    }
+    if (!Session_IsNetplay())
+      for (int p = 0; p < kMpMaxPlayers; p++)
+        if (Inst_IsJoined(p))
+          mask |= 1 << p;
+  }
+  Inst_SetSfxPlayers(mask);
+}
+
+// One frame of sound, rendered headless and thrown away (its loudness is
+// kept in audio.c), timed.
+static void RenderAudioFrame(void) {
+  int16 samples[534 * 2];
+  uint64 t0 = SDL_GetPerformanceCounter();
+  ZeldaRenderAudio(samples, 534, 2);
+  g_audio_ms += (double)(SDL_GetPerformanceCounter() - t0) * 1000.0 / (double)SDL_GetPerformanceFrequency();
+  g_audio_frames++;
+}
+
 // The local player playing player p on this computer: its camera draws p's
 // view. (Offline tests without one: local p, the convention of run.)
 static int LocalOfPlayer(int p) {
@@ -752,6 +801,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
   Hd3d_ResetForTests();
   g_config.mp_watch_everyone = false;  // (nor "Watch everyone")
   g_remap3d = true, g_drawtick = false, g_nhashmarks = 0;
+  g_coop_sfx = true, g_audiotick = false, g_naudiomarks = 0;
   memset(g_markpos_set, 0, sizeof(g_markpos_set));
   // (Room for a picture at 4x, or 2x2 panes.)
   size_t pixels_size = (size_t)width * height * 16;
@@ -770,6 +820,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     // menu, if it has one open; commands about a player use where its Link is).
     if (Inst_ViewOfPlayer(view) >= 0)
       Inst_Switch(Inst_ViewOfPlayer(view));
+    UpdateSfxPlayers();
     if (!strcmp(cmd, "load")) {
       int n = atoi(arg1);
       if (n < 1 || n > 13) {
@@ -965,6 +1016,70 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "musicoff")) {
       // musicoff <0|1>: silence the music, keep the sound effects
       ZeldaSetMusicOff(atoi(arg1) != 0);
+    } else if (!strcmp(cmd, "coopsfx")) {
+      // coopsfx <0|1>: the "Everyone's sound effects" option
+      g_coop_sfx = atoi(arg1) != 0;
+      UpdateSfxPlayers();
+    } else if (!strcmp(cmd, "audiotick")) {
+      // audiotick <0|1>: tick renders the sound too
+      g_audiotick = atoi(arg1) != 0;
+    } else if (!strcmp(cmd, "audioreset")) {
+      // audioreset: the loudness and the time count from here
+      ZeldaResetAudioStats();
+      g_audio_ms = 0, g_audio_frames = 0;
+    } else if (!strcmp(cmd, "audiorun")) {
+      // audiorun <n>: run n frames, rendering each one's sound headless (as a
+      // recording does, without files): the sound queue starts empty and the
+      // game keeps seeing the music state it saw. Prints the loudness of the
+      // main driver and of the extra drivers since audioreset, and the time
+      // the sound took.
+      bool capture = !g_rec_video;
+      if (capture)
+        ZeldaSetAudioCapture(true);
+      for (int n = atoi(arg1); n > 0; n--, frame++) {
+        uint16 in[kMpMaxPlayers];
+        HeldInputs(held, in);
+        Inst_RunFrame(in);
+        RecordFrame(pixels, width, height, render_flags, view);
+        if (!g_rec_video)
+          RenderAudioFrame();
+      }
+      if (capture)
+        ZeldaSetAudioCapture(false);
+      ZeldaGetAudioStats(&g_audio_main_rms, &g_audio_sfx_rms);
+      printf("audiorun %s: main rms %.1f, sfx rms %.1f (%d extra drivers), %.3f ms a frame\n", arg1, g_audio_main_rms,
+             g_audio_sfx_rms, ZeldaNumSfxSources(), g_audio_frames ? g_audio_ms / g_audio_frames : 0.0);
+    } else if (!strcmp(cmd, "expect_audio")) {
+      // expect_audio <main|sfx> <min> <max>: the loudness of that part in the last audiorun (or since it)
+      ZeldaGetAudioStats(&g_audio_main_rms, &g_audio_sfx_rms);
+      bool sfx = !strcmp(arg1, "sfx");
+      double v = sfx ? g_audio_sfx_rms : g_audio_main_rms;
+      printf("expect_audio %s: %.1f\n", arg1, v);
+      if ((!sfx && strcmp(arg1, "main")) || v < atof(arg2) || v > atof(arg3)) {
+        printf("FAIL: %s rms %.1f, expected %s-%s at frame %d\n", arg1, v, arg2, arg3, frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "audiomark") || !strcmp(cmd, "expect_audiomark")) {
+      // audiomark <name>: remember the main driver's loudness of the last
+      // audiorun; expect_audiomark <name>: it is exactly that again
+      int k = 0;
+      while (k < g_naudiomarks && strcmp(g_audiomarks[k].name, arg1))
+        k++;
+      ZeldaGetAudioStats(&g_audio_main_rms, &g_audio_sfx_rms);
+      if (!strcmp(cmd, "audiomark")) {
+        if (k == g_naudiomarks && k < (int)countof(g_audiomarks))
+          snprintf(g_audiomarks[g_naudiomarks++].name, sizeof(g_audiomarks[0].name), "%s", arg1);
+        if (k < g_naudiomarks)
+          g_audiomarks[k].main_rms = g_audio_main_rms;
+        printf("audiomark %s: main rms %.3f\n", arg1, g_audio_main_rms);
+      } else if (k == g_naudiomarks) {
+        printf("FAIL: no audiomark %s\n", arg1);
+        g_failures++;
+      } else if (g_audiomarks[k].main_rms != g_audio_main_rms) {
+        printf("FAIL: main rms %.3f, audiomark %s was %.3f at frame %d\n", g_audio_main_rms, arg1,
+               g_audiomarks[k].main_rms, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "stalewidth")) {
       // stalewidth <p> <n>: player p's world's video chip still has n widescreen
       // columns per side (as from before the setting changed, or a snapshot)
@@ -1584,12 +1699,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         // As in the game's loop: the world of our first player is heard, and
         // is the current one between frames (so it differs between computers).
         Inst_SetAudioPlayer(Ui_WatchedPlayer(0));
+        UpdateSfxPlayers();
         if (!Ui_PausesGame())
           frame += Session_Tick(in, g_wanted_zelda_features);
         Ap_Tick();
         if (g_drawtick)
           DrawLikeGame(pixels, width, height, render_flags, &(int){ 0 }, &(int){ 0 });
         RecordFrame(pixels, width, height, render_flags, view);
+        if (g_audiotick && !g_rec_video)
+          RenderAudioFrame();
         TrackSprites(frame, view);
         SDL_Delay(16);
         SessionPlayer seats[kMpMaxPlayers];

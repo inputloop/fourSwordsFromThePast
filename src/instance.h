@@ -61,6 +61,12 @@ bool Inst_GetIndependent();
 bool Inst_RunFrame(const uint16 *inputs);
 // The player whose instance is heard; the camera instance for local display.
 void Inst_SetAudioPlayer(int p);
+// Couch co-op: the players (a bit each) whose worlds are heard for their
+// sound effects too, by an extra sound driver per world (audio.c). Display
+// only: nothing of the game changes with it.
+void Inst_SetSfxPlayers(uint8 mask);
+// Whether the current world is the heard one (so its songs go to the driver).
+bool Inst_HearsCurrent();
 
 // Display only: Links of other worlds that are in the same room or overworld
 // area as the current world, so players see each other before their worlds

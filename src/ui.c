@@ -608,6 +608,12 @@ static void ScreenMultiplayer() {
     Ui_ToggleWatchEveryone();
     g_ui.dirty_settings = true;
   }
+  // (This computer's own: the sound of the other local players' worlds.)
+  Item("Everyone's sound effects", OnOff(g_config.mp_coop_sound_effects));
+  if (Act() != kAct_None) {
+    g_config.mp_coop_sound_effects ^= 1;
+    g_ui.dirty_settings = true;
+  }
   Item("Player colors", g_config.mp_colorblind ? "color-blind" : "standard");
   if (Act() != kAct_None) {
     g_config.mp_colorblind ^= 1;
@@ -2702,6 +2708,7 @@ void Ui_SaveSettings() {
   fprintf(f, "InputDelay = %d\n", g_config.mp_input_delay);
   fprintf(f, "NameTags = %d\n", g_config.mp_name_tags);
   fprintf(f, "WatchEveryone = %d\n", g_config.mp_watch_everyone);
+  fprintf(f, "CoopSoundEffects = %d\n", g_config.mp_coop_sound_effects);
   fprintf(f, "ColorBlindColors = %d\n", g_config.mp_colorblind);
   if (g_config.mp_player_name)
     fprintf(f, "PlayerName = %s\n", g_config.mp_player_name);

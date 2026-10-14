@@ -99,6 +99,7 @@ typedef struct Config {
   int mp_input_delay;  // frames (online only)
   bool mp_name_tags;   // P1-P4 over each Link
   bool mp_watch_everyone;  // every joined player's world on screen (display only)
+  bool mp_coop_sound_effects;  // couch co-op: every local player's sound effects are heard
   bool mp_colorblind;  // color-blind friendly player colors
   uint16 mp_port;
   const char *mp_player_name;

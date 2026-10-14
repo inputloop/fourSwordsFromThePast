@@ -1,0 +1,106 @@
+# Couch co-op sound: every local player's sound effects are heard, the music
+# only from player 1's world. P2 goes into Link's house (a world of its own)
+# and swings the sword while P1 stands still outside. With "Everyone's sound
+# effects" on, the extra driver of P2's world sounds (the swings); off, it
+# doesn't. The main driver (P1's world, with the music) renders exactly the
+# same either way, and so does the game (the state hash): the extra drivers
+# are outside the game's state. P1's music keeps playing although P2's world
+# loaded the dungeon songs (only the heard world's songs go to the driver),
+# and when P1 follows P2 inside, the house's song plays.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 2 3920 1690
+pram 2 2f 00
+hold 2 U
+run 300
+hold 2 -
+expect_apart 1 2
+expect_instances 2
+view 2
+expect_module 7
+view 1
+coopsfx 1
+audioreset
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 40
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 40
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 40
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 100
+expect_audio main 500 32767
+expect_audio sfx 50 32767
+audiomark swings
+hashmark swings
+# The same swings with the option off: the sound of P2's world is not heard,
+# the music and the game are the same.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 2 3920 1690
+pram 2 2f 00
+hold 2 U
+run 300
+hold 2 -
+expect_apart 1 2
+coopsfx 0
+audioreset
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 40
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 40
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 40
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 100
+expect_audio main 500 32767
+expect_audio sfx 0 0
+expect_audiomark swings
+expect_hashmark swings
+# On again in the middle of play: P2's world is heard from the next frame,
+# without replaying the swing that ended a while ago.
+coopsfx 1
+audioreset
+audiorun 60
+expect_audio sfx 0 0
+hold 2 B
+audiorun 4
+hold 2 -
+audiorun 60
+expect_audio sfx 50 32767
+# P1 goes in too: the worlds merge and the house's song plays (its songs
+# replace the overworld's in the driver); nothing is left to hear twice.
+pos 1 3920 1690
+pram 1 2f 00
+hold 1 U
+run 300
+hold 1 -
+expect_same 1 2
+view 1
+expect_module 7
+audioreset
+audiorun 120
+expect_audio main 300 32767
+expect_audio sfx 0 0

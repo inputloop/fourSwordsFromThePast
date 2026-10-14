@@ -167,6 +167,19 @@ static SDL_HitTestResult HitTestCallback(SDL_Window *win, const SDL_Point *pt, v
 
 static SDL_mutex *g_audio_mutex;
 
+// The players playing on this computer (what each local player watches), a
+// bit each.
+static uint8 LocalPlayersMask() {
+  const SessionStatus *st = Session_GetStatus();
+  uint8 mask = 0;
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    int p = st->local_slot[i] < 0 ? -1 : Ui_WatchedPlayer(i);
+    if (p >= 0 && p < kMpMaxPlayers)
+      mask |= 1 << p;
+  }
+  return mask;
+}
+
 // The worlds to show: one per local player, in different places (split
 // screen), and for each the first local player seeing it (-1: nobody).
 static int GetViews(int *views, int8 *pane_local) {
@@ -741,8 +754,10 @@ int main(int argc, char** argv) {
     Hd3d_RemapInputs(local_inputs);
 
     bool is_replay = false;
-    // Sound comes from the world of the first local player.
+    // Sound comes from the world of the first local player; the other local
+    // players' worlds are heard for their sound effects (the option).
     Inst_SetAudioPlayer(Ui_WatchedPlayer(0));
+    Inst_SetSfxPlayers(g_config.mp_coop_sound_effects ? LocalPlayersMask() : 0);
     if (!Ui_PausesGame()) {
       SDL_LockMutex(g_audio_mutex);
       Session_Tick(local_inputs, g_config.features0);

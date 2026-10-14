@@ -49,6 +49,7 @@ static bool g_ff;
 static bool g_independent = true;
 static int g_audio_player;
 static int g_audio_inst = -1;
+static uint8 g_sfx_players;  // players whose worlds are heard for their sound effects (couch co-op)
 static uint8 g_shared[kSharedEnd - kSharedStart];  // progress as of the last sync
 
 // Bits the game clears again on every overworld transition (the dam switch
@@ -383,6 +384,42 @@ bool Inst_GetIndependent() { return g_independent; }
 void Inst_SetAudioPlayer(int p) {
   if (p >= 0 && p < kMpMaxPlayers)
     g_audio_player = p;
+}
+
+void Inst_SetSfxPlayers(uint8 mask) {
+  g_sfx_players = mask;
+}
+
+bool Inst_HearsCurrent() {
+  return g_audio_inst < 0 || g_cur == g_audio_inst;
+}
+
+// The worlds of the other local players are heard for their sound effects
+// (a driver per world, see ZeldaPushSfxWorlds): every world other than the
+// heard one, ai, that a player in g_sfx_players sees, with its sound ports
+// as the frame left them. (Only read: nothing of any world changes.)
+static void PushSfxWorlds(int ai) {
+  int worlds[kInstMax], n = 0;
+  uint8 ports[kInstMax][4];
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (!(g_sfx_players >> p & 1))
+      continue;
+    int w = Inst_ViewOfPlayer(p);
+    if (w < 0 || w == ai)
+      continue;
+    bool dup = false;
+    for (int i = 0; i < n; i++)
+      dup |= worlds[i] == w;
+    if (dup)
+      continue;
+    worlds[n] = w;
+    if (w == g_cur)
+      ZeldaGetApuPorts(ports[n]);
+    else
+      memcpy(ports[n], g_inst[w].apu_ports, 4);
+    n++;
+  }
+  ZeldaPushSfxWorlds(n, worlds, ports);
 }
 
 static int FreeSlot() {
@@ -986,11 +1023,15 @@ bool Inst_RunFrame(const uint16 *inputs) {
     ZeldaGetApuPorts(ports);
     memcpy(ports + 1, old_ports + 1, 3);
     ZeldaSetApuPorts(ports);
+    // The driver takes the new world's songs (a dungeon's or the others).
+    ZeldaUseSongBank(ZeldaSongBankOf(g_ram));
   }
   g_audio_inst = ai;
   Inst_Switch(ai);
-  if (g_audio_output)
+  if (g_audio_output) {
     ZeldaPushApuState();
+    PushSfxWorlds(ai);
+  }
   return replay;
 }
 
