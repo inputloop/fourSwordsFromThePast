@@ -51,6 +51,7 @@ in three places with the team panel.*
 
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 See **[docs/HOW_THE_MOD_WORKS.md](docs/HOW_THE_MOD_WORKS.md)** for a plain-language guide to how the whole mod works.
+Want to change or extend it? **[docs/MODDING.md](docs/MODDING.md)** is a step-by-step modding guide: building, a map of the code, the rules that keep online play in sync, recipes and testing.
 
 ## Four Swords of the Past
 

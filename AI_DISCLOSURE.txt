@@ -34,7 +34,7 @@ WHAT THE AI WROTE
   tests (archipelago/).
 - The automated tests (tests/, archipelago/tests/), the build and CI
   scripts, and the documentation: README.md, MULTIPLAYER.md,
-  docs/HOW_THE_MOD_WORKS.md, BUILDING.md additions, zelda3.ini comments and
+  docs/HOW_THE_MOD_WORKS.md, docs/MODDING.md, BUILDING.md additions, zelda3.ini comments and
   the Archipelago setup guides.
 - The screenshots in docs/screenshots/. They are not AI-generated images:
   the AI ran the game with a test program and saved what the game drew.
