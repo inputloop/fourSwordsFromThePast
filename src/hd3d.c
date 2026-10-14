@@ -113,8 +113,8 @@ typedef struct Pane {
   bool ov_sub, ov_half, ov_obj;
   uint32 ov_fixed;           // the fixed color (where the overlay is see-through)
   bool sky;                  // outdoors: a sky where the ground ends
+  bool game_clouds;          // Death Mountain: the overlay under the ground is its clouds, in the sky too
   uint32 sky_mid, sky_top, cloud_rgb;  // (lit; the horizon is the fog)
-  int cloud_x, cloud_y;      // Death Mountain: the overlay's scroll (its drift)
 } Pane;
 
 static Pane g_panes[kHd3dMaxPanes];
@@ -468,10 +468,12 @@ static void ReadOverlay(Pane *p, const Ppu *ppu, uint8 mode) {
     return;
   const BgLayer *bg = &ppu->bgLayer[0];
   DecodeOverlay(ppu, p->overlay, kPicW, bg->hScroll - ppu->extraLeftRight, bg->vScroll + 1, p->w, p->h);
-  // (Under everything it is Death Mountain's clouds: its sky's too.)
+  // (Under everything it is Death Mountain's clouds: its sky's too. The
+  // screen the overlay shows now, so that it drifts as the overlay scrolls:
+  // on Dark Death Mountain the overlay's tilemap is 64x64 and the tiles at
+  // its origin are not the ones over the screen.)
   if (mode == 2)
-    DecodeOverlay(ppu, p->clouds, 256, 0, 0, 256, 256);
-  p->cloud_x = bg->hScroll, p->cloud_y = bg->vScroll;
+    DecodeOverlay(ppu, p->clouds, 256, bg->hScroll, bg->vScroll, 256, 256);
   p->ov_sub = ppu->subtractColor;
   p->ov_half = ppu->halfColor;
   p->ov_obj = (ppu->mathEnabled & 0x10) != 0;
@@ -486,7 +488,10 @@ static void ReadSky(Pane *p, const Ppu *ppu) {
   p->sky = !player_is_indoors;
   int br = ppu->brightness & 15;
   uint32 mid, top, cloud;
-  if (p->ov_mode == 2)
+  // (On Dark Death Mountain the overlay under the ground is its lower
+  // ground's rock, not clouds: it keeps the Dark World's sky.)
+  p->game_clouds = p->ov_mode == 2 && !(overworld_screen_index & 0x40);
+  if (p->game_clouds)
     mid = 0xa0a8b8, top = 0x707c94, cloud = 0xd8dce4;
   else if (overworld_screen_index & 0x40)
     mid = 0x9c5c7c, top = 0x482858, cloud = 0xe0b0c0;
@@ -676,9 +681,11 @@ typedef struct BackgroundJob {
   const R3dFrame *f;
   float horizon, top;        // indoors: a little darker at the top, down to the horizon row
   uint32 ground;             // the ground's color near the camera
+  float out_fog;             // the ground past the live rectangle is at least this much fog (first person: all)
   uint32 sky[kSkySteps];     // outdoors: the sky, and how much cloud shows, by elevation
   uint8 cloud[kSkySteps];
   float cloud_u, cloud_v;    // where the clouds have drifted (noise texels)
+  float sky_gain;            // the sky's gradient, squeezed toward the horizon for the far third-person camera
 } BackgroundJob;
 
 static uint8 g_noise[kNoiseSize * kNoiseSize];
@@ -717,7 +724,7 @@ static void MakeNoise(void) {
 // The sky along a ray going up (dz > 0): the color for its elevation, then
 // the clouds, on a plane above, so they shrink toward the horizon.
 static uint32 SkyAt(const BackgroundJob *j, float dx, float dy, float dz) {
-  float e = dz / sqrtf(dx * dx + dy * dy + dz * dz);
+  float e = j->sky_gain * dz / sqrtf(dx * dx + dy * dy + dz * dz);
   int i = (int)(e * (kSkySteps - 1) + 0.5f);
   i = i < 0 ? 0 : i >= kSkySteps ? kSkySteps - 1 : i;
   uint32 c = j->sky[i];
@@ -725,9 +732,9 @@ static uint32 SkyAt(const BackgroundJob *j, float dx, float dy, float dz) {
     return c;
   const Pane *p = j->p;
   float s = 1.0f / dz;
-  if (p->ov_mode == 2) {
+  if (p->game_clouds) {
     // Death Mountain: the game's own clouds, pixel for pixel.
-    int u = (int)(dx * s * 96.0f + 4096.0f) + p->cloud_x, v = (int)(dy * s * 96.0f + 4096.0f) + p->cloud_y;
+    int u = (int)(dx * s * 96.0f + 4096.0f), v = (int)(dy * s * 96.0f + 4096.0f);
     uint8 idx = p->clouds[(v & 255) * 256 + (u & 255)];
     return idx ? LerpRgb(c, OverlayMath(p, c, idx), j->cloud[i] * (1.0f / 255.0f)) : c;
   }
@@ -777,12 +784,24 @@ static void BackgroundRows(int y0, int y1, void *ctx) {
       float oy = f->live_y0 - gy > gy - f->live_y1 ? f->live_y0 - gy : gy - f->live_y1;
       ox = ox > 0.0f ? ox : 0.0f, oy = oy > 0.0f ? oy : 0.0f;
       float fog = ox + oy > 0.0f ? Clampf((sqrtf(ox * ox + oy * oy) - f->live_fog0) * inv_live, 0.0f, 1.0f) : 0.0f;
+      // (In first person the ground past the live rectangle is the haze at
+      // the horizon, never the backdrop: black in the Dark World.)
+      if (ox + oy > 0.0f && fog < j->out_fog)
+        fog = j->out_fog;
       if (dist) {
         float d = t * sqrtf(dx * dx + dy * dy + dz * dz);
         float fd = Clampf((d - f->dist_fog0) / (f->dist_fog1 - f->dist_fog0), 0.0f, 1.0f);
         fog = fd > fog ? fd : fog;
       }
-      row[x] = LerpRgb(j->ground, f->fog_rgb, fog * fog * (3.0f - 2.0f * fog));
+      uint32 ground = j->ground;
+      if (p->ov_mode == 2 && fog < 1.0f) {
+        // Death Mountain: the game's own clouds under the ground it leaves
+        // open (as the 2D picture mixes them into its backdrop), where they
+        // lie in the world, drifting as its overlay scrolls.
+        int u = (int)gx - p->live[0], v = (int)gy - p->live[1] + 1;
+        ground = OverlayMath(p, ground, p->clouds[(v & 255) * 256 + (u & 255)]);
+      }
+      row[x] = LerpRgb(ground, f->fog_rgb, fog * fog * (3.0f - 2.0f * fog));
     }
   }
 }
@@ -801,6 +820,11 @@ static void MakeBackground(const Pane *p, const R3dFrame *f, float b) {
   }
   j.horizon = Clampf(j.horizon, 1.0f, (float)p->h);
   j.top = 1.0f - 0.15f * Clampf(b, 0.0f, 1.0f);
+  j.out_fog = p->info.indoors ? 0.0f : Clampf(b, 0.0f, 1.0f);
+  // (The third-person camera is far back with a narrow field of view: tilted
+  // down to the horizon it sees a few degrees of sky, where the gradient
+  // would all be the horizon's haze.)
+  j.sky_gain = 1.0f + 3.0f * (1.0f - Clampf(b, 0.0f, 1.0f));
   // (Indoors in first person no ground goes on past the room: it is the fog.)
   j.ground = p->info.indoors ? LerpRgb(p->backdrop, f->fog_rgb, Clampf(b, 0.0f, 1.0f)) : p->backdrop;
   if (p->sky) {
@@ -851,17 +875,24 @@ typedef struct BlurJob {
   const float *depth;
   int w;
   float focus_inv, focus, k;
+  float fp;                  // 0 third person .. 1 first person
+  float far0, far1;          // first person: the depth the far softening starts and is full at
 } BlurJob;
 
-// Depth of field from the real depth: in focus around the camera's target.
+// Depth of field from the real depth. Third person: in focus around the
+// camera's target, like the 2D look's band around the players. First person
+// the eye is at the Link, so no band fits: everything is sharp but the far
+// distance, which softens a little (the fog's range, half the strength).
 static void BlurRows(int y0, int y1, void *ctx) {
   const BlurJob *j = (const BlurJob *)ctx;
+  float tp = 1.0f - j->fp, fp = 0.5f * j->fp;
   for (int y = y0; y < y1; y++) {
     const float *d = j->depth + y * j->w;
     uint8 *out = g_blur + y * j->w;
     for (int x = 0; x < j->w; x++) {
       float z = d[x] > 0.0f ? 1.0f / d[x] : 1e9f;  // (the depth buffer holds 1 / depth; 0: nothing)
-      out[x] = (uint8)(j->k * SmoothStep(0.08f, 0.35f, fabsf(z - j->focus) * j->focus_inv));
+      float b = tp * SmoothStep(0.08f, 0.35f, fabsf(z - j->focus) * j->focus_inv) + fp * SmoothStep(j->far0, j->far1, z);
+      out[x] = (uint8)(j->k * b);
     }
   }
 }
@@ -1021,12 +1052,14 @@ static void FinishPane(Pane *p, int view) {
     if (b < 1.0f) {
       float sx, sy, d;
       R3d_Project(&f->cam, p->pose.target, &sx, &sy, &d);
-      focus = d > 1.0f ? d + (96.0f - d) * b : 96.0f;
+      focus = d > 1.0f ? d : 96.0f;
     }
     BlurJob j;
     j.depth = g_depth, j.w = w;
     j.focus = focus, j.focus_inv = 1.0f / focus;
     j.k = 255.0f * g_hd2d.depth_of_field / 100.0f;
+    j.fp = b;
+    j.far0 = 192.0f, j.far1 = 480.0f;
     Hd2d_ParallelFor(h, BlurRows, &j);
     Hd2dPostIn in;
     in.cls = g_cls, in.cls_pitch = kPicW;
