@@ -49,8 +49,9 @@ WHAT THE AI DID NOT WRITE
 - Third-party libraries included in the repository, written by their own
   authors under their own licenses: cJSON (third_party/cJSON), the Opus
   decoder (third_party/opus-1.3.1-stripped), the OpenGL loader
-  (third_party/gl_core) and stb_image (third_party/stb). The licenses of
-  Opus and cJSON are in LICENSE.txt; stb_image's is in its header.
+  (third_party/gl_core) and stb_image and stb_image_write (third_party/stb).
+  The licenses of Opus and cJSON are in LICENSE.txt; the stb libraries'
+  are in their headers.
 - The game's graphics, sound and text. They are not in this repository:
   every player extracts them from their own copy of the original game.
 - The project's direction: the maintainers chose what to build (some

@@ -44,6 +44,8 @@ static const uint16 kDefaultKbdControls[kKeys_Total] = {
   N, N,
   // View3d, View3dTurnLeft, View3dTurnRight, View3dTiltUp, View3dTiltDown, View3dReset
   _(SDLK_F11), _(SDLK_DELETE), _(SDLK_PAGEDOWN), _(SDLK_HOME), _(SDLK_END), _(SDLK_PAGEUP),
+  // Screenshot, ScreenshotClean
+  _(SDLK_F12), C(SDLK_F12),
 };
 #undef _
 #undef A
@@ -65,6 +67,7 @@ static const KeyNameId kKeyNameId[] = {
   S(ClearKeyLog), S(StopReplay), S(Fullscreen), S(Reset),
   S(Pause), S(PauseDimmed), S(Turbo), S(ReplayTurbo), S(WindowBigger), S(WindowSmaller), S(VolumeUp), S(VolumeDown), S(DisplayPerf), S(ToggleRenderer),
   S(View3d), S(View3dTurnLeft), S(View3dTurnRight), S(View3dTiltUp), S(View3dTiltDown), S(View3dReset),
+  S(Screenshot), S(ScreenshotClean),
 };
 #undef S
 #undef M

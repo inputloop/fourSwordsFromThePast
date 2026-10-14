@@ -85,6 +85,10 @@
 //   splitshot <file.ppm> <p> <q>  render the worlds of players p and q side by side
 //   splitshot3 <file.ppm> <p> <q> <r>  three players' worlds in a 2x2 window, the team panel in the fourth quarter
 //   expect_shot <name> [max % of pixels that may differ] [channel tolerance]  compare with tests/baseline/<name>.ppm
+//   screenshot <folder> <seen|clean> [overlay]  the screenshot keys (F12 / Ctrl+F12) on the frame "shot" draws:
+//                       the PNG written to that folder must read back as the frame as seen / without the
+//                       overlay, under a new name (overlay: the overlay must have drawn something)
+//   expect_hotkey <key> <screenshot|screenshotclean|view3d|none>  what a key (e.g. Ctrl+F12) does
 //   benchdraw <n>       times n frames drawn (with the current 2D-HD setting)
 //   drawrun <n>         run n frames, drawing each into a buffer exactly the size the renderer asks for (fails on an overrun)
 //   stalewidth <p> <n>  p's world's video chip keeps n widescreen columns per side (drawing must use the setting)
@@ -211,6 +215,8 @@
 #include "bindings.h"
 #include "ui.h"
 #include "upnp.h"
+#include "screenshot.h"
+#include "third_party/stb/stb_image.h"  // only the declarations: the code is in glsl_shader.c
 
 static int g_failures;
 
@@ -802,6 +808,87 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
       WritePpm(arg1, width, height, pixels, width);
       printf("wrote %s\n", arg1);
+    } else if (!strcmp(cmd, "screenshot")) {
+      // (Drawn with a wider pitch than the picture, as a renderer may give.)
+      bool clean = !strcmp(arg2, "clean");
+      int pitch_px = width + 16;
+      uint32 *buf = calloc((size_t)pitch_px * height, 4), *bare = malloc((size_t)width * height * 4);
+      g_mp_local_mask = 1 << view;
+      Ui_SetViews(&(UiView){ 0, 0, width, height, view, LocalOfPlayer(view) }, 1);
+      UsePane(view);
+      Hd2d_DrawFrame((uint8 *)buf, pitch_px * 4, render_flags, 0);
+      for (int y = 0; y < height; y++)
+        memcpy(bare + y * width, buf + y * pitch_px, width * 4);
+      // As DrawPpuFrameWithPerf does.
+      Screenshot_SetFolder(arg1);
+      Screenshot_Request(clean ? kScreenshot_Clean : kScreenshot_AsSeen);
+      Screenshot_Grab(kScreenshot_Clean, (uint8 *)buf, pitch_px * 4, width, height);
+      Ui_Draw((uint8 *)buf, pitch_px * 4, width, height, 1);
+      Screenshot_Grab(kScreenshot_AsSeen, (uint8 *)buf, pitch_px * 4, width, height);
+      static char last[300];
+      bool ok = false;
+      const char *file = Screenshot_LastFile();
+      int w = 0, h = 0, n = 0;
+      uint8 *png = Screenshot_Wait(10000, &ok) && ok ? stbi_load(file, &w, &h, &n, 3) : NULL;
+      if (!png || w != width || h != height) {
+        printf("FAIL: screenshot %s wasn't written or doesn't read back (%dx%d, expected %dx%d) at frame %d\n", file, w,
+               h, width, height, frame);
+        g_failures++;
+      } else {
+        int differ = 0, overlay = 0;
+        for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
+            uint32 seen = buf[y * pitch_px + x] & 0xffffff, under = bare[y * width + x] & 0xffffff;
+            const uint8 *c = png + (y * width + x) * 3;
+            differ += (uint32)(c[0] << 16 | c[1] << 8 | c[2]) != (clean ? under : seen);
+            overlay += seen != under;
+          }
+        }
+        printf("screenshot: %s, %dx%d (the overlay drew %d pixels)\n", file, w, h, overlay);
+        if (differ) {
+          printf("FAIL: %d pixels of %s aren't the frame %s at frame %d\n", differ, file,
+                 clean ? "without the overlay" : "as seen", frame);
+          g_failures++;
+        }
+        if (!strcmp(arg3, "overlay") && !overlay) {
+          printf("FAIL: the overlay drew nothing (expected it to) at frame %d\n", frame);
+          g_failures++;
+        }
+        if (!strcmp(last, file)) {
+          printf("FAIL: screenshot %s was written over at frame %d\n", file, frame);
+          g_failures++;
+        }
+        snprintf(last, sizeof(last), "%s", file);
+      }
+      stbi_image_free(png);
+      free(buf);
+      free(bare);
+    } else if (!strcmp(cmd, "expect_hotkey")) {
+      // expect_hotkey <[Ctrl+|Shift+|Alt+]key> <command>
+      const char *k = arg1;
+      int mod = 0;
+      for (;;) {
+        if (!strncmp(k, "Ctrl+", 5))
+          mod |= KMOD_LCTRL, k += 5;
+        else if (!strncmp(k, "Shift+", 6))
+          mod |= KMOD_LSHIFT, k += 6;
+        else if (!strncmp(k, "Alt+", 4))
+          mod |= KMOD_LALT, k += 4;
+        else
+          break;
+      }
+      static const struct { const char *name; int cmd; } kHotkeys[] = {
+        { "none", 0 }, { "screenshot", kKeys_Screenshot }, { "screenshotclean", kKeys_ScreenshotClean },
+        { "view3d", kKeys_View3d },
+      };
+      int want = -1, got = FindCmdForSdlKey(SDL_GetKeyFromName(k), (SDL_Keymod)mod);
+      for (size_t i = 0; i < countof(kHotkeys); i++)
+        if (!strcmp(arg2, kHotkeys[i].name))
+          want = kHotkeys[i].cmd;
+      if (want < 0 || got != want) {
+        printf("FAIL: %s does command %d, expected %s at frame %d\n", arg1, got, arg2, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "benchdraw")) {
       // benchdraw <n>: times n frames drawn (with the current 2D-HD setting)
       UsePane(view);

@@ -1,0 +1,25 @@
+# The screenshot keys (display only): F12 saves the frame as it is seen,
+# Ctrl+F12 the same frame without the mod's overlay. Each picture is written
+# as a PNG (under tests/out/screenshots here) and read back; two taken in
+# the same second get different names.
+expect_hotkey F12 screenshot
+expect_hotkey Ctrl+F12 screenshotclean
+expect_hotkey F11 view3d
+expect_hotkey Shift+F12 none
+load 2
+join 2
+run 30
+screenshot tests/out/screenshots seen
+screenshot tests/out/screenshots clean
+# The menu is part of the overlay.
+menu
+screenshot tests/out/screenshots seen overlay
+screenshot tests/out/screenshots clean overlay
+menu
+# Widescreen, the 2D-HD look and the 3D view.
+widescreen 64
+hd2d 1
+view3d 1
+drawrun 10
+screenshot tests/out/screenshots seen
+screenshot tests/out/screenshots clean

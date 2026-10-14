@@ -1159,6 +1159,8 @@ static void ScreenControls() {
   Label("3D view: right stick turns camera");
   Label("  (or hold the right mouse button)");
   Label("Left click or L3: first person");
+  Label("Screenshot: F12 (Ctrl+F12 without");
+  Label("  the overlay), into screenshots/");
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);

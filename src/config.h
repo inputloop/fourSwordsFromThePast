@@ -42,6 +42,9 @@ enum {
   kKeys_View3dTiltUp,
   kKeys_View3dTiltDown,
   kKeys_View3dReset,
+  // Screenshots (display only too): as on screen, and without the overlay.
+  kKeys_Screenshot,
+  kKeys_ScreenshotClean,
   kKeys_Total,
 };
 

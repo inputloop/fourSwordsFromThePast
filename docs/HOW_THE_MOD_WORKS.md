@@ -382,11 +382,13 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 
 The game only runs what is on its own screen and a little around it (enemies further away don't exist), so the 3D view fades into mist there. Dark rooms stay dark as in the original. In first person, pressing Up walks where you look: that is the one thing the 3D view changes in the game, and it does it on your own computer, by turning the direction buttons before they are sent, so online play stays in sync. Each player chooses their own view, and in split screen a player in first person gets a pane of their own. It costs about 1-1.5 milliseconds a frame. The code is in `src/hd3d*.c`, `src/r3d.c` and `src/cam3d.c`.
 
+**Screenshot keys.** F12 saves a PNG of exactly what is on the screen (2D, 2D-HD, 3D, split screen, menus and all) into a `screenshots` folder next to the game, named after the date and time; Ctrl+F12 saves the same frame without what the mod draws on top (menus, name tags, arrows, the corner health), so the game's own HUD stays. Both keys can be changed in `zelda3.ini`. The finished frame is copied right before and right after the overlay is drawn on it (`src/screenshot.c`), and the PNG is compressed on a separate thread, so even a big picture doesn't make the game stutter. Taking a picture only reads what was drawn, so it works online too.
+
 **Settings files.** `zelda3.ini` holds all default settings with explanations. Changes made in the menu are saved to `zelda3.coop.ini`, which overrides the defaults. They are saved automatically when the menu closes, and right away when you host or join a game, so the address you last joined, UPnP, the input delay and the other network settings are remembered.
 
 ## How it is tested and built
 
-The mod has 168 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 169 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 
@@ -411,6 +413,7 @@ The mod has 168 automatic tests that play the game with no window, by following 
 - the polish pass: a Link frozen by a sprite walks again, carrying a teammate through exits and merges, leaving and rejoining (hearts kept, nothing stale), five open menus at once, room flags kept across an exit, the dam staying per world, the item box always showing the leader's item, enemies a teammate killed staying dead across a merge, the group camera (walking together, walking away, dungeon bounds, tethers, text boxes, area edges, menus handing the lead back, rejoining on the way in), and every rewritten story line fitting the text box,
 - the 2D-HD look: a dark room is lit by the filter, and a Link in a doorway stays hidden unless see-through is on,
 - the 3D view: drawing in 3D changes nothing in the game (the game's memory and its fingerprint are the same with the 3D view on or off, also online with one player in 3D), it never writes outside the picture it was given (in every widescreen size), at its test angle it shows exactly the original picture, the direction buttons turn with the camera only when they should (never in menus or text boxes), first person, the camera controls and the View button, split-screen panes, dark rooms and the moments it falls back to the flat picture; its renderer and camera also have their own tests that run on GitHub,
+- the screenshot keys: the PNG reads back as exactly the frame as seen, or without the overlay (also with a menu open, widescreen, 2D-HD and the 3D view), and two pictures taken in the same second get different names,
 - menus: the world keeps running (and the Link stands still) while a player is in the item menu, even alone; the options menu stops only its player; the map button goes mini map, full map, no map,
 - screenshots: a few scenes (the HUD, the co-op HUD, the pause menu, the 2D-HD look) are compared with reference screenshots. Those are made from your own copy of the game the first time, and are never uploaded, because the game's graphics belong to Nintendo; so this check runs on your computer, not on GitHub. When something looks different, the test saves the new picture and one with the changed pixels in red.
 

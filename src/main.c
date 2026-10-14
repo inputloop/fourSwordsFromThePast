@@ -34,6 +34,7 @@
 #include "bindings.h"
 #include "instance.h"
 #include "archipelago.h"
+#include "screenshot.h"
 
 static bool g_run_without_emu = 0;
 
@@ -244,7 +245,9 @@ static void DrawPpuFrameWithPerf() {
     DrawSplitScreen(pixel_buffer, pitch, views, nviews, g_ppu_render_flags & ~kPpuRenderFlags_4x4Mode7);
     SDL_UnlockMutex(g_audio_mutex);
     Hd3d_FinishPanes();
+    Screenshot_Grab(kScreenshot_Clean, pixel_buffer, pitch, g_disp_width, g_disp_height);
     Ui_Draw(pixel_buffer, pitch, g_disp_width, g_disp_height, 1);
+    Screenshot_Grab(kScreenshot_AsSeen, pixel_buffer, pitch, g_disp_width, g_disp_height);
     g_renderer_funcs.EndDraw();
     return;
   }
@@ -263,9 +266,12 @@ static void DrawPpuFrameWithPerf() {
   } else {
     Hd2d_DrawFrame(pixel_buffer, pitch, g_ppu_render_flags, 0);
   }
+  // The screenshot keys: the frame without the overlay, and as it is seen.
+  Screenshot_Grab(kScreenshot_Clean, pixel_buffer, pitch, g_disp_width * render_scale, g_disp_height * render_scale);
   if (g_display_perf)
     RenderNumber(pixel_buffer + pitch * render_scale, pitch, g_curr_fps, render_scale == 4);
   Ui_Draw(pixel_buffer, pitch, g_disp_width * render_scale, g_disp_height * render_scale, render_scale);
+  Screenshot_Grab(kScreenshot_AsSeen, pixel_buffer, pitch, g_disp_width * render_scale, g_disp_height * render_scale);
   g_renderer_funcs.EndDraw();
 }
 
@@ -782,6 +788,7 @@ int main(int argc, char** argv) {
   Session_Disconnect();
   if (g_config.autosave && !was_client)
     HandleCommand(kKeys_Save + 0, true);
+  Screenshot_Wait(5000, NULL);  // (a picture still being written)
 
   // clean sdl
   if (g_config.enable_audio) {
@@ -860,6 +867,11 @@ static void HandleCommand(uint32 j, bool pressed) {
   }
   if (j >= kKeys_View3d && j <= kKeys_View3dReset) {
     Hd3d_OnKeyCommand(j, pressed);  // (display only: allowed online)
+    return;
+  }
+  if (j == kKeys_Screenshot || j == kKeys_ScreenshotClean) {
+    if (pressed)  // (display only too)
+      Screenshot_Request(j == kKeys_Screenshot ? kScreenshot_AsSeen : kScreenshot_Clean);
     return;
   }
 

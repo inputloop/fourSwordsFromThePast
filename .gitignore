@@ -51,3 +51,6 @@ __pycache__
 
 # Built by archipelago/build_apworld.py
 /archipelago/*.apworld
+
+# Pictures taken with F12 / Ctrl+F12
+/screenshots/

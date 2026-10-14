@@ -257,6 +257,7 @@
     <ClCompile Include="src\hd3d_linkpose.c" />
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />
+    <ClCompile Include="src\screenshot.c" />
     <ClCompile Include="src\session.c" />
     <ClCompile Include="src\ui.c" />
     <ClCompile Include="src\upnp.c" />
@@ -491,6 +492,7 @@
     <ClInclude Include="src\randomizer.h" />
     <ClInclude Include="src\story.h" />
     <ClInclude Include="src\net.h" />
+    <ClInclude Include="src\screenshot.h" />
     <ClInclude Include="src\session.h" />
     <ClInclude Include="src\ui.h" />
     <ClInclude Include="src\upnp.h" />

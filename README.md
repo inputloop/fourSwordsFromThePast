@@ -543,6 +543,11 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 - 3D view (when it is on): the right stick (or a right mouse drag) turns
   the camera, and a left click or L3 switches first person. See
   [3D view and first person](#3d-view-and-first-person-beta).
+- `F12` saves a screenshot of what is on screen as a PNG in the
+  `screenshots` folder next to the game (e.g.
+  `screenshots/fsotp-2026-10-14_15-30-02.png`); `Ctrl+F12` saves the same
+  picture without the mod's menus, name tags and arrows (the game's HUD
+  stays). Change the keys in `zelda3.ini` (`Screenshot`, `ScreenshotClean`).
 
 ## Where to mod
 
@@ -636,6 +641,8 @@ Additionally, the following commands are available:
 | F   | Display renderer performance |
 | F1-F10 | Load snapshot      |
 | Alt+Enter | Toggle Fullscreen     |
+| F12 | Save a screenshot (in `screenshots/`) |
+| Ctrl+F12 | Save a screenshot without the mod's overlay |
 | Shift+F1-F10 | Save snapshot |
 | Ctrl+F1-F10 | Replay the snapshot |
 | 1-9 | Load a dungeons playthrough snapshot |
