@@ -112,7 +112,7 @@ typedef struct PanelCell {
   int8 s0, s1;               // the hinge's offset (px) at its two ends along the foot (diagonal walls)
 } PanelCell;
 
-// A small liftable prop indoors (a pot, a skull, a bush): its whole
+// A small prop indoors as a standing picture (g_hd3d_prop_pictures, off): its whole
 // picture stands up on its front line and turns to face the camera. At the
 // default view it stands where its painted face is, so it shows exactly the
 // picture (the relief rule); from the side it is the same picture, not a
@@ -1199,6 +1199,8 @@ static int MedianBand(const int *hist) {
 
 // ---- Geometry: small props indoors ----
 
+bool g_hd3d_prop_pictures;  // (off: props are blocks)
+
 static bool PropSolid(const Layer *ly, int i) {
   return IsSolid(ly->cls[i]) && !(ly->cf[i] & (kCf_Shell | kCf_Panel | kCf_Prop));
 }
@@ -1235,13 +1237,10 @@ static void BuildProps(Hd3dScene *s, int L) {
     // (The marks stay: a piece too big is a relief, and is not tried again.)
     if (big || r1 + 1 >= n)
       continue;
-    // Only what can be picked up (pots, skulls, bushes) is a picture that
-    // turns to face the camera: a chest, a statue or a torch stand reads
-    // better as a block with its painted top and front.
-    bool liftable = false;
-    for (int k = 0; k < tail; k++)
-      liftable |= ly->attr[g_list[k]] >= 0x50 && ly->attr[g_list[k]] <= 0x57;
-    if (!liftable)
+    // Everything that stands on the floor is a block with its painted top
+    // and front (a chest, a statue, a torch stand, a pot): nothing turns to
+    // face the camera. (The standing pictures are kept for a setting.)
+    if (!g_hd3d_prop_pictures)
       continue;
     // The box may hold only this piece, floor and pits.
     for (int k = 0; k < tail; k++)
