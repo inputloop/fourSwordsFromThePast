@@ -447,7 +447,8 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
 - **Moving.** Once the camera is turned, Up walks where the camera looks
   (in first person always): Left and Right go sideways, Down goes back.
   *Controls turn with camera* switches this off in third person. Link still
-  faces and swings his sword in the game's four directions.
+  faces and swings his sword in the game's four directions, and every Link
+  shows the side your camera sees of him: his back when he runs away from it.
 - **First person.** The view is at Link's eye height and starts facing where
   he faces. Your own Link is hidden, but not his sword: a swing, a spin
   attack or an item in his hand sweeps across the bottom of the view.

@@ -254,6 +254,7 @@
     <ClCompile Include="src\hd3d_input.c" />
     <ClCompile Include="src\hd3d_world.c" />
     <ClCompile Include="src\hd3d_sprites.c" />
+    <ClCompile Include="src\hd3d_linkpose.c" />
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\session.c" />

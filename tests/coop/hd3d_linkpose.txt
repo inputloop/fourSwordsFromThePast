@@ -1,0 +1,111 @@
+# 3D view: with the camera turned, each Link is drawn facing the way the
+# camera sees him (hd3d_linkpose.c runs the game's Link drawing again with
+# that facing, then puts back every byte it touched). This only draws: the
+# game must play exactly the same. Two Links in one world (the leader, and
+# one whose own state is swapped in to draw him, with other health), walking,
+# swinging the sword and standing, seen from a camera turned 90 and 180
+# degrees and in first person. The d-pad is not turned here (remap3d 0), so
+# every run is the same walk.
+load 2
+drawrun 30
+clearsprites
+pos 1 3860 1690
+join 2
+drawrun 4
+pos 2 3940 1690
+hp 2 27
+together 1
+drawrun 150
+remap3d 0
+cam3d 1 tp 90
+# Drawing changes nothing, not even the first time: the state hash is taken
+# with the 3D view off, then the poses are drawn (seen from the side and
+# from behind), in third person and in first person.
+hold 1 R
+hold 2 U
+drawrun 8
+hashmark walking
+view3d 1
+expect_3d 1
+expect_drawpure 5
+expect_hashmark walking
+view3d 0
+hold 1 RB
+hold 2 L
+drawrun 3
+hashmark swinging
+view3d 1
+expect_drawpure 3
+expect_hashmark swinging
+view3d 0
+hold 1 -
+hold 2 -
+drawrun 30
+cam3d 1 fp 90
+hashmark standing
+view3d 1
+expect_drawpure 3
+expect_hashmark standing
+view3d 0
+cam3d 1 tp 0
+# The same walk with the 3D view off, and on with turned cameras.
+mark
+hold 1 R
+hold 2 U
+drawrun 40
+hold 1 B
+hold 2 D
+drawrun 20
+hold 1 L
+hold 2 RB
+drawrun 30
+hold 1 -
+hold 2 -
+drawrun 20
+hashmark walk
+rewind
+view3d 1
+cam3d 1 tp 90
+hold 1 R
+hold 2 U
+drawrun 40
+hold 1 B
+hold 2 D
+drawrun 20
+hold 1 L
+hold 2 RB
+drawrun 30
+hold 1 -
+hold 2 -
+drawrun 20
+expect_hashmark walk
+rewind
+cam3d 1 tp 180
+hold 1 R
+hold 2 U
+drawrun 40
+hold 1 B
+hold 2 D
+drawrun 20
+hold 1 L
+hold 2 RB
+drawrun 30
+hold 1 -
+hold 2 -
+drawrun 20
+expect_hashmark walk
+rewind
+cam3d 1 fp 90
+hold 1 R
+hold 2 U
+drawrun 40
+hold 1 B
+hold 2 D
+drawrun 20
+hold 1 L
+hold 2 RB
+drawrun 30
+hold 1 -
+hold 2 -
+drawrun 20
+expect_hashmark walk

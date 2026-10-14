@@ -241,6 +241,9 @@
     <ClCompile Include="src\hd3d_sprites.c">
       <Filter>Zelda</Filter>
     </ClCompile>
+    <ClCompile Include="src\hd3d_linkpose.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
     <ClCompile Include="src\mptest.c">
       <Filter>Zelda</Filter>
     </ClCompile>

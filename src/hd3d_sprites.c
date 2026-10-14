@@ -173,13 +173,14 @@ static const uint8 kHd3dSpriteSizes[8][2] = {
 };
 
 enum {
-  kSprMaxEntries = 128 + kPpuMaxExtraSpriteSets * kPpuMaxExtraSprites,
+  kSprMaxEntries = 128 + kPpuMaxExtraSpriteSets * kPpuMaxExtraSprites + kHd3dMaxLinks * kHd3dPoseMax,
   kSprMaxCard = 256,          // a group bigger than this either way is left out
   kSprLutBanks = 129,         // lut index of extra palette bank 1, color 0
   // A first-person weapon (SprWeaponCard).
   kWpnMax = 64,               // its picture is cut to this many px either way
   kWpnFine = 2,               // the turned picture has this many texels per picture px either way
   kWpnScreenPx = 52,          // the picture's height is this many picture px (4.3 screen px each at 224 rows)
+  kSprPoseSet = kPpuMaxExtraSpriteSets,  // SprEnt.set of player p's pose: this + p
 };
 #define kWpnAhead 16.0f       // its hands: this far ahead of the eye
 #define kWpnBelow 11.0f       // and this far below it
@@ -197,7 +198,7 @@ typedef struct SprEnt {
   uint16 oam1;               // char, name select, palette, priority, flips
   uint16 order;              // regular: its index; extra set k: 128 + 64k + i
   uint8 size, bank;          // bank: the extra palette bank that replaces palette 7 (0: none)
-  int8 set;                  // -1 regular; else the extra set, whose tiles replace VRAM 0x4000-0x41FF
+  int8 set;                  // -1 regular; else the extra set (or pose), whose tiles replace VRAM 0x4000-0x41FF
   uint8 kind, index, join;
   bool shadow;
   bool weapon;               // the first-person player's weapon, or a sparkle of it
@@ -295,7 +296,8 @@ static void SprDrawEntry(const Hd3dSpriteFrame *sf, const SprEnt *e, uint8 *dst,
   int obj_adr = (oam1 & 0x100) ? sf->obj_adr2 : sf->obj_adr1;
   int pal = (oam1 >> 9) & 7;
   int base = (pal == 7 && e->bank) ? kSprLutBanks + (e->bank - 1) * 16 : 1 + pal * 16;
-  const uint16 *tiles = e->set >= 0 ? sf->sets[e->set].tiles : NULL;
+  const uint16 *tiles = e->set < 0 ? NULL : e->set < kSprPoseSet ? sf->sets[e->set].tiles :
+                        sf->poses[e->set - kSprPoseSet].tiles;
   for (int row = 0; row < size; row++) {
     int y = dy + row;
     if ((unsigned)y >= (unsigned)h)
@@ -441,6 +443,50 @@ static bool SprWeaponCard(const Hd3dSpriteFrame *sf, const SprEnt *ents, const S
   return true;
 }
 
+// A Link the camera sees from another side (sf->poses, hd3d_linkpose.c):
+// where the game's picture of him shows his body, its entries make way for
+// the pose's. (A blinking or hidden Link keeps the game's picture. The
+// regular OAM's Link entries only count when tagged.) Returns the new n.
+static int SprUsePoses(const Hd3dSpriteFrame *sf, SprEnt *ents, int n, bool any_tag) {
+  bool body[kHd3dMaxLinks] = { false }, any = false;
+  for (int i = 0; i < n; i++) {
+    const SprEnt *e = &ents[i];
+    if (e->kind == kHd3dTag_Link && e->index < kHd3dMaxLinks && !e->shadow && (e->set >= 0 || any_tag) &&
+        sf->poses[e->index].count)
+      body[e->index] = any = true;
+  }
+  if (!any)
+    return n;
+  int m = 0;
+  for (int i = 0; i < n; i++) {
+    if (ents[i].kind == kHd3dTag_Link && ents[i].index < kHd3dMaxLinks && body[ents[i].index])
+      continue;
+    ents[m] = ents[i];
+    ents[m].parent = (int16)m;
+    m++;
+  }
+  const uint8 *sizes = kHd3dSpriteSizes[sf->obj_size & 7];
+  for (int p = 0; p < kHd3dMaxLinks; p++) {
+    const Hd3dLinkPose *ps = &sf->poses[p];
+    for (int i = 0; body[p] && i < ps->count && m < kSprMaxEntries; i++) {
+      SprEnt *e = &ents[m];
+      e->x = ps->x[i] + sf->cam_x;
+      e->y = ps->y[i] + sf->cam_y + 1;
+      e->oam1 = ps->oam1[i];
+      e->size = sizes[ps->big[i] & 1];
+      e->order = ps->order[i];
+      e->bank = ps->bank;
+      e->set = (int8)(kSprPoseSet + p);
+      e->kind = kHd3dTag_Link, e->index = (uint8)p, e->join = kJoin_Key;
+      e->shadow = SprIsShadow(e->oam1);
+      e->parent = (int16)m;
+      e->next = -1;
+      m++;
+    }
+  }
+  return m;
+}
+
 int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, const R3dCamera *cam, uint8 atlas_slot,
                       uint8 *atlas, uint32 *lut, R3dCard *cards, int max_cards,
                       R3dQuad *decals, int max_decals, int *num_decals) {
@@ -525,6 +571,7 @@ int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, const R
       n++;
     }
   }
+  n = SprUsePoses(sf, ents, n, any_tag);
 
   // Groups: an object's entries (a hidden Link's weapon apart); touching
   // untagged ones; each projectile alone.

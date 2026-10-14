@@ -597,6 +597,7 @@ static void ReadWorld(Pane *p, uint32 flags, int step, bool same_world, Hd3dScen
   p->sf->hide_player = (int8)(!test && p->cam3d.blend > 0.5f ? player : -1);
   p->sf->xray_player = (int8)(!test && Cam3d_IsTurned(&p->cam3d) ? player : -1);
   p->sf->weapon_ancillae = p->sf->hide_player >= 0 ? WeaponAncillae(player) : 0;
+  Hd3dLinkPose_Read(p->sf, test ? NULL : &p->cam3d);  // (the Links face the way this camera sees them)
   int br = ppu->brightness & 15;
   memset(p->bg_lut, 0, sizeof(p->bg_lut));
   for (int i = 0; i < 128; i++)

@@ -1,5 +1,5 @@
 // Shared by the 3D view's own files (hd3d.c, hd3d_input.c, hd3d_world.c,
-// hd3d_sprites.c). Nothing else includes it.
+// hd3d_sprites.c, hd3d_linkpose.c). Nothing else includes it.
 #ifndef ZELDA3_HD3D_INTERNAL_H_
 #define ZELDA3_HD3D_INTERNAL_H_
 
@@ -24,6 +24,8 @@ enum {
   kHd3dFogMargin = 72,       // geometry is kept this far beyond the original screen (fading out)
   kHd3dMaxRelief = 64,       // the highest surface: picture rows this far above the screen can show
   kHd3dBandMax = 8,          // the widest dungeon wall band, in 8 px cells
+  kHd3dMaxLinks = 4,         // players (kMpMaxPlayers)
+  kHd3dPoseMax = 16,         // OAM entries of one Link drawn again (body, sword, shield, shadow...)
 };
 
 // Why a pane is drawn in 2D.
@@ -92,6 +94,18 @@ typedef struct Hd3dObject {  // where an object that draws sprites stands
   int16 z;                   // height above the ground (jumps, throws)
 } Hd3dObject;
 
+// A Link drawn again by the game's own routine, facing the way the pane's
+// camera sees him (hd3d_linkpose.c).
+typedef struct Hd3dLinkPose {
+  uint8 count;               // 0: none (the Link as the game drew him)
+  uint8 bank;                // the extra palette bank of palette 7 (0: cgram 0xF0-0xFF, the leader's colors)
+  int16 x[kHd3dPoseMax], y[kHd3dPoseMax];  // screen px, against cam_x and cam_y
+  uint16 oam1[kHd3dPoseMax]; // char, name select, palette, priority, flips
+  uint8 big[kHd3dPoseMax];   // 1: the large size
+  uint16 order[kHd3dPoseMax];  // as Hd3dSprites_Build orders the entries the game drew
+  uint16 tiles[0x200];       // VRAM 0x4000-0x41FF as the game would upload it for this pose
+} Hd3dLinkPose;
+
 typedef struct Hd3dSpriteFrame {
   // Copied by the frame hook inside ZeldaDrawPpuFrame.
   uint16 oam[0x110];
@@ -116,6 +130,9 @@ typedef struct Hd3dSpriteFrame {
   int8 hide_player;          // first person: this player's Link and shadow are not drawn (-1)
   int8 xray_player;          // this player's Link gets a silhouette where hidden (-1)
   uint16 weapon_ancillae;    // first person: the hidden player's sword sparkles (a bit per ancilla slot)
+  // Phase A, once the pane's camera is known (Hd3dLinkPose_Read).
+  Hd3dLinkPose poses[kHd3dMaxLinks];
+  uint8 pose_facing[kHd3dMaxLinks];  // (kept between frames) the facing last shown, + 1 (0: none)
 } Hd3dSpriteFrame;
 
 void Hd3dSprites_Capture(Ppu *ppu, Hd3dSpriteFrame *out);  // the frame hook
@@ -127,6 +144,13 @@ void Hd3dSprites_ReadWorld(Hd3dSpriteFrame *out);          // phase A, after the
 int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, const R3dCamera *cam, uint8 atlas_slot,
                       uint8 *atlas, uint32 *lut, R3dCard *cards, int max_cards,
                       R3dQuad *decals, int max_decals, int *num_decals);
+
+// ---- hd3d_linkpose.c: Links facing the way the camera sees them ----
+// Phase A, after Hd3dSprites_ReadWorld and hide_player: fills sf->poses for
+// the Links whose facing seen from cam differs from their facing in the
+// world. Runs the game's Link drawing and puts back every byte it touched.
+// cam NULL (the oblique test camera): none.
+void Hd3dLinkPose_Read(Hd3dSpriteFrame *sf, const Cam3d *cam);
 
 // ---- hd3d_input.c: cameras, input, panes ----
 extern Cam3d g_hd3d_cam[kHd3dMaxLocal];
