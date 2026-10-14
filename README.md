@@ -406,7 +406,9 @@ lens-and-light pass over the pixel art, in the style of Octopath Traveler.
 - **Depth of field**: the players are in focus and the screen goes softly out
   of focus above and below them, like a diorama. In split screen, each pane
   focuses on its own player. Far layers (a cave's distant floor, the void
-  under a pit) are softer and hazy.
+  under a pit) are softer and hazy. In the 3D view the focus follows the
+  real depth around Link; in first person everything is sharp but the far
+  distance.
 - **Lighting**: dark rooms are lit for real: a warm glow around each Link
   with the Lamp, lit torches, fire-rod fire and the big explosions, over a darkness that lifts
   as torches are lit. Without the Lamp a dark room stays dim, with the Links
@@ -489,7 +491,8 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
   fades into mist where the original screen ends, a little further in first
   person. Outdoors a sky rises out of that mist, with slow drifting clouds:
   blue over the Light World, violet-red over the Dark World and grey over
-  Death Mountain, where the game's own clouds drift in it. Dark rooms stay as dark as in the original (pitch black without
+  Death Mountain, where the game's own clouds drift in it. Tilt the camera
+  down to the horizon and the sky shows over the far ground. Dark rooms stay as dark as in the original (pitch black without
   the Lamp), or are lit by the 2D-HD lighting when that is on.
 - **What stays 2D.** The item menu, the maps, the title and file select,
   the world map, game over, and moments the game draws with special screen

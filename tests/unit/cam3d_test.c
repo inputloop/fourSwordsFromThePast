@@ -428,6 +428,15 @@ static void TestDefaultView(void) {
   c.pitch = 75;
   Cam3d_MakeView(&c, &p, &t, &rc);
   CHECK(fabs(rc.stretch_y - 1) < 1e-6, "stretch at 75: %f", rc.stretch_y);
+  // Tilted all the way down (the pitch clamps at 10) the horizon is in the
+  // picture, so a low camera shows the sky outdoors: a far point level with
+  // the eye lands in the upper part of the picture.
+  c.pitch = -20;
+  Cam3d_MakeView(&c, &p, &t, &rc);
+  double lf = sqrt((double)rc.fwd[0] * rc.fwd[0] + (double)rc.fwd[1] * rc.fwd[1]);
+  Project(&rc, rc.eye[0] + rc.fwd[0] / lf * 1e6, rc.eye[1] + rc.fwd[1] / lf * 1e6, rc.eye[2], &sx, &sy, &zc);
+  CHECK(sy > 4 && sy < 112, "the horizon at the lowest pitch is in the picture: row %f", sy);
+  CHECK(rc.eye[2] > p.target[2] + 50, "the lowest pitch still looks down a little: eye z %f", rc.eye[2]);
   // Wider pictures show more at the sides (Hor+): same focal, cx in the middle.
   R3dCamera narrow, wide;
   Cam3d_Reset(&c);
@@ -525,10 +534,10 @@ static void TestStick(void) {
   Run(&c, &in, &t, 0.1f);
   CHECK(c.pitch < 45 && c.pitch > 35, "stick up 0.1 s: pitch %f", c.pitch);
   Run(&c, &in, &t, 2);
-  CHECK(c.pitch == 30, "stick up stops at 30: %f", c.pitch);
+  CHECK(c.pitch == 10, "stick up stops at 10: %f", c.pitch);
   in.stick_y = 1;
   Run(&c, &in, &t, 0.1f);
-  CHECK(c.pitch > 33, "back down at once from the limit: %f", c.pitch);
+  CHECK(c.pitch > 13, "back down at once from the limit: %f", c.pitch);
   t.invert_y = true;
   Cam3d_Reset(&c);
   in.stick_y = -1;

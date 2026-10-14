@@ -1,0 +1,42 @@
+# 3D view: the horizon. Outdoors in first person the ground past the loaded
+# screen is the haze at the horizon, never the backdrop (black in the Dark
+# World), and on Dark Death Mountain the ground below the plateau is the
+# game's own rock (its overlay under the picture), not a black pit; its sky
+# is the Dark World's, not the rock. The third-person camera tilts down to
+# 10 degrees, where the sky shows over the far ground.
+hd2d 1
+view3d 1
+load 2
+drawrun 30
+enter d6
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 40
+clearsprites
+# Turtle Rock's doorstep, looking north at the rock below the plateau's edge
+# (it was black: the backdrop with nothing drawn).
+cam3d 1 fp 0 6
+drawrun 2
+expect_3d 1
+expect_luma 64 180 192 220 40 255
+# Looking up: the Dark World's violet sky, neither white nor the rock's tiles.
+cam3d 1 fp 0 -20
+drawrun 2
+expect_luma 64 30 192 60 40 190
+# Third person tilted down to the limit (10 degrees), zoomed out: the sky
+# over Kakariko at the top of the picture.
+load 2
+drawrun 30
+enter f2
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 40
+clearsprites
+cam3d 1 tp 180 10 75
+drawrun 2
+expect_3d 1
+expect_luma 64 24 192 40 110 255

@@ -19,7 +19,7 @@
 #define kCos30 0.8660254f
 
 // Third person: the pitch range, the original view and the zoom range.
-#define kTpPitchMin 30.0f
+#define kTpPitchMin 10.0f   // (low enough to see the horizon and the sky)
 #define kTpPitchMax 75.0f
 #define kTpPitch 45.0f
 #define kZoomMin 0.75f

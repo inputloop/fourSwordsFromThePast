@@ -34,7 +34,7 @@ stick3d 1 0 -100
 cam3dstep 3000
 stick3d 1 0 0
 cam3dstep 200
-expect_cam3d 1 0 30 0.1
+expect_cam3d 1 0 10 0.1
 stick3d 1 0 100
 cam3dstep 3000
 stick3d 1 0 0
@@ -71,21 +71,21 @@ expect_cam3d 1 60 45 3
 key3d up 1
 cam3dstep 500
 key3d up 0
-expect_cam3d 1 60 30 3
+expect_cam3d 1 60 10 3
 # The mouse turns the camera only while dragged with the right button
 # (third person). (The first movement of a drag is the cursor's jump.)
 motion 100 0
 cam3dstep 16
-expect_cam3d 1 60 30 3
+expect_cam3d 1 60 10 3
 click right down
 cam3dstep 16
 motion 100 0
 cam3dstep 16
-expect_cam3d 1 90 30 3
+expect_cam3d 1 90 10 3
 click right up
 motion 100 0
 cam3dstep 16
-expect_cam3d 1 90 30 3
+expect_cam3d 1 90 10 3
 # The reset key: back to the classic view.
 key3d reset
 expect_cam3d 1 0 45 0

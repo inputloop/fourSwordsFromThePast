@@ -505,7 +505,7 @@ void Hd3d_SetCamera(int local, const Hd3dCamState *s) {
     c->fp_pitch = Clampf(s->pitch, -60.0f, 45.0f);
   } else {
     c->yaw = Wrap180(s->yaw);
-    c->pitch = Clampf(s->pitch, 30.0f, 75.0f);
+    c->pitch = Clampf(s->pitch, 10.0f, 75.0f);
     c->zoom = Clampf(s->zoom, 0.75f, 2.0f);
   }
   c->blend = c->first_person ? 1.0f : 0.0f;
