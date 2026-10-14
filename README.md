@@ -478,7 +478,7 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
   Teammates, enemies and items are cards. After stairs to another floor, a
   building's door or a fall, the view turns to where Link comes out facing
   (unless it already looks about that way). Indoors the walls stand tall
-  around you, and pots, statues and chests are standing pictures.
+  around you, and pots and skulls are standing pictures (chests and statues stay solid).
   *First-person view* sets the field of view (50-90 degrees). In split
   screen a player in first person always gets a pane of their own.
 - **Third person.** *Camera returns* (off by default) eases the camera back to
