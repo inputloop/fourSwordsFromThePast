@@ -169,6 +169,8 @@ struct Hd3dScene {
   // (canopy edges) from slab_lo up to slab_hi (slab_hi <= slab_lo: none).
   int8 ow_level[kMaxCells], ow_face[kMaxCells];
   uint8 ow_fdir[kMaxCells];   // a face: 1 + which way it drops (0: not a face)
+  int16 ow_cliff[kMaxCells];  // picture cells: the top cell of a painted face below a south ledge of their
+                              // terrace (its level), the nearest; -1: none. The terrace's other sides show it
   int8 slab_lo[kMaxCells], slab_hi[kMaxCells];
   uint8 ow_front[kMaxCells];  // world cells: how far south the block at least this high goes (cells; 0x80: ground)
   int16 ow_zmax;             // the highest surface
@@ -1488,6 +1490,8 @@ static int16 g_ow_level[kOwRegions];
 static int16 g_ow_hdef[kOwRegions];
 static uint8 g_ow_rflags[kOwRegions];
 
+static void OwCliffs(Hd3dScene *s);
+
 // Which way the ground drops at a ledge (-1: not a ledge). A diagonal ledge
 // counts as its north or south half.
 static int LedgeDrop(uint8 a) {
@@ -1835,6 +1839,66 @@ static void ComputeTerraces(Hd3dScene *s) {
   for (int i = 0; i < cells; i++)
     if (g_ow[i] & kOw_Bridge)
       OwStairs(s, i, g_ow[i] >> 5 & 3);
+  OwCliffs(s);
+}
+
+// Each cell's painted cliff: the face below a south ledge of its terrace
+// (one with the cell's level as its high side, else of any level: the
+// area's cliffs are painted alike), the nearest such band in its column,
+// else in the nearest column with one in its row. The sides and back of a
+// terrace show that band (the art paints nothing there).
+static void OwCliffs(Hd3dScene *s) {
+  int n = s->n, cells = n * n;
+  for (int i = 0; i < cells; i++)
+    s->ow_cliff[i] = -1;
+  for (int c = 0; c < n; c++) {
+    // The bands of this column: their top cells.
+    int16 top[kMaxN];
+    int bands = 0;
+    for (int r = 0; r < n; r++) {
+      int j = r * n + c;
+      if (s->ow_fdir[j] == 1 + kDrop_S && (r == 0 || s->ow_fdir[j - n] != 1 + kDrop_S || s->ow_face[j - n] != s->ow_face[j]))
+        top[bands++] = (int16)j;
+    }
+    if (!bands)
+      continue;
+    for (int r = 0; r < n; r++) {
+      int j = r * n + c, best = -1, dist = n, any = -1, any_dist = n;
+      if (s->ow_fdir[j])
+        continue;
+      for (int k = 0; k < bands; k++) {
+        int d = abs(top[k] / n - r);
+        if (s->ow_face[top[k]] == s->ow_level[j] && d < dist)
+          best = top[k], dist = d;
+        if (d < any_dist)
+          any = top[k], any_dist = d;
+      }
+      s->ow_cliff[j] = (int16)(best >= 0 ? best : any);
+    }
+  }
+  for (int r = 0; r < n; r++) {
+    for (int c = 0; c < n; c++) {
+      int j = r * n + c, any = -1;
+      if (s->ow_cliff[j] >= 0 || s->ow_fdir[j])
+        continue;
+      for (int d = 1; d <= 32 && s->ow_cliff[j] < 0; d++) {
+        for (int side = -1; side <= 1; side += 2) {
+          int cc = c + side * d, k = cc >= 0 && cc < n ? s->ow_cliff[r * n + cc] : -1;
+          // (Only ones found in their own column: this row's, not a chain.)
+          if (k < 0 || k % n != cc)
+            continue;
+          if (s->ow_face[k] == s->ow_level[j]) {
+            s->ow_cliff[j] = (int16)k;
+            break;
+          }
+          if (any < 0)
+            any = k;
+        }
+      }
+      if (s->ow_cliff[j] < 0)
+        s->ow_cliff[j] = (int16)any;
+    }
+  }
 }
 
 // Doorways and cave mouths: walkable cells (up to 4 rows) under something
@@ -2762,19 +2826,71 @@ static void EmitFace(EmitCtx *x, int L, int c, int r, int dir, int zlo, int zhi)
 // corner, wrapping round it for up to 16 px. A south face is a front: that
 // is the relief rule. (Side faces by the relief rule had the picture's rows
 // slanting across them: stripes, and shards at a canopy's ragged edge.)
-// The side and back of a terrace (ground, 0x80 in front) fold its edge down
-// instead: a cliff with the rim's art running down it.
+// The side and back of a terrace (ground, 0x80 in front) show its painted
+// cliff (the face below one of its south ledges, stretched to the drop), or
+// with none fold its edge down: a cliff with the rim's art running down it.
+// Its front (a south face) is that painted cliff by the relief rule; where
+// the drop is taller than the painted band (the terrace overhangs the ground
+// below), the band is stretched down it rather than showing the ground's rows.
 static void EmitFaceOw(EmitCtx *x, int c, int r, int dir, int zlo, int zhi, int front) {
   static const uint8 kShade[4] = { 176, 216, 216, 255 };
   Hd3dScene *s = x->s;
+  bool ground = (front & 0x80) != 0;
+  int n = s->n;
+  if (!ground && dir != kDir_S && !x->e->test_camera) {
+    // The side of a block standing on a terrace reaches down the terrace's
+    // drop (the house on its raised yard, a cliff on a plateau): below the
+    // block's foot it is the terrace's side, not more of the block's front.
+    int rf = r + (front & 0x7f) + 1, jf = rf * n + c;
+    const Layer *ly = &s->layer[0];
+    if (rf < n && (s->ow_front[jf] & 0x80) && (ly->wf[jf] & kWf_Set) && ly->wz[jf] > zlo && ly->wz[jf] < zhi) {
+      EmitFaceOw(x, c, r, dir, zlo, ly->wz[jf], front | 0x80);
+      zlo = ly->wz[jf];
+    }
+  }
   R3dQuad *q = NewQuad(x, x->e->tex_bg2, kShade[dir], kR3dClass_World);
   if (!q)
     return;
-  bool ground = (front & 0x80) != 0;
   front &= 0x7f;
   float x0 = (float)(s->origin_x + 8 * c), x1 = x0 + 8.0f, y0 = (float)(s->origin_y + 8 * r), y1 = y0 + 8.0f;
   float zl = (float)zlo, zh = (float)zhi, yf = y1 + 8.0f * (float)front, fold = 0.5f * (zh - zl);
-  if (dir == kDir_S) {
+  // The painted band: its top row and rows (0: none) in picture cells.
+  int band = -1, rows = 0;
+  if (ground && dir == kDir_S && !x->e->test_camera) {  // (the test camera shows the picture as it is)
+    int pr = r + 1 - zhi / 8;
+    if (pr >= 0 && pr < n && s->ow_fdir[pr * n + c] == 1 + kDrop_S) {
+      band = pr * n + c;
+      while (rows < 12 && pr + rows < n && s->ow_fdir[(pr + rows) * n + c] == 1 + kDrop_S &&
+             s->ow_face[(pr + rows) * n + c] == s->ow_face[band])
+        rows++;
+    }
+    if (8 * rows >= zhi - zlo)
+      band = -1;  // (the relief rule shows it as it is)
+  } else if (ground && dir != kDir_S) {
+    int pr = r - zhi / 8;
+    band = pr >= 0 && pr < n ? s->ow_cliff[pr * n + c] : -1;
+    while (band >= 0 && rows < 12 && band / n + rows < n && s->ow_fdir[band + rows * n] == 1 + kDrop_S &&
+           s->ow_face[band + rows * n] == s->ow_face[band])
+      rows++;
+  }
+  if (band >= 0 && rows > 0) {
+    // (A texel column in from the band's edges; the band's rows down the drop.)
+    float bx = (float)(s->origin_x + 8 * (band % n)), by = (float)(s->origin_y + 8 * (band / n));
+    float u0 = bx + 0.5f, u1 = bx + 7.5f, v0 = by, v1 = by + 8.0f * (float)rows;
+    if (dir == kDir_S || dir == kDir_N) {
+      float y = dir == kDir_S ? y1 : y0;
+      SetVertex(&q->v[0], x0, y, zh, u0, v0);
+      SetVertex(&q->v[1], x1, y, zh, u1, v0);
+      SetVertex(&q->v[2], x1, y, zl, u1, v1);
+      SetVertex(&q->v[3], x0, y, zl, u0, v1);
+    } else {
+      float px = dir == kDir_E ? x1 : x0;
+      SetVertex(&q->v[0], px, y0, zh, u0, v0);
+      SetVertex(&q->v[1], px, y1, zh, u1, v0);
+      SetVertex(&q->v[2], px, y1, zl, u1, v1);
+      SetVertex(&q->v[3], px, y0, zl, u0, v1);
+    }
+  } else if (dir == kDir_S) {
     SetVertex(&q->v[0], x0, y1, zh, x0, y1 - zh);
     SetVertex(&q->v[1], x1, y1, zh, x1, y1 - zh);
     SetVertex(&q->v[2], x1, y1, zl, x1, y1 - zl);
