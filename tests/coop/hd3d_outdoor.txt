@@ -1,0 +1,73 @@
+# 3D view outdoors: the ground stands at the levels its ledges give it
+# (terraces), trees and houses are tall, doorways and cave mouths are
+# openings. Seen from straight above at the original slant (the oblique test
+# camera) the scene must still be exactly the original picture, Links
+# included: on the raised yard at Link's house and jumping off its ledge, at
+# a Kakariko door, at the Sanctuary among its trees, in front of a cave under
+# a ledge (area 0x22), at a cave in a cliff (area 0x02) and on Death Mountain.
+# At most 2% of the pixels may be off by more than 12 per color channel. On a
+# failure tests/out/exact3d_2d.ppm, _3d.ppm and _diff.ppm show where.
+view3d 1
+load 2
+drawrun 30
+enter 104
+drawrun 200
+hold 1 D
+drawrun 150
+hold 1 -
+drawrun 60
+expect_3d 1
+expect_exact3d 2 12
+# Off the ledge (in the air over its face, then below it).
+hold 1 D
+drawrun 48
+expect_exact3d 2 12
+drawrun 30
+hold 1 -
+drawrun 10
+expect_exact3d 2 12
+load 2
+drawrun 30
+enter f2
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 60
+expect_exact3d 2 12
+load 2
+drawrun 30
+enter 12
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 60
+expect_exact3d 2 12
+load 2
+drawrun 30
+enter e3
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 60
+expect_exact3d 2 12
+load 2
+drawrun 30
+enter e2
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 60
+expect_exact3d 2 12
+load 2
+drawrun 30
+enter f1
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 60
+expect_exact3d 2 12

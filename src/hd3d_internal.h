@@ -59,6 +59,10 @@ Hd3dScene *Hd3dScene_Previous(void);
 void Hd3dScene_GetInfo(const Hd3dScene *s, Hd3dSceneInfo *out);
 // The height things stand at on a layer (0 BG2, 1 BG1): 0, or kHd3dLowerFloor.
 int Hd3dScene_WalkZ(const Hd3dScene *s, int layer);
+// The height of the ground under picture point (x, y): outdoors the terrace
+// there (on a cliff face below a ledge, partway down it); else as WalkZ.
+// Something standing there is drawn at (x, y + z, z) (the relief rule).
+int Hd3dScene_GroundZ(const Hd3dScene *s, int layer, int x, int y);
 // Heights grow in (0 to 1 over 0.3 s) once a scene that was drawn flat
 // becomes ready; a scene first drawn when already ready starts at 1.
 float Hd3dScene_StepRise(Hd3dScene *s, float dt, bool drawn);

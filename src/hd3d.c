@@ -478,7 +478,8 @@ static void ReadPose(Pane *p, int player, float dt, bool snap) {
   int e = ppu->extraLeftRight;
   int cam_x = (int)BG2HOFS_copy2 - e, cam_y = (int)BG2VOFS_copy2;
   bool lower = player_is_indoors && *Mp_PlayerRam(player, 0xEE) != 0;  // link_is_on_lower_level
-  int g = lower ? Hd3dScene_WalkZ(p->scene, 1) : Hd3dScene_WalkZ(p->scene, 0);
+  // (Outdoors the ground has terraces: the height under the Link's feet.)
+  int g = Hd3dScene_GroundZ(p->scene, lower, Mp_PlayerX(player) + 8, Mp_PlayerY(player) + 20);
   SmoothTo(&p->tz, (float)g, dt, 0.15f, snap);
   Cam3dPose *pose = &p->pose;
   pose->w = p->w, pose->h = p->h;

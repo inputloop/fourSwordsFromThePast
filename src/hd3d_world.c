@@ -50,6 +50,7 @@ enum {
   kThinReach = 6,            // the thin test looks this far for ground
   kVoidTexels = 56,          // a solid cell with this many see-through or near-black texels is void
   kCornerReach = kHd3dBandMax,
+  kOwSkirt = 16,             // outdoors: world rows kept past the area's north and south edges
 };
 
 // Cell classes.
@@ -75,8 +76,9 @@ enum {
 enum { kPk_Hole, kPk_Ground, kPk_Level, kPk_Flat, kPk_Top, kPk_Face, kPk_PitWall, kPk_PitFloor, kPk_Panel };
 
 // World cell flags (Layer.wf). Bits 4-6: how many 16 px steps north an
-// inpainted cell takes its texels from.
-enum { kWf_Set = 1, kWf_NoFace = 2, kWf_Empty = 4, kWf_Inpaint = 8 };
+// inpainted cell takes its texels from. kWf_Flat (outdoors): an inpainted
+// cell seen through see-through texels: the backdrop's color.
+enum { kWf_Set = 1, kWf_NoFace = 2, kWf_Empty = 4, kWf_Inpaint = 8, kWf_Flat = 0x80 };
 
 // Panel directions: where the wall lies from its floor (ties go in this order).
 enum { kDir_N, kDir_W, kDir_E, kDir_S, kDir_None = 0xff };
@@ -127,6 +129,7 @@ struct Hd3dScene {
   int16 bg1_dx, bg1_dy;      // a parallax BG1's scroll against BG2
   int32 reach[4];            // the reachable rectangle (world px: x0, y0, x1, y1)
   uint32 void_rgb;           // the void's color as the caller's LUT has it (lids of east, west and south walls)
+  uint32 backdrop_rgb;       // outdoors: the backdrop's color, as the caller's LUT has it
   int16 void_index;          // the void's texel: the room's filler, or 0 (see-through)
   uint32 hash_rest, hash_anim;
   uint16 anim_lo, anim_hi;   // chars of the animated range (anim_lo 0xffff: none)
@@ -135,6 +138,18 @@ struct Hd3dScene {
   uint16 src_map[2][4096];   // the game's tilemaps as last read (outdoors: the map16 grid in [0])
   uint8 src_attr[2][4096];
   Layer layer[2];
+  // Outdoors (layer 0, see "Geometry: outdoors"). Picture cells: the level
+  // of the ground (terraces) and, on the faces below a ledge, the level of
+  // their top (0: not a face). World cells: a slab floating over the ground
+  // (canopy edges) from slab_lo up to slab_hi (slab_hi <= slab_lo: none).
+  int8 ow_level[kMaxCells], ow_face[kMaxCells];
+  uint8 ow_fdir[kMaxCells];   // a face: 1 + which way it drops (0: not a face)
+  int8 slab_lo[kMaxCells], slab_hi[kMaxCells];
+  uint8 ow_front[kMaxCells];  // world cells: how far south the block at least this high goes (cells; 0x80: ground)
+  int16 ow_zmax;             // the highest surface
+  // Outdoors: world rows past the south edge (and north of the north one)
+  // where surfaces of the edge's raised (lowered) picture rows land.
+  int8 ow_skirt[2][kMaxN][kOwSkirt];
   PanelLine *lines;
   int num_lines;
   PanelCell *pcells;
@@ -164,6 +179,14 @@ static int16 g_line_of[2][4][kMaxN + 1];          // [layer][dir][hinge / 8]: th
 static uint8 g_dist[kMaxCells];                   // chessboard distance to ground
 static int8 g_col_z[kMaxN];
 static int16 g_col_row[kMaxN];
+// (Outdoors.)
+static int16 g_region[kMaxCells];                 // terrace region of a picture cell (-1: a ledge)
+static uint8 g_ow[kMaxCells];                     // kOw_* of a picture cell
+static int16 g_obj[kMaxCells];                    // the object (connected solid cells) of a picture cell
+static int8 g_open[kMaxN];                        // world rows of a column: open below this height (-128: not)
+static int8 g_head[kMaxN];                        // and where its slab's underside goes, room permitting (a Link's height up)
+static uint8 g_wground[kMaxN];                    // world rows of a column: the ground's own surface (not a prop's)
+static int16 g_col_h[kMaxN];                      // world rows of a column: the highest surface
 
 static void InitTables(void) {
   for (int in = 0; in < 2; in++) {
@@ -774,8 +797,8 @@ static void Classify(Hd3dScene *s, int L) {
       c = tab[ly->attr[i]];
       if (c == kCls_Pit && (f & kCf_Blank)) {
         c = kCls_Empty;  // a see-through pit: what is below shows
-      } else if (c == kCls_Ground && !s->indoors && (f & kCf_Prio)) {
-        c = kCls_Wall;   // over Link's head: canopy rims, eaves, bridge decks
+      } else if (c == kCls_Ground && !s->indoors && (f & kCf_Prio) && !(ly->attr[i] >= 0x28 && ly->attr[i] <= 0x2f)) {
+        c = kCls_Wall;   // over Link's head: canopy rims, eaves, bridge decks (a ledge stays a ledge)
         f |= kCf_Overhead;
       } else if (IsSolid(c) && s->indoors && (f & kCf_Decoded)) {
         const uint8 *t = CellTexels(s, L, i);
@@ -1172,6 +1195,839 @@ static void BuildRelief(Hd3dScene *s, int L) {
   }
 }
 
+// ---- Geometry: outdoors ----
+//
+// The overworld's ground has levels. The game marks where it drops with
+// ledges (attributes 28-2F: which way you jump off) and paints the drop as a
+// cliff face below a south ledge. Terraces:
+// - Regions: the cells you reach without crossing a ledge. Solid cells count
+//   as passable, so a bush or a fence never splits one. A gap of a few cells
+//   in a straight line of ledges (stairs or a slope down from a plateau) is
+//   bridged at first.
+// - A ledge says its high side is above its low side: by the painted face
+//   below it (south ledges), else by the other drops of the same region (16
+//   px without any). Levels follow, the lowest regions at 0. A bridge whose
+//   sides don't come out that way (two plateaus side by side) was wrong: it
+//   goes and the levels are worked out again.
+// - A region on both sides of one of its own ledges (an opening no bridge
+//   closed) is ambiguous: those ledges stay props, as before terraces.
+// - Bridges become stairs, 8 px a step. Under the relief rule a step takes
+//   two picture rows (a tread and a riser), so stairs reach a little into
+//   the plateau and below it.
+// - The solid cells below a ledge are its face; their top is its high side.
+// Objects (connected solid cells that aren't faces) stand on the level under
+// their foot: trees tall, with the canopy's walkable edges floating over the
+// ground (slabs), houses a little taller, low props as before.
+
+enum {
+  kOw_Ledge = 1,             // a ledge
+  kOw_Bridge = 2,            // a gap in a line of ledges, bridged
+  kOw_Canopy = 4,            // drawn over Links: a canopy or roof cell, or an edge you walk under
+  kOw_Tree = 8,              // a tree's canopy (hookshot attribute with the priority bit)
+  kOw_Door = 16,             // a house's doorway: drawn as part of its front wall
+  kOwRegions = 4096,
+  kOwObjects = 4096,         // objects with their own height (more are measured column by column)
+  kOwBridgeGap = 12,         // the widest gap bridged (cells)
+  kOwMaxLevel = 64,          // the highest terrace (px)
+  kOwMaxZ = 120,             // the highest surface (px; heights are int8)
+  kOwTreeRows = 8,           // the tallest tree (cells)
+  kOwSlab = 4,               // a floating canopy edge is at least this thick (px)
+  kOwHeadroom = 24,          // and its underside this high over the ground, where it can be (a Link's height)
+};
+
+enum { kDrop_N, kDrop_S, kDrop_W, kDrop_E };
+static const int8 kDropX[4] = { 0, 0, -1, 1 }, kDropY[4] = { -1, 1, 0, 0 };
+
+typedef struct OwEdge {
+  int16 lo, hi;              // regions: the low and the high side
+  int8 h;                    // the drop (px; -1: unknown)
+  uint8 cell_hi;             // (unused padding)
+} OwEdge;
+
+static OwEdge g_ow_edges[kMaxCells];
+static uint16 g_obj_hist[kOwObjects][8];         // objects: how many columns have a front wall that high
+static uint8 g_obj_wall[kOwObjects];
+static int16 g_ow_level[kOwRegions];
+static int16 g_ow_hdef[kOwRegions];
+static uint8 g_ow_rflags[kOwRegions];
+
+// Which way the ground drops at a ledge (-1: not a ledge). A diagonal ledge
+// counts as its north or south half.
+static int LedgeDrop(uint8 a) {
+  switch (a) {
+  case 0x28: case 0x2c: case 0x2e: return kDrop_N;
+  case 0x29: case 0x2d: case 0x2f: return kDrop_S;
+  case 0x2a: return kDrop_W;
+  case 0x2b: return kDrop_E;
+  default: return -1;
+  }
+}
+
+static bool OwWalk(const Layer *ly, int i) {
+  return ly->cls[i] == kCls_Ground || (ly->cf[i] & kCf_Overhead);
+}
+
+static bool OwMass(const Layer *ly, int i) {
+  return IsSolid(ly->cls[i]) || (ly->cf[i] & kCf_Overhead);
+}
+
+// Regions: flood over everything but ledges and bridges. Returns the count (-1: too many).
+static int OwRegions(Hd3dScene *s) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, cells = n * n, count = 0;
+  for (int i = 0; i < cells; i++)
+    g_region[i] = (g_ow[i] & (kOw_Ledge | kOw_Bridge)) ? -1 : -2;
+  for (int i = 0; i < cells; i++) {
+    if (g_region[i] != -2)
+      continue;
+    if (count >= kOwRegions)
+      return -1;
+    int head = 0, tail = 0;
+    g_region[i] = (int16)count;
+    g_list[tail++] = (int16)i;
+    while (head < tail) {
+      int j = g_list[head++], r = j / n, c = j % n;
+      for (int d = 0; d < 4; d++) {
+        int rr = r + kDropY[d], cc = c + kDropX[d];
+        if (rr < 0 || rr >= n || cc < 0 || cc >= n || g_region[rr * n + cc] != -2)
+          continue;
+        // Up or down only between cells that aren't solid: a cliff's body
+        // never joins its top to its foot.
+        if (d <= kDrop_S && (OwMass(ly, j) || OwMass(ly, rr * n + cc)))
+          continue;
+        g_region[rr * n + cc] = (int16)count;
+        g_list[tail++] = (int16)(rr * n + cc);
+      }
+    }
+    count++;
+  }
+  return count;
+}
+
+// The region of the ground that way from cell i: past other ledges (a step
+// or two) and, on the low side, past the solid cells of its face; -1: none.
+// (Only walkable ground counts: a ledge in a cliff's body says nothing.)
+static int OwSide(const Hd3dScene *s, int i, int d, bool low) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, r = i / n, c = i % n, ledges = 0, solid = 0;
+  for (int k = 1; k <= 16; k++) {
+    int rr = r + kDropY[d] * k, cc = c + kDropX[d] * k, j = rr * n + cc;
+    if (rr < 0 || rr >= n || cc < 0 || cc >= n)
+      return -1;
+    if (g_ow[j] & kOw_Ledge) {
+      if (++ledges > 3 || solid)
+        return -1;
+    } else if (g_region[j] >= 0 && OwWalk(ly, j)) {
+      return g_region[j];
+    } else if (!low || ++solid > 12 || !OwMass(ly, j)) {
+      return -1;
+    }
+  }
+  return -1;
+}
+
+// The painted face below a south ledge: how many solid cells down to the ground (px; -1: none found).
+static int OwFaceDrop(const Hd3dScene *s, int i) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, r = i / n, c = i % n, solid = 0;
+  for (int rr = r + 1; rr < n && rr <= r + 12; rr++) {
+    int j = rr * n + c;
+    if (g_ow[j] & kOw_Ledge)
+      continue;
+    if (OwWalk(ly, j))
+      return solid ? 8 * solid : -1;
+    solid++;
+  }
+  return -1;
+}
+
+// Bridges the gaps in straight lines of ledges that drop the same way.
+static void OwBridge(Hd3dScene *s) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n;
+  for (int i = 0; i < n * n; i++) {
+    int d = LedgeDrop(ly->attr[i]);
+    if (!(g_ow[i] & kOw_Ledge) || d < 0)
+      continue;
+    // Along the line: east for north and south drops, south for west and east ones.
+    int sx = d <= kDrop_S ? 1 : 0, sy = 1 - sx, r = i / n, c = i % n;
+    int nr = r + sy, nc = c + sx;
+    if (nr >= n || nc >= n || (g_ow[nr * n + nc] & kOw_Ledge))
+      continue;  // (not the end of a line)
+    int k = 1;
+    for (; k <= kOwBridgeGap + 1; k++) {
+      int rr = r + sy * k, cc = c + sx * k;
+      if (rr >= n || cc >= n) {
+        k = 99;
+        break;
+      }
+      int j = rr * n + cc;
+      if (g_ow[j] & kOw_Ledge) {
+        if (LedgeDrop(ly->attr[j]) != d)
+          k = 99;
+        break;
+      }
+      if (ly->cls[j] == kCls_Empty || ly->cls[j] == kCls_Pit) {
+        k = 99;
+        break;
+      }
+    }
+    if (k < 2 || k > kOwBridgeGap + 1)
+      continue;
+    for (int m = 1; m < k; m++)
+      g_ow[(r + sy * m) * n + c + sx * m] |= (uint8)(kOw_Bridge | d << 5);
+  }
+}
+
+static int CompareEdges(const void *a, const void *b) {
+  const OwEdge *x = (const OwEdge *)a, *y = (const OwEdge *)b;
+  if (x->lo != y->lo)
+    return x->lo - y->lo;
+  if (x->hi != y->hi)
+    return x->hi - y->hi;
+  return x->h - y->h;
+}
+
+// The median of known drops in edges [from, to) (sorted by h): -1 if none.
+static int MedianDrop(const OwEdge *e, int from, int to) {
+  int k0 = from;
+  while (k0 < to && e[k0].h < 0)
+    k0++;
+  return k0 < to ? e[k0 + (to - k0) / 2].h : -1;
+}
+
+// Levels of the regions from the ledges between them. False: none (a cycle).
+static bool OwSolve(Hd3dScene *s, int regions) {
+  int n = s->n, ne = 0;
+  memset(g_ow_rflags, 0, (size_t)regions);
+  for (int i = 0; i < n * n; i++) {
+    if (!(g_ow[i] & kOw_Ledge))
+      continue;
+    int d = LedgeDrop(s->layer[0].attr[i]);
+    int hi = OwSide(s, i, d ^ 1, false), lo = OwSide(s, i, d, true);
+    if (hi < 0 || lo < 0)
+      continue;
+    if (hi == lo) {
+      g_ow_rflags[hi] |= 1;  // (both sides of its own ledge)
+      continue;
+    }
+    OwEdge *e = &g_ow_edges[ne++];
+    e->lo = (int16)lo, e->hi = (int16)hi, e->cell_hi = 0;
+    e->h = (int8)(d == kDrop_S ? IntMin(OwFaceDrop(s, i), kOwMaxLevel) : -1);
+  }
+  qsort(g_ow_edges, (size_t)ne, sizeof(OwEdge), CompareEdges);
+  // Pairs of regions: the median drop each; a region's own default is the
+  // median over its pairs that know one.
+  int np = 0;
+  for (int a = 0; a < ne;) {
+    int b = a;
+    while (b < ne && g_ow_edges[b].lo == g_ow_edges[a].lo && g_ow_edges[b].hi == g_ow_edges[a].hi)
+      b++;
+    OwEdge p = g_ow_edges[a];
+    p.h = (int8)MedianDrop(g_ow_edges, a, b);
+    g_ow_edges[np++] = p;
+    a = b;
+  }
+  for (int r = 0; r < regions; r++)
+    g_ow_level[r] = 0, g_ow_hdef[r] = 0;
+  for (int k = 0; k < np; k++) {
+    int hi = g_ow_edges[k].hi;
+    g_ow_rflags[hi] |= 2, g_ow_rflags[g_ow_edges[k].lo] |= 2;  // (has a level of its own)
+    if (g_ow_edges[k].h > g_ow_hdef[hi])
+      g_ow_hdef[hi] = g_ow_edges[k].h;
+  }
+  for (int round = 0; round < 48; round++) {
+    bool changed = false;
+    for (int k = 0; k < np; k++) {
+      const OwEdge *e = &g_ow_edges[k];
+      int h = e->h > 0 ? e->h : g_ow_hdef[e->hi] > 0 ? g_ow_hdef[e->hi] : 16;
+      int want = IntMin(g_ow_level[e->lo] + h, 4 * kOwMaxLevel);
+      if (want > g_ow_level[e->hi])
+        g_ow_level[e->hi] = (int16)want, changed = true;
+    }
+    if (!changed)
+      return true;
+  }
+  return false;
+}
+
+// Stairs where a bridge stands: 8 px a step over two rows (or columns).
+static void OwStairs(Hd3dScene *s, int i, int d) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, r = i / n, c = i % n;
+  int hi = OwSide(s, i, d ^ 1, false), lo = OwSide(s, i, d, true);
+  if (hi < 0 || lo < 0)
+    return;
+  int lh = g_ow_level[hi], ll = g_ow_level[lo], steps = (lh - ll) / 8;
+  if (steps <= 0)
+    return;
+  // The stairs run along the drop, from the high side through the bridge.
+  for (int k = -steps + 1; k <= steps; k++) {
+    int rr = r + kDropY[d] * k, cc = c + kDropX[d] * k;
+    if (rr < 0 || rr >= n || cc < 0 || cc >= n)
+      continue;
+    int j = rr * n + cc;
+    int reg = g_region[j];
+    if (j != i && reg != hi && reg != lo)
+      continue;
+    if (j != i && !OwWalk(ly, j))
+      continue;
+    int z = lh - 8 * ((k + steps) / 2);
+    if (z < ll)
+      z = ll;
+    s->ow_level[j] = (int8)z;
+  }
+}
+
+static void ComputeTerraces(Hd3dScene *s) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, cells = n * n;
+  memset(s->ow_level, 0, (size_t)cells);
+  memset(s->ow_face, 0, (size_t)cells);
+  memset(s->ow_fdir, 0, (size_t)cells);
+  for (int i = 0; i < cells; i++) {
+    uint8 f = 0;
+    if (OwWalk(ly, i) && !(ly->cf[i] & kCf_Overhead) && LedgeDrop(ly->attr[i]) >= 0)
+      f |= kOw_Ledge;
+    g_ow[i] = f;
+  }
+  OwBridge(s);
+  int regions = -1;
+  bool ok = false;
+  for (int pass = 0; pass < 3; pass++) {
+    regions = OwRegions(s);
+    if (regions <= 0)
+      return;
+    ok = OwSolve(s, regions);
+    if (!ok)
+      return;
+    // Bridges whose sides didn't come out higher on the high side go.
+    bool removed = false;
+    for (int i = 0; i < cells; i++) {
+      if (!(g_ow[i] & kOw_Bridge))
+        continue;
+      int d = g_ow[i] >> 5 & 3, hi = OwSide(s, i, d ^ 1, false), lo = OwSide(s, i, d, true);
+      if (hi < 0 || lo < 0 || hi == lo || g_ow_level[hi] <= g_ow_level[lo])
+        g_ow[i] &= ~kOw_Bridge, removed = true;
+    }
+    if (!removed)
+      break;
+    if (pass == 2)
+      return;  // (still changing: leave it flat)
+  }
+  // A region no ledge says anything about (a strip of cliff, ground walled
+  // in by cliffs) is level with what is right below it, past solid cells
+  // (else right above).
+  static int16 inherit[kOwRegions];
+  for (int r = 0; r < regions; r++)
+    inherit[r] = -32768;
+  for (int pass = 0; pass < 2; pass++) {
+    for (int i = 0; i < cells; i++) {
+      int reg = g_region[i];
+      if (reg < 0 || (g_ow_rflags[reg] & 2) || inherit[reg] != -32768)
+        continue;
+      int step = pass ? -n : n, j = i + step, k = 0;
+      while (j >= 0 && j < cells && OwMass(ly, j) && ++k < 24)
+        j += step;
+      if (j >= 0 && j < cells && g_region[j] >= 0 && (g_ow_rflags[g_region[j]] & 2))
+        inherit[reg] = g_ow_level[g_region[j]];
+    }
+  }
+  for (int r = 0; r < regions; r++)
+    if (inherit[r] != -32768)
+      g_ow_level[r] = inherit[r];
+  // The biggest region is the ground (0); others are above or below it.
+  static int32 size[kOwRegions];
+  memset(size, 0, sizeof(size[0]) * (size_t)regions);
+  for (int i = 0; i < cells; i++)
+    if (g_region[i] >= 0)
+      size[g_region[i]]++;
+  int big = 0;
+  for (int r = 1; r < regions; r++)
+    if (size[r] > size[big])
+      big = r;
+  int base = g_ow_level[big];
+  for (int r = 0; r < regions; r++)
+    g_ow_level[r] = (int16)IntMin(IntMax(g_ow_level[r] - base, -kOwMaxLevel), kOwMaxLevel);
+  for (int i = 0; i < cells; i++)
+    if (g_region[i] >= 0)
+      s->ow_level[i] = (int8)g_ow_level[g_region[i]];
+  // Ledges are the rim of their high side; the solid cells below them are
+  // their face (unless the region is on both sides of its own ledges).
+  for (int i = 0; i < cells; i++) {
+    if (!(g_ow[i] & kOw_Ledge))
+      continue;
+    int d = LedgeDrop(ly->attr[i]), hi = OwSide(s, i, d ^ 1, false), lo = OwSide(s, i, d, true);
+    if (hi < 0)
+      continue;
+    s->ow_level[i] = (int8)g_ow_level[hi];
+    if (lo < 0 || lo == hi || (g_ow_rflags[hi] & 1) || g_ow_level[hi] <= g_ow_level[lo])
+      continue;
+    // (A band beside an east or west ledge is a few cells wide; past it, or
+    // at a tree or a bush, it ends.)
+    int r = i / n, c = i % n, reach = d == kDrop_W || d == kDrop_E ? 4 : 12;
+    for (int k = 1; k <= reach; k++) {
+      int rr = r + kDropY[d] * k, cc = c + kDropX[d] * k;
+      if (rr < 0 || rr >= n || cc < 0 || cc >= n)
+        break;
+      int j = rr * n + cc;
+      if (g_ow[j] & kOw_Ledge)
+        continue;
+      if (!OwMass(ly, j) || (ly->cf[j] & kCf_Overhead) || (g_ow[j] & kOw_Bridge))
+        break;
+      if (reach == 4 && ((ly->cf[j] & kCf_Prio) || ly->attr[j] == 0x27 || (ly->attr[j] >= 0x50 && ly->attr[j] <= 0x57)))
+        break;
+      if (!s->ow_fdir[j] || s->ow_face[j] < g_ow_level[hi])
+        s->ow_face[j] = (int8)g_ow_level[hi], s->ow_fdir[j] = (uint8)(1 + d);
+    }
+  }
+  for (int i = 0; i < cells; i++)
+    if (g_ow[i] & kOw_Bridge)
+      OwStairs(s, i, g_ow[i] >> 5 & 3);
+}
+
+// Doorways and cave mouths: walkable cells (up to 4 rows) under something
+// solid at least 3 cells tall (a house, a cliff), with solid cells close on
+// both sides. What is above them floats over them (a lintel): a real
+// opening, as deep as the doorway. (Painted on the wall instead, a Link in
+// the doorway would be behind it.)
+static bool OwLiftable(const Layer *ly, int i) {
+  return ly->attr[i] >= 0x50 && ly->attr[i] <= 0x57 && !(ly->cf[i] & kCf_Overhead);
+}
+
+// What a cell belongs to, for doorways: its object, or the faces below ledges.
+static int OwDoorKey(const Hd3dScene *s, int i) {
+  return s->ow_fdir[i] ? -3 : g_obj[i];
+}
+
+// The key of the tall solid right above cell i (through doorway cells above
+// it, up to 4 rows): -2 if there is none.
+static int OwDoorAbove(const Hd3dScene *s, int i) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, depth = 1;
+  while (i >= 0 && (g_ow[i] & kOw_Door)) {
+    if (++depth > 4)
+      return -2;
+    i -= n;
+  }
+  for (int k = 0; k < 3; k++)
+    if (i - k * n < 0 || !OwMass(ly, i - k * n) || (ly->cf[i - k * n] & kCf_Overhead))
+      return -2;
+  return OwDoorKey(s, i);
+}
+
+static void OwDoors(Hd3dScene *s) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n;
+  for (int r = 3; r < n; r++) {
+    for (int c = 1; c < n - 1; c++) {
+      int i = r * n + c, key;
+      if (!OwWalk(ly, i) || (ly->cf[i] & kCf_Overhead) || (g_ow[i] & kOw_Ledge) ||
+          (key = OwDoorAbove(s, i - n)) == -2)
+        continue;
+      // The same house (or cliff) close on both sides.
+      int sides = 0;
+      for (int step = -1; step <= 1; step += 2) {
+        for (int k = 1; k <= 3; k++) {
+          int cc = c + step * k, j = r * n + cc;
+          if (cc < 0 || cc >= n)
+            break;
+          if (OwMass(ly, j) && !(ly->cf[j] & kCf_Overhead)) {
+            sides += OwDoorKey(s, j) == key && !OwLiftable(ly, j);  // (a bush beside a doorstep isn't a wall)
+            break;
+          }
+          if (!OwWalk(ly, j) || OwDoorAbove(s, j - n) != key)
+            break;
+        }
+      }
+      if (sides == 2)
+        g_ow[i] |= kOw_Door;
+    }
+  }
+}
+
+static bool OwSolid(const Layer *ly, int i) {
+  return OwMass(ly, i);
+}
+
+static int CanopyFlags(const Layer *ly, int i) {
+  uint16 f = ly->cf[i];
+  if (f & kCf_Overhead)
+    return kOw_Canopy;
+  if (!IsSolid(ly->cls[i]) || !(f & kCf_Prio))
+    return 0;
+  return ly->attr[i] == 0x27 ? kOw_Canopy | kOw_Tree : kOw_Canopy;
+}
+
+// Objects: connected solid cells (and canopy edges) that aren't faces.
+static void OwObjects(Hd3dScene *s) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, cells = n * n, count = 0;
+  for (int i = 0; i < cells; i++)
+    g_ow[i] &= kOw_Ledge | kOw_Bridge;
+  for (int i = 0; i < cells; i++) {
+    g_obj[i] = OwSolid(ly, i) && !s->ow_fdir[i] ? -2 : -1;
+    g_ow[i] = (uint8)(g_ow[i] | CanopyFlags(ly, i));
+  }
+  for (int i = 0; i < cells; i++) {
+    if (g_obj[i] != -2)
+      continue;
+    int head = 0, tail = 0;
+    g_obj[i] = (int16)count;
+    g_list[tail++] = (int16)i;
+    while (head < tail) {
+      int j = g_list[head++], r = j / n, c = j % n;
+      for (int d = 0; d < 4; d++) {
+        int rr = r + kDropY[d], cc = c + kDropX[d];
+        if (rr < 0 || rr >= n || cc < 0 || cc >= n || g_obj[rr * n + cc] != -2)
+          continue;
+        g_obj[rr * n + cc] = (int16)count;
+        g_list[tail++] = (int16)(rr * n + cc);
+      }
+    }
+    count = count < 0x7ffe ? count + 1 : count;
+  }
+  OwDoors(s);
+  // A house is as high all over: by the median front wall (the plain rows
+  // at the bottom of its columns, a doorway counted as wall).
+  int objs = IntMin(count, kOwObjects);
+  memset(g_obj_hist, 0, sizeof(g_obj_hist[0]) * (size_t)objs);
+  for (int c = 0; c < n; c++) {
+    for (int r = n - 1; r >= 0; r--) {
+      int o = g_obj[r * n + c];
+      if (o < 0 || o >= objs || (r + 1 < n && g_obj[(r + 1) * n + c] == o))
+        continue;  // (not the bottom of a run)
+      int plain = 0;
+      for (int k = r + 1; k < n && (g_ow[k * n + c] & kOw_Door); k++)
+        plain++;
+      for (int k = r; k >= 0 && g_obj[k * n + c] == o && !(g_ow[k * n + c] & kOw_Canopy); k--)
+        plain++;
+      g_obj_hist[o][IntMin(plain, 7)]++;
+    }
+  }
+  for (int o = 0; o < objs; o++) {
+    int total = 0, acc = 0, m = 0;
+    for (int k = 0; k < 8; k++)
+      total += g_obj_hist[o][k];
+    while (m < 7 && 2 * (acc + g_obj_hist[o][m]) < total)
+      acc += g_obj_hist[o][m++];
+    g_obj_wall[o] = (uint8)m;
+  }
+}
+
+// How a run [a, b) of solid cells in column c stands: its top and the
+// bottom of its face (above the ground when its canopy floats over it).
+static void OwRun(Hd3dScene *s, int c, int a, int b, int *top, int *bottom) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, len = b - a, foot = b < n ? b * n + c : (b - 1) * n + c;
+  int g = s->ow_level[foot];
+  // Over a doorway or a cave mouth it floats: its lintel.
+  int door = 0;
+  while (b + door < n && (g_ow[(b + door) * n + c] & kOw_Door))
+    door++;
+  // A face below a ledge: up to its high side, the rest flush with it.
+  int face = -128;
+  for (int k = a; k < b; k++)
+    if (s->ow_fdir[k * n + c])
+      face = IntMax(face, s->ow_face[k * n + c]);
+  if (face > -128) {
+    // (A drop taller than the painted face: the terrace overhangs it, which
+    // keeps the picture: the higher surface wins.)
+    // All face only where the terrace itself is right above (it is the top);
+    // else (the band beside an east or west ledge) it keeps a top row.
+    int above = (a - 1) * n + c, drop = (face - g) / 8;
+    bool covered = a > 0 && OwWalk(ly, above) && s->ow_level[above] >= face;
+    // Shorter than the drop (a cave mouth under it, a ragged foot): the
+    // terrace overhangs the ground below, which stays open under it.
+    if (!door && covered && drop > len)
+      while (door < drop - len && b + door < n && OwWalk(ly, (b + door) * n + c) &&
+             !(g_ow[(b + door) * n + c] & kOw_Ledge))
+        door++;
+    *bottom = g + 8 * door;
+    *top = face > g ? IntMax(*bottom, g + 8 * IntMin(len + door - !covered, (face - g) / 8)) : g;
+    return;
+  }
+  bool tree = false, canopy_only = true, edge_only = true;
+  int prio = 0, low_only = 1, plain_bottom = 0;
+  for (int k = a; k < b; k++) {
+    int i = k * n + c;
+    tree |= (g_ow[i] & kOw_Tree) != 0;
+    canopy_only &= (g_ow[i] & kOw_Canopy) != 0;
+    edge_only &= (ly->cf[i] & kCf_Overhead) != 0;
+    prio += (g_ow[i] & kOw_Canopy) != 0;
+    low_only &= ly->cls[i] == kCls_Low && !(ly->cf[i] & kCf_Prio);
+  }
+  for (int k = b - 1; k >= a && !(g_ow[k * n + c] & kOw_Canopy); k--)
+    plain_bottom++;
+  plain_bottom += door;
+  // A tree's canopy, or an edge you walk under, floats at the foot line of
+  // the object it belongs to (the nearest columns of it that reach lower).
+  int b2 = b + door;
+  if (!door && canopy_only && (tree || edge_only) && b < n) {
+    int obj = g_obj[(b - 1) * n + c];
+    for (int dc = -2; dc <= 2; dc++) {
+      int cc = c + dc;
+      if (!dc || cc < 0 || cc >= n || obj < 0)
+        continue;
+      for (int r = b - 1; r < IntMin(b + 4, n); r++) {
+        int g2 = g_obj[r * n + cc];
+        if (g2 == obj && r + 1 > b2)
+          b2 = r + 1;
+        else if (g2 != obj && r >= b)
+          break;
+      }
+    }
+    for (int k = b; k < b2; k++)
+      tree |= (g_ow[k * n + c] & kOw_Tree) != 0;
+    if (b2 > b)
+      g = s->ow_level[b * n + c];  // (its own ground, under it)
+  }
+  int h;
+  if (tree || (!door && b2 > b)) {
+    // Tall, with a third of it (up to 3 rows) left for the top: a tree with
+    // some depth to it, not a sign.
+    int l2 = b2 - a;
+    h = IntMin(l2 - IntMin(IntMax(l2 / 3, 1), 3), kOwTreeRows);
+  } else if (prio) {
+    int o = g_obj[(b - 1) * n + c];
+    h = IntMin(IntMax((o >= 0 && o < kOwObjects ? g_obj_wall[o] : plain_bottom) + 2, 3), 6);
+  } else if (low_only) {
+    h = len >= 4 ? 2 : 1;
+  } else {
+    h = len < 4 ? len - 1 : IntMin(3 + (len - 4) / 2, 6);
+    // One cell wide (open ground on both sides most of the way): a fence or
+    // a row of posts running north and south, long but low.
+    int open = 0;
+    for (int k = a; k < b; k++)
+      open += (c == 0 || !OwMass(ly, k * n + c - 1)) && (c == n - 1 || !OwMass(ly, k * n + c + 1));
+    if (2 * open >= len)
+      h = IntMin(h, 2);
+  }
+  int lo = g + 8 * (b2 - b), hi = g + 8 * h;
+  // Within what the picture allows: a face of at most len - 1 rows (a top
+  // of at least one). A one-cell prop is a cube on its own cell (as indoors).
+  hi = IntMin(hi, lo + 8 * IntMax(len - 1, 0));
+  if (len == 1 && b2 == b)
+    hi = lo + 8;
+  hi = IntMax(hi, lo);
+  if (hi > kOwMaxZ)
+    hi = lo + (kOwMaxZ - lo) / 8 * 8;
+  *top = hi, *bottom = lo;
+}
+
+// Puts the picture rows [a, b) of solid cells in column c into the relief.
+static void OwPlaceRun(Hd3dScene *s, int c, int a, int b) {
+  Layer *ly = &s->layer[0];
+  int n = s->n, top, bottom;
+  OwRun(s, c, a, b, &top, &bottom);
+  int foot = b < n ? s->ow_level[b * n + c] : s->ow_level[(b - 1) * n + c];
+  int h = (top - bottom) / 8, len = b - a;
+  if (bottom > foot) {
+    // It floats over walkable ground: whatever lands over that ground
+    // higher than its bottom is a slab, not a column down to the ground.
+    int b2 = b + (bottom - foot) / 8;
+    for (int w = b + foot / 8; w < b2 + foot / 8; w++)
+      if (w >= 0 && w < n && (g_open[w] == -128 || g_open[w] > bottom))
+        g_open[w] = (int8)bottom, g_head[w] = (int8)IntMin(foot + kOwHeadroom, kOwMaxZ);
+  }
+  bool face = false;
+  for (int k = a; k < b; k++)
+    face |= s->ow_fdir[k * n + c] != 0;
+  if (len == 1 && bottom <= foot && !face && top > bottom) {
+    // A cube on its own cell: the top shows the row above, the face the prop.
+    ly->pk[a * n + c] = kPk_Top, g_col_z[a] = (int8)top, g_col_row[a] = (int16)(a + bottom / 8);
+    return;
+  }
+  if (h >= len) {
+    for (int k = a; k < b; k++)  // (all face: the top is the terrace above)
+      ly->pk[k * n + c] = kPk_Face;
+    return;
+  }
+  if (top == bottom && bottom <= foot) {
+    for (int k = a; k < b; k++)  // (flush with the ground)
+      ly->pk[k * n + c] = kPk_Ground, g_col_z[k] = (int8)top, g_col_row[k] = (int16)(k + top / 8);
+    return;
+  }
+  for (int k = a; k < b - h; k++)
+    ly->pk[k * n + c] = kPk_Top, g_col_z[k] = (int8)top, g_col_row[k] = (int16)(k + top / 8);
+  for (int k = b - h; k < b; k++)
+    ly->pk[k * n + c] = kPk_Face;
+}
+
+// The outdoor relief: like BuildRelief, with terraces under everything and
+// floating canopy edges (slabs).
+static void BuildReliefOutdoors(Hd3dScene *s) {
+  Layer *ly = &s->layer[0];
+  int n = s->n;
+  ComputeTerraces(s);
+  OwObjects(s);
+  memset(ly->wz, 0, (size_t)n * n);
+  memset(ly->wf, 0, (size_t)n * n);
+  memset(s->slab_lo, 0, (size_t)n * n);
+  memset(s->slab_hi, 0, (size_t)n * n);
+  for (int c = 0; c < n; c++) {
+    memset(g_open, -128, sizeof(g_open));
+    memset(g_wground, 1, sizeof(g_wground));
+    for (int r = 0; r < n;) {
+      int i = r * n + c;
+      uint8 cl = ly->cls[i];
+      if (cl == kCls_Empty) {
+        ly->pk[i] = kPk_Hole, r++;
+      } else if (OwSolid(ly, i)) {
+        int a = r;
+        while (r < n && OwSolid(ly, r * n + c))
+          r++;
+        // Stacked objects stand on their own: a bush or rock (a 16 px liftable
+        // object, on the 16 px grid) is cut from what is above or below it.
+        for (int b = r, k = r - 1; k >= a; k--) {
+          int j = k * n + c;
+          if (k == a || OwLiftable(ly, j) != OwLiftable(ly, j - n) || (OwLiftable(ly, j) && !(k & 1))) {
+            OwPlaceRun(s, c, k, b);
+            b = k;
+          }
+        }
+      } else if (cl == kCls_Pit) {
+        int a = r, base = s->ow_level[i];
+        while (r < n && ly->cls[r * n + c] == kCls_Pit)
+          r++;
+        uint8 rim = a > 0 ? ly->pk[(a - 1) * n + c] : kPk_Hole;
+        bool sink = rim == kPk_Ground && g_col_z[a - 1] == base;
+        int len = r - a, wall = sink ? IntMin(kHd3dPitDepth / 8, len - 1) : 0;
+        for (int k = a; k < a + wall; k++)
+          ly->pk[k * n + c] = kPk_PitWall;
+        for (int k = a + wall; k < r; k++)
+          ly->pk[k * n + c] = kPk_PitFloor, g_col_z[k] = (int8)(base - 8 * wall),
+          g_col_row[k] = (int16)(k - wall + base / 8);
+      } else {
+        int z = s->ow_level[i];
+        ly->pk[i] = kPk_Ground, g_col_z[r] = (int8)z, g_col_row[r] = (int16)(r + z / 8), r++;
+      }
+    }
+    // The surfaces land; the higher one wins. Over open ground (doorways,
+    // under a canopy's edge) what is higher than the opening is a slab.
+    memset(s->ow_skirt[0][c], -128, kOwSkirt);
+    memset(s->ow_skirt[1][c], -128, kOwSkirt);
+    for (int r = 0; r < n; r++) {
+      uint8 pk = ly->pk[r * n + c];
+      int wr = g_col_row[r];
+      if (!HasSurface(pk))
+        continue;
+      if (wr < 0 || wr >= n) {
+        int side = wr < 0, k = side ? -1 - wr : wr - n;
+        if (k < kOwSkirt && g_col_z[r] > s->ow_skirt[side][c][k])
+          s->ow_skirt[side][c][k] = g_col_z[r];
+        continue;
+      }
+      int j = wr * n + c;
+      if (g_open[wr] != -128 && g_col_z[r] > g_open[wr]) {
+        if (s->slab_hi[j] <= s->slab_lo[j] || g_col_z[r] > s->slab_hi[j])
+          s->slab_hi[j] = g_col_z[r], s->slab_lo[j] = (int8)IntMin(g_open[wr], g_col_z[r] - kOwSlab);
+        continue;
+      }
+      if (!(ly->wf[j] & kWf_Set) || g_col_z[r] > ly->wz[j])
+        ly->wz[j] = g_col_z[r], ly->wf[j] = kWf_Set, g_wground[wr] = pk == kPk_Ground || pk == kPk_PitFloor;
+    }
+    // Holes, and inpainting what was uncovered (texels from the plain
+    // ground north of it, as indoors).
+    int above = 0;
+    bool have = false;
+    for (int r = 0; r < n; r++) {
+      int j = r * n + c;
+      if (ly->wf[j] & kWf_Set) {
+        above = ly->wz[j], have = true;
+        continue;
+      }
+      if (ly->pk[j] == kPk_Hole) {
+        ly->wf[j] = kWf_Empty;
+        have = false;
+        continue;
+      }
+      // (Outdoors tall things uncover a lot: up to 64 px north, else 48 south
+      // (stored as 5-7). A see-through texel in front shows the backdrop,
+      // which is the ground's color; plain ground is close enough.)
+      // (Not above the ground there: a gap between stacked props would hide
+      // the face of the one behind.)
+      int z = have ? IntMin(above, s->ow_level[j]) : s->ow_level[j], src = r - z / 8, k = 1;
+      for (; k <= 7; k++) {
+        int sr = k <= 4 ? src - 2 * k : src + 2 * (k - 4);
+        if (sr >= 0 && sr < n && ly->pk[sr * n + c] == kPk_Ground && !(ly->cf[sr * n + c] & kCf_Overhead))
+          break;
+      }
+      if (k > 7)
+        k = 0;
+      // (Seen through the see-through texels of what is in front of it, it
+      // shows what the picture shows there: the backdrop.)
+      int flat = src >= 0 && src < n && (ly->cf[src * n + c] & kCf_Holes) ? kWf_Flat : 0;
+      ly->wz[j] = (int8)z, ly->wf[j] = (uint8)(kWf_Set | kWf_Inpaint | k << 4 | flat);
+      above = z, have = true;
+    }
+    // A slab resting on what is under it is part of it; so is one over
+    // nothing that landed (only real ground stays open under a slab).
+    for (int r = 0; r < n; r++) {
+      int j = r * n + c;
+      if (s->slab_hi[j] <= s->slab_lo[j])
+        continue;
+      if (ly->wz[j] >= s->slab_lo[j] || (ly->wf[j] & kWf_Inpaint)) {
+        if (s->slab_hi[j] > ly->wz[j])
+          ly->wz[j] = s->slab_hi[j], ly->wf[j] = kWf_Set;
+        s->slab_hi[j] = s->slab_lo[j] = 0;
+      }
+    }
+    // Under a slab there is room for a Link where the wall behind the
+    // opening is tall enough to fill in what the raised edge uncovers (over
+    // a passage it stays where the picture has it).
+    for (int w = 0, back = -128; w < n; w++) {
+      int j = w * n + c;
+      if (g_open[w] == -128) {
+        back = (ly->wf[j] & kWf_Set) ? ly->wz[j] : -128;
+        continue;
+      }
+      if (s->slab_hi[j] <= s->slab_lo[j] || back == -128 || !(ly->wf[j] & kWf_Set))
+        continue;
+      int lo = s->slab_lo[j], want = IntMin(g_head[w], s->slab_hi[j] - kOwSlab);
+      s->slab_lo[j] = (int8)IntMax(lo, IntMin(want, lo + back - ly->wz[j]));
+    }
+    // Past the edges: a gap takes the height before it, toward the area.
+    for (int side = 0; side < 2; side++) {
+      int8 *sk = s->ow_skirt[side][c];
+      int edge = side ? c : (n - 1) * n + c, last = kOwSkirt - 1;
+      int8 prev = (int8)((ly->wf[edge] & kWf_Set) ? ly->wz[edge] : 0);
+      while (last >= 0 && sk[last] == -128)
+        last--;
+      for (int k = 0; k <= last; k++)
+        prev = sk[k] = (int8)(sk[k] != -128 ? sk[k] : prev);
+    }
+    // Where each block's front is (its side and back faces take its texels;
+    // a slab in front counts: the back of a doorway shows the door).
+    // (The next row south lower than this one, with a stack: rows whose
+    // height rises going south.)
+    int top = 0;
+    for (int r = n - 1; r >= 0; r--) {
+      int j = r * n + c, z = ly->wz[j];
+      g_col_h[r] = (int16)((ly->wf[j] & kWf_Set) ? z : -128);
+      if (s->slab_hi[j] > s->slab_lo[j])
+        g_col_h[r] = (int16)IntMax(g_col_h[r], s->slab_hi[j]);
+      while (top > 0 && g_col_h[g_col_row[top - 1]] >= z)
+        top--;
+      int next = top > 0 ? g_col_row[top - 1] : n;
+      s->ow_front[j] = (uint8)(IntMin(next - r - 1, 32) | (g_wground[r] ? 0x80 : 0));
+      g_col_row[top++] = (int16)r;
+    }
+  }
+}
+
+static void OwHeightRange(Hd3dScene *s) {
+  const Layer *ly = &s->layer[0];
+  int zmax = 0;
+  for (int i = 0; i < s->n * s->n; i++) {
+    if (ly->wf[i] & kWf_Set)
+      zmax = IntMax(zmax, ly->wz[i]);
+    if (s->slab_hi[i] > s->slab_lo[i])
+      zmax = IntMax(zmax, s->slab_hi[i]);
+  }
+  s->ow_zmax = (int16)zmax;
+}
+
 static void ChunkBounds(Hd3dScene *s, int L) {
   Layer *ly = &s->layer[L];
   int n = s->n, nc = n / kChunkCells;
@@ -1184,6 +2040,8 @@ static void ChunkBounds(Hd3dScene *s, int L) {
           if (ly->wf[r * n + c] & kWf_Set) {
             lo = IntMin(lo, ly->wz[r * n + c]);
             hi = IntMax(hi, ly->wz[r * n + c]);
+            if (!s->indoors && s->slab_hi[r * n + c] > s->slab_lo[r * n + c])
+              hi = IntMax(hi, s->slab_hi[r * n + c]);  // (outdoors: floating canopy edges)
           }
       if (slab && lo <= hi)
         lo = IntMin(lo, kHd3dLowerFloor);
@@ -1215,7 +2073,10 @@ static void BuildGeometry(Hd3dScene *s) {
     b = MedianBand(hist_all);
   s->wall_height = (int16)(b ? 8 * IntMin(IntMax(b, 3), kHd3dBandMax) : 48);
   for (int L = 0; L < layers; L++) {
-    BuildRelief(s, L);
+    if (s->indoors)
+      BuildRelief(s, L);
+    else
+      BuildReliefOutdoors(s), OwHeightRange(s);
     ChunkBounds(s, L);
   }
   s->ready = true;
@@ -1282,6 +2143,49 @@ int Hd3dScene_WalkZ(const Hd3dScene *s, int layer) {
   return s && layer ? LayerBase(s, 1) : 0;
 }
 
+int Hd3dScene_GroundZ(const Hd3dScene *s, int layer, int x, int y) {
+  if (!s || s->indoors || !s->ready)
+    return Hd3dScene_WalkZ(s, layer);
+  const Layer *ly = &s->layer[0];
+  int n = s->n, px = x - s->origin_x, py = y - s->origin_y;
+  if (px < 0 || py < 0 || px >= s->size || py >= s->size)
+    return 0;
+  int c = px >> 3, r = py >> 3, i = r * n + c;
+  if (s->ow_fdir[i]) {
+    // On the face below a ledge (jumping off it): down the face, so that in
+    // the world the feet stay on it (y + z stays the same).
+    int top = s->ow_face[i], d = s->ow_fdir[i] - 1;
+    if (d == kDrop_S) {
+      int b = r;
+      while (b < n && s->ow_fdir[b * n + c])
+        b++;
+      int g = s->ow_level[IntMin(b, n - 1) * n + c];
+      return IntMax(g, IntMin(top, 8 * b + g - py));
+    }
+    if (d == kDrop_W || d == kDrop_E) {
+      // Across a cliff band to the east or west: from its high edge to its low one.
+      int step = kDropX[d], c0 = c, c1 = c;
+      while (c0 - step >= 0 && c0 - step < n && s->ow_fdir[r * n + c0 - step])
+        c0 -= step;
+      while (c1 >= 0 && c1 < n && s->ow_fdir[r * n + c1])
+        c1 += step;
+      int g = c1 >= 0 && c1 < n ? s->ow_level[r * n + c1] : 0, width = 8 * abs(c1 - c0);
+      int along = step > 0 ? px - 8 * c0 : 8 * c0 + 8 - px;
+      return width > 0 ? top + (g - top) * IntMax(IntMin(along, width), 0) / width : top;
+    }
+    return top;
+  }
+  int z = s->ow_level[i];
+  // Stairs: between this row's level and the next one's.
+  int f = py & 7, r2 = f >= 4 ? r + 1 : r - 1;
+  if (r2 >= 0 && r2 < n && OwWalk(ly, r2 * n + c)) {
+    int z2 = s->ow_level[r2 * n + c];
+    if (z2 != z && abs(z2 - z) <= 8)
+      z += (z2 - z) * (f >= 4 ? 2 * f - 7 : 7 - 2 * f) / 16;
+  }
+  return z;
+}
+
 float Hd3dScene_StepRise(Hd3dScene *s, float dt, bool drawn) {
   if (!s)
     return 1.0f;
@@ -1319,6 +2223,7 @@ void Hd3dScene_Textures(Hd3dScene *s, const uint32 *lut, R3dTexture *bg2, R3dTex
       bg1->origin_x -= s->bg1_dx, bg1->origin_y -= s->bg1_dy;
   }
   s->void_rgb = lut ? lut[s->void_index & 255] : 0;
+  s->backdrop_rgb = lut ? lut[0] : 0;
 }
 
 typedef struct EmitCtx {
@@ -1368,7 +2273,9 @@ static void Orient(R3dQuad *q, float nx, float ny, float nz) {
   }
 }
 
-// Scenery near the line from the camera to the player's Link is dithered.
+// Scenery near the line from the camera to the player's Link is dithered:
+// what stands above that line (outdoors a raised terrace further off is
+// under it and stays solid).
 static void Fade(const EmitCtx *x, R3dQuad *q) {
   const Hd3dEmit *e = x->e;
   if (!e->fade)
@@ -1384,10 +2291,13 @@ static void Fade(const EmitCtx *x, R3dQuad *q) {
   float len2 = dx * dx + dy * dy, t = 0;
   if (len2 > 1e-6f) {
     t = ((px - e->fade_a[0]) * dx + (py - e->fade_a[1]) * dy) / len2;
+    if (t < 0 && len2 > 64.0f * 64.0f && t * t * len2 > 16.0f * 16.0f)
+      return;  // (well behind Link, away from the camera: it hides nothing)
     t = t < 0 ? 0 : t > 1 ? 1 : t;
   }
   float ex = e->fade_a[0] + dx * t - px, ey = e->fade_a[1] + dy * t - py;
-  if (ex * ex + ey * ey < 28.0f * 28.0f)
+  float za = e->fade_a[2] + 12.0f, zl = za + (e->fade_b[2] - za) * t;
+  if (ex * ex + ey * ey < 28.0f * 28.0f && zt > zl)
     q->flags |= kR3dQuad_Dither;
 }
 
@@ -1446,6 +2356,56 @@ static void EmitFace(EmitCtx *x, int L, int c, int r, int dir, int zlo, int zhi)
   Fade(x, q);
 }
 
+// Outdoors a face takes its texels from the front (south face) of the block
+// it belongs to, front cells south of this one: the rows that front shows at
+// each height, and on east and west faces the front's columns near the
+// corner, wrapping round it for up to 16 px. A south face is a front: that
+// is the relief rule. (Side faces by the relief rule had the picture's rows
+// slanting across them: stripes, and shards at a canopy's ragged edge.)
+// The side and back of a terrace (ground, 0x80 in front) fold its edge down
+// instead: a cliff with the rim's art running down it.
+static void EmitFaceOw(EmitCtx *x, int c, int r, int dir, int zlo, int zhi, int front) {
+  static const uint8 kShade[4] = { 176, 216, 216, 255 };
+  Hd3dScene *s = x->s;
+  R3dQuad *q = NewQuad(x, x->e->tex_bg2, kShade[dir], kR3dClass_World);
+  if (!q)
+    return;
+  bool ground = (front & 0x80) != 0;
+  front &= 0x7f;
+  float x0 = (float)(s->origin_x + 8 * c), x1 = x0 + 8.0f, y0 = (float)(s->origin_y + 8 * r), y1 = y0 + 8.0f;
+  float zl = (float)zlo, zh = (float)zhi, yf = y1 + 8.0f * (float)front, fold = 0.5f * (zh - zl);
+  if (dir == kDir_S) {
+    SetVertex(&q->v[0], x0, y1, zh, x0, y1 - zh);
+    SetVertex(&q->v[1], x1, y1, zh, x1, y1 - zh);
+    SetVertex(&q->v[2], x1, y1, zl, x1, y1 - zl);
+    SetVertex(&q->v[3], x0, y1, zl, x0, y1 - zl);
+  } else if (dir == kDir_N) {
+    float vt = ground ? y0 - zh : yf - zh, vb = ground ? y0 - zh + fold : yf - zl;
+    SetVertex(&q->v[0], x0, y0, zh, x0, vt);
+    SetVertex(&q->v[1], x1, y0, zh, x1, vt);
+    SetVertex(&q->v[2], x1, y0, zl, x1, vb);
+    SetVertex(&q->v[3], x0, y0, zl, x0, vb);
+  } else if (ground) {
+    float px = dir == kDir_E ? x1 : x0, in = dir == kDir_E ? -1.0f : 1.0f;
+    float ut = px + in * 0.5f, ub = px + in * (0.5f + fold);
+    SetVertex(&q->v[0], px, y0, zh, ut, y0 - zh);
+    SetVertex(&q->v[1], px, y1, zh, ut, y1 - zh);
+    SetVertex(&q->v[2], px, y1, zl, ub, y1 - zh);
+    SetVertex(&q->v[3], px, y0, zl, ub, y0 - zh);
+  } else {
+    float px = dir == kDir_E ? x1 : x0, in = dir == kDir_E ? -1.0f : 1.0f;
+    float w0 = yf - y0 < 16.0f ? yf - y0 : 16.0f, w1 = yf - y1 < 16.0f ? yf - y1 : 16.0f;
+    float u0 = px + in * (0.5f + w0), u1 = px + in * (0.5f + w1);
+    SetVertex(&q->v[0], px, y0, zh, u0, yf - zh);
+    SetVertex(&q->v[1], px, y1, zh, u1, yf - zh);
+    SetVertex(&q->v[2], px, y1, zl, u1, yf - zl);
+    SetVertex(&q->v[3], px, y0, zl, u0, yf - zl);
+  }
+  Orient(q, (float)kDirX[dir], (float)kDirY[dir], 0);
+  ApplyRise(x, q, 0);
+  Fade(x, q);
+}
+
 static void EmitRelief(EmitCtx *x, int L) {
   Hd3dScene *s = x->s;
   Layer *ly = &s->layer[L];
@@ -1469,6 +2429,8 @@ static void EmitRelief(EmitCtx *x, int L) {
           int j = r * n + c;
           uint8 f = ly->wf[j];
           int z = ly->wz[j], ink = f >> 4 & 7;
+          if (!s->indoors && ink > 4)
+            ink = 4 - ink;  // (outdoors 5-7: south)
           if (!(f & kWf_Set)) {
             c++;
             continue;
@@ -1481,7 +2443,10 @@ static void EmitRelief(EmitCtx *x, int L) {
               while (len < 4 && c + len < cb && (ly->wf[j + len] & (kWf_Set | kWf_Inpaint)) == kWf_Set &&
                      ly->wz[j + len] == z && SourceDecoded(ly, n, r - z / 8, c + len))
                 len++;
+            int before = x->num;
             EmitTop(x, L, c, r, len, z, ink);
+            if ((f & kWf_Flat) && x->num > before)
+              x->out[before].flags |= kR3dQuad_Flat, x->out[before].color = s->backdrop_rgb;
           }
           for (int k = 0; k < len && faces; k++) {
             int jj = j + k, cc = c + k;
@@ -1502,12 +2467,128 @@ static void EmitRelief(EmitCtx *x, int L) {
               } else {
                 continue;
               }
-              EmitFace(x, L, cc, r, dir, zl, z);
+              if (s->indoors)
+                EmitFace(x, L, cc, r, dir, zl, z);
+              else
+                EmitFaceOw(x, cc, r, dir, zl, z, s->ow_front[jj]);
             }
           }
           c += len;
         }
       }
+    }
+  }
+}
+
+// Outdoors: the canopy edges that float over the ground (slabs). The top
+// keeps the relief rule; the faces show what the relief puts there; the
+// underside (only seen from below, in first person) shows the top's texels.
+static void EmitSlabs(EmitCtx *x) {
+  Hd3dScene *s = x->s;
+  Layer *ly = &s->layer[0];
+  int n = s->n, nc = n / kChunkCells;
+  bool faces = x->rise > 0.01f;
+  for (int cy = x->r0 / kChunkCells; cy * kChunkCells < x->r1; cy++) {
+    for (int cx = x->c0 / kChunkCells; cx * kChunkCells < x->c1; cx++) {
+      int ch = cy * nc + cx, zlo = ly->zlo[ch], zhi = ly->zhi[ch];
+      if (zlo > zhi)
+        continue;
+      float rise = x->rise, up = (1.0f - rise) * (float)IntMax(zhi, 0);
+      float bx = (float)(s->origin_x + 64 * cx), by = (float)(s->origin_y + 64 * cy);
+      if (!BoxVisible(x, bx, by - up, rise * (float)zlo, bx + 64.0f, by + 64.0f, rise * (float)zhi))
+        continue;
+      int rb = IntMin(cy * kChunkCells + kChunkCells, x->r1), cb = IntMin(cx * kChunkCells + kChunkCells, x->c1);
+      for (int r = IntMax(cy * kChunkCells, x->r0); r < rb; r++) {
+        for (int c = IntMax(cx * kChunkCells, x->c0); c < cb; c++) {
+          int j = r * n + c, top = s->slab_hi[j], bot = s->slab_lo[j];
+          if (top <= bot)
+            continue;
+          if (SourceDecoded(ly, n, r - top / 8, c)) {
+            EmitTop(x, 0, c, r, 1, top, 0);
+            if (faces) {
+              R3dQuad *q = NewQuad(x, x->e->tex_bg2, 150, kR3dClass_World);
+              if (q) {
+                float x0 = (float)(s->origin_x + 8 * c), x1 = x0 + 8.0f;
+                float y0 = (float)(s->origin_y + 8 * r), y1 = y0 + 8.0f, zb = (float)bot, dv = (float)top;
+                SetVertex(&q->v[0], x0, y0, zb, x0, y0 - dv);
+                SetVertex(&q->v[1], x1, y0, zb, x1, y0 - dv);
+                SetVertex(&q->v[2], x1, y1, zb, x1, y1 - dv);
+                SetVertex(&q->v[3], x0, y1, zb, x0, y1 - dv);
+                Orient(q, 0, 0, -1.0f);
+                ApplyRise(x, q, 0);
+                Fade(x, q);
+              }
+            }
+          }
+          if (!faces)
+            continue;
+          int front = 0;
+          while (r + front + 1 < n && front < 8 && s->slab_hi[j + (front + 1) * n] >= top &&
+                 s->slab_hi[j + (front + 1) * n] > s->slab_lo[j + (front + 1) * n])
+            front++;
+          for (int dir = 0; dir < 4; dir++) {
+            int rr = r + kDirY[dir], c2 = c + kDirX[dir];
+            if (rr < 0 || rr >= n || c2 < 0 || c2 >= n)
+              continue;
+            int nb = rr * n + c2, lo = bot;
+            // What the neighbor fills: its column, and its own slab.
+            if (ly->wf[nb] & kWf_Set)
+              lo = IntMax(lo, ly->wz[nb]);
+            if (lo >= top)
+              continue;
+            int nlo = s->slab_lo[nb], nhi = s->slab_hi[nb];
+            if (nhi > nlo && nhi > lo && nlo < top) {
+              if (nlo > lo)
+                EmitFaceOw(x, c, r, dir, lo, nlo, front);
+              if (nhi < top)
+                EmitFaceOw(x, c, r, dir, nhi, top, front);
+            } else {
+              EmitFaceOw(x, c, r, dir, lo, top, front);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Outdoors, past the area's south (and north) edge: what raised (lowered)
+// ground at the edge put there, so the edge's last picture rows still show.
+static void EmitSkirts(EmitCtx *x) {
+  Hd3dScene *s = x->s;
+  const Layer *ly = &s->layer[0];
+  int n = s->n;
+  bool faces = x->rise > 0.01f;
+  for (int side = 0; side < 2; side++) {
+    if (side ? x->r0 > 0 : x->r1 < n)
+      continue;
+    for (int c = x->c0; c < x->c1; c++) {
+      const int8 *sk = s->ow_skirt[side][c];
+      int edge = side ? c : (n - 1) * n + c, prev = (ly->wf[edge] & kWf_Set) ? ly->wz[edge] : 0;
+      int k = 0;
+      for (; k < kOwSkirt && sk[k] != -128; k++) {
+        int z = sk[k], r = side ? -1 - k : n + k;
+        if (SourceDecoded(ly, n, r - z / 8, c))
+          EmitTop(x, 0, c, r, 1, z, 0);
+        if (faces) {
+          // Toward the area: the step from the row before.
+          if (z > prev)
+            EmitFaceOw(x, c, r, side ? kDir_S : kDir_N, prev, z, 0x80);
+          else if (z < prev)
+            EmitFaceOw(x, c, side ? r + 1 : r - 1, side ? kDir_N : kDir_S, z, prev, 0x80);
+          for (int dir = kDir_W; dir <= kDir_E; dir++) {
+            int c2 = c + kDirX[dir], z2 = c2 >= 0 && c2 < n ? s->ow_skirt[side][c2][k] : -128;
+            int zl = z2 == -128 ? IntMin(z, 0) : z2;
+            if (zl < z)
+              EmitFaceOw(x, c, r, dir, zl, z, 0x80);
+          }
+        }
+        prev = z;
+      }
+      // Where nothing lands further south, what still stands ends in a face
+      // (a wall whose foot is past the edge: the picture's last rows).
+      if (!side && faces && prev > 8 * k)
+        EmitFaceOw(x, c, n + k - 1, kDir_S, 8 * k, prev, 0x80);
     }
   }
 }
@@ -1726,6 +2807,10 @@ int Hd3dScene_Emit(Hd3dScene *s, const Hd3dEmit *e, R3dQuad *out, int max) {
   x.rise = s->ready ? (e->rise < 0 ? 0 : e->rise > 1 ? 1 : e->rise) : 0;
   int32 x0 = IntMax(e->rect[0], s->reach[0]), y0 = IntMax(e->rect[1], s->reach[1]);
   int32 x1 = IntMin(e->rect[2], s->reach[2]), y1 = IntMin(e->rect[3], s->reach[3]);
+  // (Outdoors a surface z high stands z px south of the picture point it
+  // shows: what is that tall at the bottom of the screen stands further south.)
+  if (!s->indoors && s->ready)
+    y1 = IntMin(e->rect[3] + IntMax(s->ow_zmax - kHd3dFogMargin, 0), s->reach[3] + IntMax(s->ow_zmax, 0));
   x.c0 = IntMax(FloorDiv8(x0 - s->origin_x), 0), x.c1 = IntMin(FloorDiv8(x1 - s->origin_x + 7), s->n);
   x.r0 = IntMax(FloorDiv8(y0 - s->origin_y), 0), x.r1 = IntMin(FloorDiv8(y1 - s->origin_y + 7), s->n);
   if (x.c0 >= x.c1 || x.r0 >= x.r1)
@@ -1752,6 +2837,8 @@ int Hd3dScene_Emit(Hd3dScene *s, const Hd3dEmit *e, R3dQuad *out, int max) {
       EmitRelief(&x, L);
       if (s->indoors)
         EmitPanels(&x, L);
+      else
+        EmitSlabs(&x), EmitSkirts(&x);
     }
   }
   if (s->bg1_role == kHd3dBg1_Far && s->num_layers > 1)

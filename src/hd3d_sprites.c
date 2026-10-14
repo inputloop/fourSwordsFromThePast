@@ -489,7 +489,11 @@ int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, uint8 a
       // What it stands on: its object's floor; else, indoors, a sprite drawn
       // with OAM priority 1 is on the lower floor (as the game draws them).
       int layer = obj ? obj->layer : (info.indoors && g->box[2] > g->box[0] && g->prio == 1);
-      int zw = scene ? Hd3dScene_WalkZ(scene, layer) : 0;
+      // (Outdoors the ground has terraces: the height under its ground point.)
+      int gx = obj ? obj->x : (g->box[0] + g->box[2]) / 2, gy = obj ? obj->y : g->box[3];
+      if (!obj && g->sbox[2] > g->sbox[0])
+        gx = (g->sbox[0] + g->sbox[2]) / 2, gy = (g->sbox[1] + g->sbox[3]) / 2;
+      int zw = scene ? Hd3dScene_GroundZ(scene, layer, gx, gy) : 0;
 
       // The shadows: a ground decal, and the foot.
       int sbb[4] = { 0, 0, 0, 0 };
