@@ -481,7 +481,7 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
   around you, and pots, statues and chests are standing pictures.
   *First-person view* sets the field of view (50-90 degrees). In split
   screen a player in first person always gets a pane of their own.
-- **Third person.** *Camera returns* (on by default) eases the camera back to
+- **Third person.** *Camera returns* (off by default) eases the camera back to
   the starting angle two seconds after you let go. Once it is turned, your
   own Link shows as a faint silhouette where scenery hides him, and scenery
   right between the camera and Link is thinned out (*Fade scenery near

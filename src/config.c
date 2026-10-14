@@ -675,7 +675,7 @@ void ParseConfigFile(const char *filename) {
   g_config.hd2d_vignette = 45;
   g_config.hd2d_grade = 50;
   g_config.hd2d_lighting = 70;
-  g_config.hd3d_camera_returns = true;
+  g_config.hd3d_camera_returns = false;
   g_config.hd3d_turn_controls = true;
   g_config.hd3d_mouse_look = true;
   g_config.hd3d_fade_scenery = true;
