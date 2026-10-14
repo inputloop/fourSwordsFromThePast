@@ -103,6 +103,7 @@ typedef struct Pane {
   int fade_in;               // 0-256: how much of the 3D picture shows (256: no fade)
   uint32 bg_lut[256];        // cgram 0-127 with the brightness
   uint32 fog_tp, fog_fp;     // the fog in third and first person
+  uint32 exit_rgb;           // indoors: the daylight through an exit door (first person)
   uint32 backdrop;           // cgram 0 as lit: the ground where a background tile is see-through
   float ambient, card_min;
   float subtract[3];
@@ -447,6 +448,8 @@ static void ReadLight(Pane *p, Ppu *ppu, int player_z) {
   if (player_is_indoors) {
     p->fog_tp = dark ? 0 : around;
     p->fog_fp = dark ? 0 : ScaleRgb(0x08080c, br, 15);
+    // (The world outside, as its haze in first person: the area entered from.)
+    p->exit_rgb = ScaleRgb(overworld_screen_index & 0x40 ? 0x887898 : 0xb8d0e8, br, 15);
   } else {
     p->fog_tp = ScaleRgb(0x788296, br, 15);
     p->fog_fp = ScaleRgb(overworld_screen_index & 0x40 ? 0x887898 : 0xb8d0e8, br, 15);
@@ -530,6 +533,8 @@ static void ReadPose(Pane *p, int player, float dt, bool snap) {
   float bx = (float)(Mp_PlayerX(player) + 8 + dx), by = (float)(Mp_PlayerY(player) + 16 + dy);
   float eye[3];
   eye[0] = bx, eye[1] = by + (float)g, eye[2] = (float)(g + lz + 20);
+  // (In a doorway the eye waits in front of the door, or in the room.)
+  Hd3dScene_DoorEye(p->scene, lower, Mp_PlayerX(player) + 8 + dx, Mp_PlayerY(player) + 24 + dy, &eye[1]);
   float jx = eye[0] - p->eye[0], jy = eye[1] - p->eye[1];
   bool jump = snap || jx * jx + jy * jy > 48.0f * 48.0f;  // (a warp or a new room: no gliding)
   for (int i = 0; i < 3; i++)
@@ -958,6 +963,7 @@ static void FinishPane(Pane *p, int view) {
   e.fade = !test && g_hd3d.fade_scenery && Cam3d_IsTurned(c);
   memcpy(e.fade_a, p->link, sizeof(e.fade_a));
   memcpy(e.fade_b, f->cam.eye, sizeof(e.fade_b));
+  e.exit_rgb = p->exit_rgb;
   int nq = scene ? Hd3dScene_Emit(scene, &e, g_quads, kHd3dMaxQuads) : 0;
   nq = IntMax(0, IntMin(nq, kHd3dMaxQuads));
   if (prev) {

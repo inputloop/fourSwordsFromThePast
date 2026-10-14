@@ -1,0 +1,67 @@
+# 3D view, first person at doors. In a dungeon's entrance room, facing the
+# door you came in by, the exit shows daylight at the end of its corridor
+# (the void beyond it made it a black screen), framed by the corridor's
+# walls, and the eye waits in the room at the corridor's mouth rather than
+# inside it (facing sideways there was a wall 8 px away). At the foot of
+# Hyrule Castle's gate the eye stands in front of the gate, which is a dark
+# opening under its lintel (the eye was under the lintel, a white wall a few
+# px away). On the Sanctuary's doorstep, still in the facade's rows, the Link
+# stands at the house's foot (not on its roof at the terrace's level), and
+# the facade stands in front of the eye with its doorway open. (Lumas: areas
+# in picture pixels.)
+hd2d 1
+view3d 1
+load 2
+drawrun 30
+enter c9
+drawrun 200
+clearsprites
+cam3d 1 fp 180 6
+drawrun 2
+expect_3d 1
+expect_luma 96 70 160 150 150 255
+expect_luma 0 70 48 150 40 140
+expect_luma 208 70 256 150 40 140
+# Sideways: the room's wall, not the corridor's at 8 px.
+cam3d 1 fp 90 6
+drawrun 2
+expect_luma 96 70 160 150 30 140
+load 2
+drawrun 30
+enter 84
+drawrun 200
+clearsprites
+cam3d 1 fp 180 6
+drawrun 2
+expect_luma 96 70 160 150 150 255
+load 2
+drawrun 30
+enter 61
+drawrun 200
+hold 1 D
+drawrun 70
+hold 1 -
+drawrun 40
+clearsprites
+expect_standz 1 0
+cam3d 1 fp 0 6
+drawrun 2
+expect_luma 100 96 156 160 0 40
+expect_luma 100 20 156 56 90 200
+load 2
+drawrun 30
+enter 12
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 40
+clearsprites
+expect_standz 1 0
+cam3d 1 fp 0 6
+drawrun 2
+expect_luma 100 96 156 160 0 40
+# Facing south, down: the path, not the facade lying flat.
+cam3d 1 fp 180 30
+drawrun 2
+expect_luma 64 120 192 200 80 160

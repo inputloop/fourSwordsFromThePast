@@ -71,6 +71,14 @@ int Hd3dScene_GroundZ(const Hd3dScene *s, int layer, int x, int y);
 // Where something standing at picture point (x, y) stands: the ground, or a
 // higher ground just north that the relief puts on the same spot.
 int Hd3dScene_StandZ(const Hd3dScene *s, int layer, int x, int y);
+// First person: where the eye goes while the Link at picture point (x, y)
+// stands in a doorway (*eye_y: his eye's world y). Outdoors, in a house's
+// door cells or inside its rows above them (walking out, hidden behind the
+// facade), it waits in front of the door's foot; indoors, in the corridor
+// of an exit door, in the room at the corridor's mouth. Else the view would
+// be under the lintel or in the alcove, a wall a few px away. False: not in
+// a doorway (*eye_y as it was).
+bool Hd3dScene_DoorEye(const Hd3dScene *s, int layer, int x, int y, float *eye_y);
 // Heights grow in (0 to 1 over 0.3 s) once a scene that was drawn flat
 // becomes ready; a scene first drawn when already ready starts at 1.
 float Hd3dScene_StepRise(Hd3dScene *s, float dt, bool drawn);
@@ -87,6 +95,7 @@ typedef struct Hd3dEmit {
   uint8 tex_bg2, tex_bg1;    // R3dFrame.tex slots of this scene
   bool fade;                 // scenery near the segment fade_a..fade_b gets kR3dQuad_Dither
   float fade_a[3], fade_b[3];
+  uint32 exit_rgb;           // indoors in first person: the daylight seen through an exit door
 } Hd3dEmit;
 void Hd3dScene_Textures(Hd3dScene *s, const uint32 *lut, R3dTexture *bg2, R3dTexture *bg1);
 int Hd3dScene_Emit(Hd3dScene *s, const Hd3dEmit *e, R3dQuad *out, int max);

@@ -2447,8 +2447,20 @@ int Hd3dScene_StandZ(const Hd3dScene *s, int layer, int x, int y) {
   // the wall over the Link.)
   const Layer *ly = &s->layer[0];
   int n = s->n, c = (x - s->origin_x) >> 3, r0 = (y - s->origin_y) >> 3;
-  if (c < 0 || c >= n || r0 < 0 || r0 >= n || !OwWalk(ly, r0 * n + c))
+  if (c < 0 || c >= n || r0 < 0 || r0 >= n)
     return z;
+  if (!OwWalk(ly, r0 * n + c)) {
+    // In a house's rows (walking out of its door, hidden behind the facade):
+    // the house stands on the ground at its foot, so that is where he is,
+    // not at its region's level (the terrace north of a house built against
+    // a cliff, where he would stand on the roof).
+    int i = r0 * n + c, rf = r0;
+    if (!OwMass(ly, i) || (ly->cf[i] & kCf_Overhead) || s->ow_fdir[i])
+      return z;
+    while (rf + 1 < n && rf < r0 + 8 && OwMass(ly, (rf + 1) * n + c) && !(ly->cf[(rf + 1) * n + c] & kCf_Overhead))
+      rf++;
+    return rf + 1 < n && OwWalk(ly, (rf + 1) * n + c) ? s->ow_level[(rf + 1) * n + c] : z;
+  }
   // In an opening (a doorway, a cave mouth): open ground under a slab with a
   // Link's headroom. Nothing lands on the foot; the game draws what is above
   // over the Link.
@@ -2471,6 +2483,58 @@ int Hd3dScene_StandZ(const Hd3dScene *s, int layer, int x, int y) {
       z = zn;
   }
   return z;
+}
+
+// A door cell outdoors: walkable ground under a slab with a Link's headroom
+// (a doorway, a cave mouth; as Hd3dScene_StandZ has it).
+static bool OwDoorCell(const Hd3dScene *s, int r, int c) {
+  const Layer *ly = &s->layer[0];
+  int n = s->n, i = r * n + c;
+  if (!OwWalk(ly, i) || (ly->cf[i] & kCf_Overhead))
+    return false;
+  int z = s->ow_level[i], wr = r + z / 8, j = wr * n + c;
+  return wr >= 0 && wr < n && ly->wz[j] <= z && s->slab_hi[j] > s->slab_lo[j] && s->slab_lo[j] - z <= kOwHeadroom;
+}
+
+bool Hd3dScene_DoorEye(const Hd3dScene *s, int layer, int x, int y, float *eye_y) {
+  if (!s || !s->ready)
+    return false;
+  int n = s->n, c = (x - s->origin_x) >> 3, r = (y - s->origin_y) >> 3;
+  if (c < 0 || c >= n || r < 0 || r >= n)
+    return false;
+  if (s->indoors) {
+    // The exit's corridor: the door cells (attribute 0x8e, the game's door
+    // to the overworld) from the Link's up to the room's floor.
+    const Layer *ly = &s->layer[layer < s->num_layers ? layer : 0];
+    if (ly->attr[r * n + c] != 0x8e)
+      return false;
+    int ra = r;
+    while (ra > 0 && ly->attr[(ra - 1) * n + c] == 0x8e)
+      ra--;
+    float mouth = (float)(s->origin_y + 8 * ra + LayerBase(s, layer) - 4);
+    if (*eye_y > mouth)
+      *eye_y = mouth;
+    return true;
+  }
+  // The door cells under the Link, or under the house's rows he is in.
+  const Layer *ly = &s->layer[0];
+  int rd = r;
+  if (!OwWalk(ly, r * n + c)) {
+    if (!OwMass(ly, r * n + c) || (ly->cf[r * n + c] & kCf_Overhead) || s->ow_fdir[r * n + c])
+      return false;
+    while (rd + 1 < n && rd < r + 8 && OwMass(ly, (rd + 1) * n + c) && !(ly->cf[(rd + 1) * n + c] & kCf_Overhead))
+      rd++;
+    rd++;
+  }
+  if (rd >= n || !OwDoorCell(s, rd, c))
+    return false;
+  int rf = rd;
+  while (rf + 1 < n && OwDoorCell(s, rf + 1, c))
+    rf++;
+  float foot = (float)(s->origin_y + 8 * (rf + 1) + s->ow_level[rf * n + c] + 12);
+  if (*eye_y < foot)
+    *eye_y = foot;
+  return true;
 }
 
 float Hd3dScene_StepRise(Hd3dScene *s, float dt, bool drawn) {
@@ -2736,6 +2800,44 @@ static void EmitFaceOw(EmitCtx *x, int c, int r, int dir, int zlo, int zhi, int 
   Fade(x, q);
 }
 
+// Outdoors, the back of a doorway: the face at the north end of the door
+// cells under a lintel. By the relief rule it shows the rows painted over
+// the door (the lintel's, magnified a few px from the eye in first person);
+// as far as the lintel's face hides it from the oblique test camera it is
+// dark instead, the inside of the house. Returns whether it was all drawn.
+static bool EmitDoorBack(EmitCtx *x, int c, int r, int zlo, int zhi, int front) {
+  Hd3dScene *s = x->s;
+  const Layer *ly = &s->layer[0];
+  int n = s->n, nb = (r + 1) * n + c, lo = s->slab_lo[nb], hi = s->slab_hi[nb];
+  if (r + 1 >= n || hi <= lo || ly->wz[nb] != zlo || lo - zlo > kOwHeadroom)
+    return false;
+  int depth = 0;
+  while (r + 1 + depth < n && ly->wz[nb + depth * n] == zlo && s->slab_hi[nb + depth * n] > s->slab_lo[nb + depth * n])
+    depth++;
+  depth *= 8;
+  int d0 = IntMax(zlo, lo - depth), d1 = IntMin(IntMin(lo, hi - depth), zhi);
+  if (d1 <= d0)
+    return false;
+  R3dQuad *q = NewQuad(x, x->e->tex_bg2, 255, kR3dClass_World);
+  if (!q)
+    return true;
+  float x0 = (float)(s->origin_x + 8 * c), x1 = x0 + 8.0f, y1 = (float)(s->origin_y + 8 * r + 8);
+  float zl = (float)d0, zh = (float)d1;
+  q->flags = kR3dQuad_Flat, q->color = 0;
+  SetVertex(&q->v[0], x0, y1, zh, x0, y1 - zh);
+  SetVertex(&q->v[1], x1, y1, zh, x1, y1 - zh);
+  SetVertex(&q->v[2], x1, y1, zl, x1, y1 - zl);
+  SetVertex(&q->v[3], x0, y1, zl, x0, y1 - zl);
+  Orient(q, 0, 1.0f, 0);
+  ApplyRise(x, q, 0);
+  Fade(x, q);
+  if (d0 > zlo)
+    EmitFaceOw(x, c, r, kDir_S, zlo, d0, front);
+  if (d1 < zhi)
+    EmitFaceOw(x, c, r, kDir_S, d1, zhi, front);
+  return true;
+}
+
 // Indoors in first person, the void around a room (its filler, flat on the
 // floor) darkens toward the fog: seen from eye height it read as a beige or
 // green plain out to the horizon, past every doorway and low wall. One quad
@@ -2832,7 +2934,7 @@ static void EmitRelief(EmitCtx *x, int L) {
               }
               if (s->indoors)
                 EmitFace(x, L, cc, r, dir, zl, z);
-              else
+              else if (dir != kDir_S || !EmitDoorBack(x, cc, r, zl, z, s->ow_front[jj]))
                 EmitFaceOw(x, cc, r, dir, zl, z, s->ow_front[jj]);
             }
           }
@@ -3231,6 +3333,54 @@ static void EmitPlanes(EmitCtx *x) {
   }
 }
 
+// Indoors in first person, the way out. An exit door (attribute 0x8e, the
+// game's door to the overworld) is a corridor of walkable cells between two
+// wall panels, open to the room's edge, and past it the picture shows the
+// void: a black screen facing it from inside. Daylight closes the corridor
+// instead, where its side walls end: the haze of the world outside.
+static void EmitExits(EmitCtx *x, int L) {
+  Hd3dScene *s = x->s;
+  const Layer *ly = &s->layer[L];
+  int n = s->n, base = LayerBase(s, L);
+  if (x->fp <= 0.0f)
+    return;
+  uint32 vr = s->void_rgb, er = x->e->exit_rgb, rgb = 0;
+  int k = (int)(256.0f * x->fp);
+  for (int sh = 0; sh < 24; sh += 8)
+    rgb |= (((vr >> sh & 0xff) * (256 - k) + (er >> sh & 0xff) * k) >> 8) << sh;
+  for (int c = x->c0; c < x->c1; c++) {
+    for (int r = 0; r < n;) {
+      if (ly->attr[r * n + c] != 0x8e) {
+        r++;
+        continue;
+      }
+      int ra = r;
+      while (r < n && ly->attr[r * n + c] == 0x8e)
+        r++;
+      if (r < n && ly->cls[r * n + c] != kCls_Void)
+        continue;  // (a door into another room)
+      int end = r - 1;
+      while (end >= ra && !((c > 0 && (ly->cf[end * n + c - 1] & kCf_Panel)) ||
+                            (c + 1 < n && (ly->cf[end * n + c + 1] & kCf_Panel))))
+        end--;
+      if (end < ra || end + 1 < x->r0 || end + 1 > x->r1)
+        continue;
+      R3dQuad *q = NewQuad(x, L ? x->e->tex_bg1 : x->e->tex_bg2, 255, kR3dClass_World);
+      if (!q)
+        return;
+      q->flags = kR3dQuad_Flat, q->color = rgb;
+      float x0 = (float)(s->origin_x + 8 * c), x1 = x0 + 8.0f, y = (float)(s->origin_y + 8 * (end + 1) + base);
+      float zb = (float)base, zt = zb + (float)kFpWallHeight;
+      SetVertex(&q->v[0], x0, y, zt, x0, y - zt);
+      SetVertex(&q->v[1], x1, y, zt, x1, y - zt);
+      SetVertex(&q->v[2], x1, y, zb, x1, y - zb);
+      SetVertex(&q->v[3], x0, y, zb, x0, y - zb);
+      Orient(q, 0, -1.0f, 0);
+      ApplyRise(x, q, base);
+    }
+  }
+}
+
 static float Smoothstep(float e0, float e1, float v) {
   float t = (v - e0) / (e1 - e0);
   t = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -3279,6 +3429,7 @@ int Hd3dScene_Emit(Hd3dScene *s, const Hd3dEmit *e, R3dQuad *out, int max) {
       if (s->indoors) {
         EmitPanels(&x, L);
         EmitProps(&x, L);
+        EmitExits(&x, L);
       } else {
         EmitSlabs(&x), EmitSkirts(&x);
       }
