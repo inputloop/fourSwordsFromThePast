@@ -612,6 +612,34 @@ bool Rando_Check(uint32 seed, bool verbose) {
 }
 
 // ---------------------------------------------------------------------------
+// Places, for the spoiler log and the tracker
+
+// The dungeons, by the rooms the logic knows them by.
+static const struct { const char *name; uint8 rooms[12]; } kDungeons[] = {
+  {"Hyrule Castle", {0x11, 0x32, 0x71, 0x72, 0x80}},
+  {"Castle Tower", {0xE0, 0xD0}},
+  {"Eastern Palace", {0xA8, 0xA9, 0xAA, 0xB8, 0xB9}},
+  {"Desert Palace", {0x73, 0x74, 0x75, 0x85}},
+  {"Tower of Hera", {0x27, 0x77, 0x87}},
+  {"Palace of Darkness", {0x09, 0x0A, 0x19, 0x1A, 0x2A, 0x2B, 0x3A, 0x6A}},
+  {"Swamp Palace", {0x16, 0x28, 0x34, 0x35, 0x36, 0x37, 0x46, 0x66, 0x76}},
+  {"Skull Woods", {0x57, 0x58, 0x59, 0x67, 0x68}},
+  {"Thieves' Town", {0x44, 0x45, 0x65, 0xCB, 0xDB, 0xDC}},
+  {"Ice Palace", {0x1F, 0x2E, 0x3F, 0x5F, 0x7E, 0x9E, 0xAE}},
+  {"Misery Mire", {0xA2, 0xB3, 0xC1, 0xC2, 0xC3, 0xD1}},
+  {"Turtle Rock", {0x04, 0x14, 0x24, 0xB6, 0xB7, 0xD5, 0xD6}},
+  {"Ganon's Tower", {0x1C, 0x3D, 0x4D, 0x5B, 0x7B, 0x7C, 0x7D, 0x8B, 0x8C, 0x8D, 0x9D}},
+};
+
+static int DungeonOfRoom(int room) {
+  for (size_t i = 0; i < countof(kDungeons); i++)
+    for (int j = 0; j < 12 && kDungeons[i].rooms[j]; j++)
+      if (room < 0x100 && kDungeons[i].rooms[j] == room)
+        return (int)i;
+  return -1;
+}
+
+// ---------------------------------------------------------------------------
 // Spoiler log
 
 static const char *ItemName(uint8 item, char *buf, size_t size) {
@@ -649,28 +677,11 @@ static const char *PlaceName(int room, char *buf, size_t size) {
   for (size_t i = 0; i < countof(kPlaces); i++)
     if (kPlaces[i].room == room)
       return kPlaces[i].name;
-  // The dungeons, by the rooms the logic knows them by.
-  static const struct { const char *name; uint8 rooms[12]; } kDungeons[] = {
-    {"Hyrule Castle", {0x11, 0x32, 0x71, 0x72, 0x80}},
-    {"Castle Tower", {0xE0, 0xD0}},
-    {"Eastern Palace", {0xA8, 0xA9, 0xAA, 0xB8, 0xB9}},
-    {"Desert Palace", {0x73, 0x74, 0x75, 0x85}},
-    {"Tower of Hera", {0x27, 0x77, 0x87}},
-    {"Palace of Darkness", {0x09, 0x0A, 0x19, 0x1A, 0x2A, 0x2B, 0x3A, 0x6A}},
-    {"Swamp Palace", {0x16, 0x28, 0x34, 0x35, 0x36, 0x37, 0x46, 0x66, 0x76}},
-    {"Skull Woods", {0x57, 0x58, 0x59, 0x67, 0x68}},
-    {"Thieves' Town", {0x44, 0x45, 0x65, 0xCB, 0xDB, 0xDC}},
-    {"Ice Palace", {0x1F, 0x2E, 0x3F, 0x5F, 0x7E, 0x9E, 0xAE}},
-    {"Misery Mire", {0xA2, 0xB3, 0xC1, 0xC2, 0xC3, 0xD1}},
-    {"Turtle Rock", {0x04, 0x14, 0x24, 0xB6, 0xB7, 0xD5, 0xD6}},
-    {"Ganon's Tower", {0x1C, 0x3D, 0x4D, 0x5B, 0x7B, 0x7C, 0x7D, 0x8B, 0x8C, 0x8D, 0x9D}},
-  };
-  for (size_t i = 0; i < countof(kDungeons); i++)
-    for (int j = 0; j < 12 && kDungeons[i].rooms[j]; j++)
-      if (room < 0x100 && kDungeons[i].rooms[j] == room) {
-        snprintf(buf, size, "%s (room %02X)", kDungeons[i].name, room);
-        return buf;
-      }
+  int d = DungeonOfRoom(room);
+  if (d >= 0) {
+    snprintf(buf, size, "%s (room %02X)", kDungeons[d].name, room);
+    return buf;
+  }
   if (room >= 0x100)
     snprintf(buf, size, "Cave or house (room %03X)", room);
   else
@@ -721,5 +732,181 @@ bool Rando_WriteSpoiler(uint32 seed, const char *path) {
   fprintf(f, "\nSwords, shields, gloves, mails and boomerangs are progressive: each one\n"
              "found is the next level of what you have, whatever the location says.\n");
   fclose(f);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Check tracker
+
+// The places outside dungeons, by the part of the overworld they are in.
+// (Anything in none of these lists or the dungeons is in the Light World.)
+static const uint16 kDeathMountainRooms[] = { 0xEF, 0xFF, 0xFE, 0x10C, 0x117, 0xF8, 0x3C };
+static const uint16 kDarkWorldRooms[] = { 0x11C, 0x11E, 0x10D, 0x1004 };
+
+enum { kArea_LightWorld, kArea_DeathMountain, kArea_DarkWorld, kArea_FirstDungeon };
+
+static int TrackerAreaOf(int room) {
+  int d = DungeonOfRoom(room);
+  if (d >= 0)
+    return kArea_FirstDungeon + d;
+  for (size_t i = 0; i < countof(kDeathMountainRooms); i++)
+    if (kDeathMountainRooms[i] == room)
+      return kArea_DeathMountain;
+  for (size_t i = 0; i < countof(kDarkWorldRooms); i++)
+    if (kDarkWorldRooms[i] == room)
+      return kArea_DarkWorld;
+  return kArea_LightWorld;
+}
+
+// The items the logic counts, from the inventory of a save area. The logic
+// counts found items (two swords: the Master Sword level), the save file
+// keeps levels: every level is one more of the progressive item.
+static void StateFromSave(const uint8 *save, State *s) {
+  memset(s, 0, sizeof(*s));
+  static const struct { uint16 offs; uint8 item; } kOwned[] = {
+    {0x340, kI_Bow}, {0x342, kI_Hookshot}, {0x345, kI_FireRod}, {0x346, kI_IceRod}, {0x34A, kI_Lamp},
+    {0x34B, kI_Hammer}, {0x350, kI_Somaria}, {0x352, kI_Cape}, {0x357, kI_Pearl},
+  };
+  for (size_t i = 0; i < countof(kOwned); i++)
+    s->n[kOwned[i].item] = save[kOwned[i].offs] != 0;
+  // (0xff: the smiths have the sword; the file remembers its level.)
+  int sword = save[0x359] == 0xff ? save[kRandoSmithSwordOffs] : save[0x359];
+  static const uint8 kSwords[4] = { kI_FighterSword, kI_MasterSword, kI_TemperedSword, kI_GoldenSword };
+  for (int i = 0; i < sword && i < 4; i++)
+    s->n[kSwords[i]] = 1;
+  s->n[kI_FighterShield] = save[0x35A] != 0;
+  s->n[kI_Glove] = save[0x354] >= 1;
+  s->n[kI_Mitt] = save[0x354] >= 2;
+}
+
+enum { kLoc_Found, kLoc_Reachable, kLoc_Locked, kLoc_Filler };
+
+// One location: found, reachable with the items s has, locked, or in a room
+// the logic doesn't know (only filler goes there: never "locked").
+static int LocationStatus(int room, bool found, const Ev *e) {
+  if (found)
+    return kLoc_Found;
+  int a = RoomAccess(room, e);
+  return a < 0 ? kLoc_Filler : a ? kLoc_Reachable : kLoc_Locked;
+}
+
+static void TrackerAdd(RandoTracker *t, int room, int st) {
+  RandoTrackerArea *a = &t->area[TrackerAreaOf(room)];
+  a->total++, t->total++;
+  if (st == kLoc_Found)
+    a->found++, t->found++;
+  else if (st == kLoc_Reachable)
+    a->reachable++, t->reachable++;
+  else if (st == kLoc_Locked)
+    a->locked++, t->locked++;
+}
+
+// Which of its room's chests table entry k is. (Worked out once: the page
+// counts every location a few hundred times for its suggestions.)
+static int ChestOfRoom(int k) {
+  static uint8 nth[kMaxChests];
+  static bool done;
+  if (!done) {
+    for (int j = 0; j < kMaxChests && 3 * j + 2 < (int)kDungeonRoomChests_SIZE; j++) {
+      int room = WORD(kDungeonRoomChests[3 * j]) & 0x7fff;
+      for (int i = 0; i < j; i++)
+        nth[j] += (WORD(kDungeonRoomChests[3 * i]) & 0x7fff) == room;
+    }
+    done = true;
+  }
+  return k < kMaxChests ? nth[k] : 0;
+}
+
+// Every location of the file in save with the items in s: counted into t
+// (if given). Returns how many are found or reachable.
+static int TrackerCount(const uint8 *save, const State *s, RandoTracker *t) {
+  Ev e;
+  Evaluate(s, &e);
+  bool ap = save[kApSave_Marker] == kApMarker;
+  int open = 0;
+  for (int k = 0; 3 * k + 2 < (int)kDungeonRoomChests_SIZE; k++) {
+    if (!Rando_IsApLocation(k))
+      continue;
+    int room = WORD(kDungeonRoomChests[3 * k]) & 0x7fff;
+    // A room's chests are its entries of the table, in order; an opened one
+    // has its bit in the room's saved flags (OpenChestForItem).
+    bool found = ((save[room * 2] | save[room * 2 + 1] << 8) & (0x10 << ChestOfRoom(k))) != 0;
+    if (ap)
+      found |= (save[kApSave_Checked + k / 8] >> (k & 7)) & 1;
+    int st = LocationStatus(room, found, &e);
+    open += st == kLoc_Found || st == kLoc_Reachable;
+    if (t)
+      TrackerAdd(t, room, st);
+  }
+  for (int i = 0; i < kRando_NumSpecial; i++) {
+    int room = kSpecialLocations[i].room;
+    int st = LocationStatus(room, (save[kRandoDoneOffs] >> i) & 1, &e);
+    open += st == kLoc_Found || st == kLoc_Reachable;
+    if (t)
+      TrackerAdd(t, room, st);
+  }
+  return open;
+}
+
+bool Rando_Tracker(const uint8 *save, RandoTracker *t) {
+  memset(t, 0, sizeof(*t));
+  if (save[kRandoMarkerOffs] != kRandoMarker)
+    return false;
+  t->archipelago = save[kApSave_Marker] == kApMarker;
+  memcpy(&t->seed, save + kRandoSeedOffs, 4);
+  static const char *const kOverworlds[kArea_FirstDungeon] = { "Light World", "Death Mountain", "Dark World" };
+  t->nareas = kArea_FirstDungeon + (int)countof(kDungeons);
+  for (int i = 0; i < t->nareas; i++)
+    t->area[i].name = i < kArea_FirstDungeon ? kOverworlds[i] : kDungeons[i - kArea_FirstDungeon].name;
+  // The logic as the file was made with. (The placement sets the global
+  // itself before every use; it goes back anyway.)
+  int version_was = g_logic_version;
+  g_logic_version = save[kRandoVersionOffs];
+  State s;
+  StateFromSave(save, &s);
+  int base = TrackerCount(save, &s, t);
+  // Items that would open up more: one not found yet, or the next level of a
+  // progressive one; when no single one does, two of them together. Most
+  // new locations first.
+  static const struct { uint8 item, needs; const char *name; } kNext[] = {
+    {kI_FighterSword, 0xff, "Sword"}, {kI_MasterSword, kI_FighterSword, "Master Sword"},
+    {kI_Glove, 0xff, "Power Glove"}, {kI_Mitt, kI_Glove, "Titan's Mitt"},
+    {kI_Lamp, 0xff, "Lamp"}, {kI_Bow, 0xff, "Bow"}, {kI_Hookshot, 0xff, "Hookshot"}, {kI_Hammer, 0xff, "Hammer"},
+    {kI_Pearl, 0xff, "Moon Pearl"}, {kI_FireRod, 0xff, "Fire Rod"}, {kI_IceRod, 0xff, "Ice Rod"},
+    {kI_Somaria, 0xff, "Somaria"}, {kI_Cape, 0xff, "Cape"}, {kI_FighterShield, 0xff, "Shield"},
+  };
+  enum { kNone = countof(kNext) };
+  for (int pairs = 0; pairs < 2 && !t->nneeded; pairs++) {
+    for (int i = 0; i < kNone; i++) {
+      for (int j = pairs ? i + 1 : kNone; j <= kNone; j++) {
+        if (pairs && j == kNone)
+          break;
+        State more = s;
+        bool ok = true;
+        for (int k = 0; k < 2; k++) {
+          int x = k ? j : i;
+          if (x == kNone)
+            continue;
+          // (Not found yet; a next level only after the level before.)
+          ok &= !more.n[kNext[x].item] && (kNext[x].needs == 0xff || more.n[kNext[x].needs] ||
+                                           (k && kNext[i].item == kNext[x].needs));
+          more.n[kNext[x].item] = 1;
+        }
+        int gain = ok ? TrackerCount(save, &more, NULL) - base : 0;
+        if (gain <= 0)
+          continue;
+        int at = IntMin(t->nneeded, (int)countof(t->needed) - 1);
+        if (t->nneeded == (int)countof(t->needed) && t->needed[at].more >= gain)
+          continue;
+        t->nneeded = IntMin(t->nneeded + 1, (int)countof(t->needed));
+        for (; at > 0 && t->needed[at - 1].more < gain; at--)
+          t->needed[at] = t->needed[at - 1];
+        t->needed[at].name = kNext[i].name;
+        t->needed[at].name2 = j < kNone ? kNext[j].name : NULL;
+        t->needed[at].more = gain;
+      }
+    }
+  }
+  g_logic_version = version_was;
   return true;
 }

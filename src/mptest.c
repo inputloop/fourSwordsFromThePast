@@ -42,6 +42,8 @@
 //   expect_instances <n>  the players are spread over n worlds
 //   expect_same <p> <q> / expect_apart <p> <q>  players in the same / different worlds
 //   expect_module <n>   the game module of the viewed world (7 dungeon, 9 overworld, 14 menus and text)
+//   expect_tracker <p> <0|1> [found reachable [locked]]  local p sees the check tracker (after closing a map, tick);
+//                       the tracker's totals (prints them and the items that would open up more)
 //   expect_playing <p>  player p's world is in plain gameplay (not stuck in a transition)
 //   expect_running <p> <frames>  player p's world keeps running for that many frames
 //   expect_leader <p>   player p leads its world (the camera follows it)
@@ -1237,6 +1239,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
       Hd3d_FinishPanes();
       Inst_Switch(r);
+      // (The overlay's panes too, as the game sets them.)
+      UiView uv[2];
+      for (int v = 0; v < 2; v++)
+        uv[v] = (UiView){ v * width, 0, width, height, atoi(v ? arg3 : arg2) - 1, locals[v] };
+      Ui_SetViews(uv, 2);
       Ui_Draw((uint8 *)wide, width * 2 * 4, width * 2, height, 1);
       WritePpm(arg1, width * 2, height, wide, width * 2);
       free(wide);
@@ -2009,6 +2016,29 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       for (int i = 0; i < n; i++)
         printf(" %02x", g_ram[addr + i]);
       printf("\n");
+    } else if (!strcmp(cmd, "expect_tracker")) {
+      // expect_tracker <p> <0|1> [found reachable [locked]]: local player p
+      // sees the check tracker; its totals (of the confirmed save area)
+      int i = PlayerArg(arg1);
+      RandoTracker t;
+      bool ok = Rando_Tracker(Session_ConfirmedSaveArea(), &t);
+      printf("[frame %d] tracker of local %d: %s, %d/%d found, %d reachable, %d locked, next:", frame, i + 1,
+             Ui_TrackerShown(i) ? "shown" : "not shown", t.found, t.total, t.reachable, t.locked);
+      for (int k = 0; k < t.nneeded; k++)
+        printf(" %s%s%s +%d", t.needed[k].name, t.needed[k].name2 ? " + " : "",
+               t.needed[k].name2 ? t.needed[k].name2 : "", t.needed[k].more);
+      printf("\n");
+      if (Ui_TrackerShown(i) != (atoi(arg2) != 0)) {
+        printf("FAIL: tracker %s, expected %s at frame %d\n", Ui_TrackerShown(i) ? "shown" : "not shown",
+               atoi(arg2) ? "shown" : "not shown", frame);
+        g_failures++;
+      }
+      if (arg3[0] && (!ok || t.found != atoi(arg3) || t.reachable != atoi(arg4) ||
+                      (arg5[0] && t.locked != atoi(arg5)))) {
+        printf("FAIL: tracker counts %d %d %d, expected %s %s %s at frame %d\n", t.found, t.reachable, t.locked,
+               arg3, arg4, arg5[0] ? arg5 : "-", frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "expect_module")) {
       if (main_module_index != atoi(arg1)) {
         printf("FAIL: module %d, expected %s at frame %d\n", main_module_index, arg1, frame);

@@ -1,0 +1,179 @@
+# The check tracker: in a randomized file, closing the map (the map button,
+# X) shows a page of the checks; the map button puts it away again, and that
+# press doesn't open the map. The game goes on meanwhile (the page only
+# reads the save area), only that player's buttons don't reach it. A file
+# that isn't randomized gets no page.
+rando 40
+run 200
+newgame
+run 400
+# "Start from Link's house", then out of the door.
+hold 1 A
+run 4
+hold 1 -
+run 300
+hold 1 D
+run 200
+hold 1 -
+run 100
+expect_module 9
+tick 10
+# Nothing found yet; with no items Link's house, the sanctuary, the secret
+# passage, Kakariko well, Blind's hideout, Sahasrahla, Aginah, the mini
+# Moldorm and ice rod caves, the floodgate and the uncle's two items.
+expect_tracker 1 0 0 25 72
+# X: the mini map, X: the map, X: zoomed out, X: closed.
+hold 1 X
+tick 2
+hold 1 -
+tick 5
+hold 1 X
+tick 2
+hold 1 -
+tick 60
+expect_module 14
+expect_tracker 1 0
+hold 1 X
+tick 2
+hold 1 -
+tick 40
+hold 1 X
+tick 2
+hold 1 -
+tick 90
+expect_module 9
+expect_tracker 1 1 0 25 72
+shot tests/out/tracker.ppm
+# The game goes on (an enemy may still hit Link), but he doesn't walk.
+clearsprites
+hold 1 R
+tick 30
+hold 1 -
+expect_near 1 2232 2936
+expect_tracker 1 1
+# Found and reachable follow the save area: the chest in Link's house was
+# opened (room 104's flags). The Lamp and a glove get Link up Death
+# Mountain, but its chests need the Hookshot or the Hammer as well.
+poke f208 10
+poke f34a 1
+poke f354 1
+tick 2
+expect_tracker 1 1 1 24 72
+shot tests/out/tracker_items.ppm
+# X puts it away, and that press doesn't open the map again.
+hold 1 X
+tick 2
+expect_tracker 1 0
+tick 10
+hold 1 -
+tick 60
+expect_module 9
+expect_tracker 1 0
+# Now Link walks again.
+markpos 1
+hold 1 R
+tick 30
+hold 1 -
+expect_moved 1 east
+# Couch co-op: the page is the player's own, in its half of the screen;
+# the other player plays on.
+localjoin 2
+tick 30
+hold 2 X
+tick 2
+hold 2 -
+tick 5
+hold 2 X
+tick 2
+hold 2 -
+tick 60
+hold 2 X
+tick 2
+hold 2 -
+tick 40
+hold 2 X
+tick 2
+hold 2 -
+tick 90
+expect_tracker 2 1 1 24 72
+expect_tracker 1 0
+splitshot tests/out/tracker_split.ppm 1 2
+hold 2 B
+tick 2
+hold 2 -
+expect_tracker 2 0
+localleave 2
+tick 30
+# Archipelago files have the tracker too; their checks count as found.
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+pos 1 2500 8650
+hold 1 U
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 200
+srun 2
+expect_apchecked 89 1
+expect_tracker 1 0 1 24 72
+aproom off
+# A file that isn't randomized: the map closes, and that's it.
+load 2
+run 30
+tick 10
+expect_tracker 1 0
+hold 1 X
+tick 2
+hold 1 -
+tick 5
+hold 1 X
+tick 2
+hold 1 -
+tick 60
+expect_module 14
+hold 1 X
+tick 2
+hold 1 -
+tick 40
+hold 1 X
+tick 2
+hold 1 -
+tick 90
+expect_module 9
+expect_tracker 1 0
+# The dungeon map too (Eastern Palace): one X opens it, the next closes it.
+rando 40
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+enter c9
+run 200
+expect_module 7
+tick 10
+hold 1 X
+tick 2
+hold 1 -
+tick 5
+hold 1 X
+tick 2
+hold 1 -
+tick 80
+expect_module 14
+expect_tracker 1 0
+hold 1 X
+tick 2
+hold 1 -
+tick 80
+expect_module 7
+expect_tracker 1 1 0 25 72

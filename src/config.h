@@ -93,6 +93,7 @@ typedef struct Config {
   uint32 randomizer;  // for new games: 0 off, 1 random seed, else this seed
   bool four_swords_story;  // the opening legend tells the Four Swords story
   bool four_swords_title;  // "Four Swords of the Past" on the title screen
+  bool tracker_after_map;  // randomized files: the check tracker shows after closing a map
   bool full_inventory;  // new games start with every item (for testing)
   bool mp_use_upnp;
   int mp_input_delay;  // frames (online only)

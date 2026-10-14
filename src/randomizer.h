@@ -67,6 +67,29 @@ void Rando_GiveStartItems();
 // the order they can be collected, then every location. False on failure.
 bool Rando_WriteSpoiler(uint32 seed, const char *path);
 
+// The check tracker (the overlay's page after a map closes): the locations of
+// the randomized file in a save area (0x500 bytes from 7EF000), by area, as
+// found, reachable with the items the file has (the randomizer's own logic,
+// which is on the safe side) or locked. Locations in rooms the logic doesn't
+// know (only filler goes there) are neither reachable nor locked. Only reads
+// save. False for a file that isn't randomized.
+typedef struct RandoTrackerArea {
+  const char *name;
+  int total, found, reachable, locked;
+} RandoTrackerArea;
+typedef struct RandoTracker {
+  bool archipelago;
+  uint32 seed;
+  int total, found, reachable, locked;
+  int nareas;
+  RandoTrackerArea area[16];  // Light World, Death Mountain, Dark World, the dungeons
+  // Items (or the next level of one) that would make more reachable, the
+  // most first: how many more. When no single item would, pairs (name2).
+  int nneeded;
+  struct { const char *name, *name2; int more; } needed[8];
+} RandoTracker;
+bool Rando_Tracker(const uint8 *save, RandoTracker *t);
+
 // Tests: the logic for a set of items (count by item code): can a chest in
 // room be reached (1, 0, -1 for a room the logic doesn't know), and can the
 // game be finished.

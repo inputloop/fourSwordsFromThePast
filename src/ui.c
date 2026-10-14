@@ -253,6 +253,13 @@ static struct {
   uint8 minimap[kMpMaxPlayers];   // per player: the mini map is shown
   uint8 map_btn_held[kSessionMaxLocal];
   uint8 map_btn_eaten[kSessionMaxLocal];
+  // The check tracker, per local player: shown, how long the game's map has
+  // been open, the buttons as last seen, and buttons kept from the game
+  // until they are let go (the press that closed the tracker).
+  bool tracker[kSessionMaxLocal];
+  uint8 map_frames[kSessionMaxLocal];
+  uint16 tracker_prev[kSessionMaxLocal];
+  uint16 tracker_eaten[kSessionMaxLocal];
   uint16 last_fallback;
   // Controls screen
   int bind_player;
@@ -1114,6 +1121,12 @@ static void ScreenGameplay() {
         snprintf(g_ui.seed_note, sizeof(g_ui.seed_note), "Couldn't write %s", path);
     }
   }
+  // (This computer's own: the tracker only shows here.)
+  Item("Tracker after map", OnOff(g_config.tracker_after_map));
+  if (Act() != kAct_None) {
+    g_config.tracker_after_map = !g_config.tracker_after_map;
+    g_ui.dirty_settings = true;
+  }
   Item("Start new games with all items", OnOff(Session_GetFullInventory()));
   if (Act() != kAct_None && !client) {
     g_config.full_inventory = !g_config.full_inventory;
@@ -1416,7 +1429,55 @@ static void CycleMapButton(uint16 *local_inputs) {
   }
 }
 
+// The game's world or dungeon map (not the flute's: that one is for flying).
+static bool ViewIsGameMap(int p) {
+  uint8 m = Inst_PlayerViewModule(p), s = Inst_PlayerViewSubmodule(p);
+  return m == 14 && (s == 3 || s == 7);
+}
+
+// The check tracker: in a randomized or Archipelago file, a player who closes
+// the game's map gets a page of the checks; the map button (or A, B, Start)
+// puts it away. The game goes on meanwhile (it only reads the save area of
+// the confirmed frames): like the menu, it keeps that player's buttons from
+// the game, before they are sent. The press that closes it doesn't reach the
+// game either, so the map button goes round: mini map, map, tracker, nothing.
+static void UpdateTrackers(uint16 *local_inputs) {
+  const SessionStatus *st = Session_GetStatus();
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    int p = st->local_slot[i];
+    uint16 now = local_inputs[i], pressed = now & ~g_ui.tracker_prev[i];
+    g_ui.tracker_prev[i] = now;
+    if (p < 0 || p >= kMpMaxPlayers || (Ui_IsOpen() && i == g_ui.owner)) {
+      g_ui.tracker[i] = false;
+      g_ui.map_frames[i] = 0;
+      continue;
+    }
+    if (ViewIsGameMap(p)) {
+      if (g_ui.map_frames[i] < 255)
+        g_ui.map_frames[i]++;
+    } else {
+      // (A map open for a few frames only: online, a guess that a rollback
+      // took back.)
+      RandoTracker t;
+      if (g_ui.map_frames[i] >= 8 && g_config.tracker_after_map && Rando_Tracker(Session_ConfirmedSaveArea(), &t))
+        g_ui.tracker[i] = true;
+      g_ui.map_frames[i] = 0;
+    }
+    if (g_ui.tracker[i] && (pressed & 0x309)) {  // X, A, B, Start
+      g_ui.tracker[i] = false;
+      g_ui.tracker_eaten[i] |= pressed;
+    }
+    g_ui.tracker_eaten[i] &= now;
+    local_inputs[i] = g_ui.tracker[i] ? 0 : now & ~g_ui.tracker_eaten[i];
+  }
+}
+
+bool Ui_TrackerShown(int local_index) {
+  return local_index >= 0 && local_index < kSessionMaxLocal && g_ui.tracker[local_index];
+}
+
 void Ui_Update(uint16 *local_inputs, uint16 fallback) {
+  UpdateTrackers(local_inputs);
   CycleMapButton(local_inputs);
   // Back + Start on any controller toggles the menu.
   uint16 all = 0, pressed = 0;
@@ -2383,6 +2444,139 @@ static void DrawTextFit(int x, int y, const char *s, uint32 col, int max_w) {
   DrawText(x, y, buf, col);
 }
 
+// ---------------------------------------------------------------------------
+// Check tracker
+
+enum {
+  kTrkFound = 0xe8c050, kTrkReach = 0x58d058, kTrkLocked = 0xc84848, kTrkFiller = 0x686868,
+  kTrkEmpty = 0x282828,
+};
+
+// A bar split into found, reachable, locked and the rest (filler only).
+static void DrawTrackerBar(int x, int y, int w, int h, int total, int found, int reach, int locked) {
+  FillRect(x - 1, y - 1, w + 2, h + 2, 0x000000);
+  FillRect(x, y, w, h, total ? kTrkFiller : kTrkEmpty);
+  if (!total)
+    return;
+  int a = found * w / total, b = (found + reach) * w / total, c = (found + reach + locked) * w / total;
+  FillRect(x, y, a, h, kTrkFound);
+  FillRect(x + a, y, b - a, h, kTrkReach);
+  FillRect(x + b, y, c - b, h, kTrkLocked);
+}
+
+static void DrawRightText(int right, int y, const char *s, uint32 col) {
+  DrawText(right - TextWidth(s), y, s, col);
+}
+
+// Local player i's page, in view (its pane, or the whole picture). From the
+// save area of the confirmed frames: online it never flickers with guesses
+// that a rollback takes back.
+static void DrawTrackerPage(int i, const UiView *view) {
+  RandoTracker t;
+  if (!Rando_Tracker(Session_ConfirmedSaveArea(), &t))
+    return;
+  int p = Session_GetStatus()->local_slot[i];
+  int w = IntMin(view->w - 8, 248), h = IntMin(view->h - 8, 216);
+  int x = view->x + (view->w - w) / 2, y = view->y + (view->h - h) / 2;
+  ShadeRect(x, y, w, h);
+  ShadeRect(x, y, w, h);
+  FillRect(x, y, w, 1, 0xe0c060);
+  FillRect(x, y + h - 1, w, 1, 0xe0c060);
+  char buf[96];
+  // The title, whose page it is (in co-op) and which game.
+  DrawText(x + (w - TextWidth("CHECK TRACKER")) / 2, y + 5, "CHECK TRACKER", 0xf8d878);
+  if (Inst_NumJoined() > 1 && p >= 0) {
+    snprintf(buf, sizeof(buf), "P%d", p + 1);
+    DrawText(x + 8, y + 5, buf, Mp_PlayerColorRgb(p));
+  }
+  if (t.archipelago)
+    snprintf(buf, sizeof(buf), "AP");
+  else
+    snprintf(buf, sizeof(buf), "%08X", t.seed);
+  DrawRightText(x + w - 8, y + 5, buf, 0x8898b0);
+  // The totals, and a bar of everything.
+  snprintf(buf, sizeof(buf), "CHECKS %d/%d", t.found, t.total);
+  DrawText(x + 8, y + 18, buf, 0xffffff);
+  snprintf(buf, sizeof(buf), "%d REACHABLE NOW", t.reachable);
+  DrawRightText(x + w - 8, y + 18, buf, t.reachable ? kTrkReach : 0xa0a0a0);
+  DrawTrackerBar(x + 8, y + 28, w - 16, 4, t.total, t.found, t.reachable, t.locked);
+  // A line per area: its bar, found/total, reachable, locked.
+  int c_lock = x + w - 8, c_reach = c_lock - 22, c_found = c_reach - 22, bar_w = 34;
+  int bar_x = c_found - 34 - bar_w;
+  int row_h = 9, ry = y + 38;
+  for (int a = 0, row = 0; a < t.nareas; a++) {
+    const RandoTrackerArea *ar = &t.area[a];
+    if (!ar->total)
+      continue;  // (Agahnim's tower has only keys)
+    bool done = ar->found == ar->total;
+    if (row++ & 1)
+      FillRect(x + 4, ry - 1, w - 8, row_h, 0x14161c);
+    DrawTextFit(x + 8, ry, ar->name, done ? 0x9a8a58 : ar->reachable ? 0xffffff : 0xb0b0b0, bar_x - x - 12);
+    DrawTrackerBar(bar_x, ry + 1, bar_w, 5, ar->total, ar->found, ar->reachable, ar->locked);
+    snprintf(buf, sizeof(buf), "%d/%d", ar->found, ar->total);
+    DrawRightText(c_found, ry, buf, done ? kTrkFound : 0xd8d8d8);
+    snprintf(buf, sizeof(buf), "%d", ar->reachable);
+    DrawRightText(c_reach, ry, ar->reachable ? buf : "-", ar->reachable ? kTrkReach : 0x505050);
+    snprintf(buf, sizeof(buf), "%d", ar->locked);
+    DrawRightText(c_lock, ry, ar->locked ? buf : "-", ar->locked ? kTrkLocked : 0x505050);
+    ry += row_h;
+  }
+  // What would open up more, the colors and how to close it.
+  ry += 3;
+  if (t.nneeded) {
+    // As many as fit, whole.
+    snprintf(buf, sizeof(buf), "NEXT:");
+    for (int k = 0; k < t.nneeded; k++) {
+      char more[96];
+      snprintf(more, sizeof(more), "%s%s %s%s%s +%d", buf, k ? "," : "", t.needed[k].name,
+               t.needed[k].name2 ? " + " : "", t.needed[k].name2 ? t.needed[k].name2 : "", t.needed[k].more);
+      if (k && TextWidth(more) > w - 16)
+        break;
+      snprintf(buf, sizeof(buf), "%s", more);
+    }
+    DrawTextFit(x + 8, ry, buf, 0xf8d878, w - 16);
+  } else {
+    DrawText(x + 8, ry, t.locked ? "LOCKED ONES NEED MORE THAN TWO ITEMS" : "NOTHING LOCKED", 0xf8d878);
+  }
+  ry += 11;
+  // (Gray: rooms the logic doesn't know; only filler goes there.)
+  static const struct { const char *name; uint32 col; } kKey[] = {
+    {"FOUND", kTrkFound}, {"REACHABLE", kTrkReach}, {"LOCKED", kTrkLocked}, {"FILLER", kTrkFiller},
+  };
+  int kx = x + 8;
+  for (int k = 0; k < 4; k++) {
+    FillRect(kx - 1, ry, 7, 7, 0x000000);
+    FillRect(kx, ry + 1, 5, 5, kKey[k].col);
+    DrawText(kx + 8, ry, kKey[k].name, 0xb8c8f8);
+    kx += 8 + TextWidth(kKey[k].name) + 8;
+  }
+  ry += 10;
+  DrawText(x + 8, ry, "THE RANDOMIZER'S SAFE LOGIC", 0x8898b0);
+  DrawRightText(x + w - 8, ry, "X: CLOSE", 0xffffff);
+}
+
+// Each local player's tracker in its own pane (the whole picture with one).
+static void DrawTrackers() {
+  const SessionStatus *st = Session_GetStatus();
+  bool drawn[4] = { 0 };
+  for (int i = 0; i < kSessionMaxLocal; i++) {
+    if (!g_ui.tracker[i] || st->local_slot[i] < 0)
+      continue;
+    int v = g_nviews <= 1 ? 0 : -1;
+    for (int k = 0; k < g_nviews && v < 0; k++)
+      if (g_views[k].local == i)
+        v = k;
+    for (int k = 0; k < g_nviews && v < 0; k++)
+      if (g_views[k].player == st->local_slot[i])
+        v = k;
+    if (v < 0 || drawn[v])
+      continue;
+    drawn[v] = true;
+    UiView whole = { 0, 0, g_cv.width, g_cv.height, -1, -1 };
+    DrawTrackerPage(i, g_nviews > 1 ? &g_views[v] : &whole);
+  }
+}
+
 static void DrawMenu() {
   if (!Ui_IsOpen())
     return;
@@ -2436,6 +2630,7 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   if (g_nviews == 3)
     DrawTeamPanel(g_views[0].w, g_views[0].h, g_views[0].w, g_views[0].h);
   DrawCornerHud();
+  DrawTrackers();
   DrawNotifications();
   DrawApNotices();
   DrawMenu();
@@ -2491,6 +2686,7 @@ void Ui_SaveSettings() {
     fprintf(f, "%s = %d\n", kKeys[i].key, (g_config.features0 & kKeys[i].bit) != 0);
   fprintf(f, "FourSwordsStory = %d\n", g_config.four_swords_story);
   fprintf(f, "FourSwordsTitle = %d\n", g_config.four_swords_title);
+  fprintf(f, "TrackerAfterMap = %d\n", g_config.tracker_after_map);
   fprintf(f, "FullInventory = %d\n", g_config.full_inventory);
   // (This computer's own settings: a client's session shows the host's.)
   uint32 rando = g_config.randomizer;

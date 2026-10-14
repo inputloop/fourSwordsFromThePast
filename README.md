@@ -115,6 +115,18 @@ randomizer for save files created from then on (or set `Randomizer` in the
   seed new files will get. *Gameplay > Write spoiler log* writes
   `spoiler_<seed>.txt`: where the important items are, in the order they
   can be collected, and every location.
+- **Check tracker.** Open the map (the map button, X; the first press shows
+  the mini map, the next one the map) and close it again: a page shows how
+  many checks you found, how many you can reach right now and which are
+  still locked, for the Light World, Death Mountain, the Dark World and every
+  dungeon, plus the items that would open up more ("Next: Hookshot +8").
+  Press the map button again (or A, B, Start) to put it away. The game goes
+  on meanwhile (online too); only your Link stands still. "Reachable" is the
+  randomizer's own logic, which is on the safe side; gray checks are in
+  places the logic doesn't track (only filler goes there). In split screen
+  the page is in your own half. Turn it off with *Gameplay > Tracker after
+  map* (`TrackerAfterMap` in `zelda3.ini`). Files that aren't randomized
+  never show it.
 - In netplay the host's setting is used, and everybody plays the same seed.
 - `src/randomizer.c` has the location logic. `./zelda3 --mptest` with
   `randocheck <first seed> <count> [verbose]` checks seeds and prints spoilers.
@@ -278,6 +290,10 @@ and sent when you connect again, and your items arrive then.
   pendants and crystals, but also free heart pieces, boss heart containers
   and what people give you. The logic is the item randomizer's, without
   glitches.
+- The randomizer's **check tracker** works here too: close the map (X) to see
+  your checked locations, what you can reach with the items you have and
+  what is still locked, by area; X again puts it away. (It knows your own
+  game only: what other players can reach isn't on it.)
 - **Goal:** beat Ganon. Reaching the Triforce room tells the server you are
   done.
 

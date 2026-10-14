@@ -598,6 +598,8 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return ParseBool(value, &g_config.four_swords_story);
     } else if (StringEqualsNoCase(key, "FourSwordsTitle")) {
       return ParseBool(value, &g_config.four_swords_title);
+    } else if (StringEqualsNoCase(key, "TrackerAfterMap")) {
+      return ParseBool(value, &g_config.tracker_after_map);
     } else if (StringEqualsNoCase(key, "FullInventory")) {
       return ParseBool(value, &g_config.full_inventory);
     } else if (StringEqualsNoCase(key, "Randomizer")) {
@@ -667,6 +669,7 @@ void ParseConfigFile(const char *filename) {
   g_config.mp_input_delay = 2;
   g_config.four_swords_story = true;
   g_config.four_swords_title = true;
+  g_config.tracker_after_map = true;
   g_config.hd2d_depth_of_field = 60;
   g_config.hd2d_bloom = 40;
   g_config.hd2d_vignette = 45;

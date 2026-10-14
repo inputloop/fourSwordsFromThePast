@@ -34,6 +34,9 @@ int Ui_MenuController();
 int Ui_MenuOwner();
 void Ui_HandleText(const char *text);
 bool Ui_IsOpen();
+// Local player i is looking at the check tracker (shown after closing the
+// game's map in a randomized file; never pauses the game).
+bool Ui_TrackerShown(int local_index);
 // True when the game should not advance (menu open while playing alone).
 bool Ui_PausesGame();
 // The screens on the window (one, or one per pane of a split screen), in
