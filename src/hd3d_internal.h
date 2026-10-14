@@ -115,6 +115,7 @@ typedef struct Hd3dSpriteFrame {
   int8 leader;               // the player whose Link is in the regular entries
   int8 hide_player;          // first person: this player's Link and shadow are not drawn (-1)
   int8 xray_player;          // this player's Link gets a silhouette where hidden (-1)
+  uint16 weapon_ancillae;    // first person: the hidden player's sword sparkles (a bit per ancilla slot)
 } Hd3dSpriteFrame;
 
 void Hd3dSprites_Capture(Ppu *ppu, Hd3dSpriteFrame *out);  // the frame hook
@@ -122,7 +123,8 @@ void Hd3dSprites_ReadWorld(Hd3dSpriteFrame *out);          // phase A, after the
 // Phase B: cards (sprites standing on the scene) and shadow decals (quads on
 // the atlas texture). atlas: kHd3dAtlasW x kHd3dAtlasH indices; lut: 0
 // see-through, 1-128 cgram 0x80-0xFF, 129-176 the extra palette banks 1-3.
-int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, uint8 atlas_slot,
+// cam: the picture's camera (a first-person weapon is laid out in front of it).
+int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, const R3dCamera *cam, uint8 atlas_slot,
                       uint8 *atlas, uint32 *lut, R3dCard *cards, int max_cards,
                       R3dQuad *decals, int max_decals, int *num_decals);
 
@@ -132,6 +134,9 @@ void Hd3dInput_Tuning(Cam3dTuning *t);           // from g_hd3d
 int Hd3dInput_PaneLocal(int view);               // whose camera pane view uses (Hd3d_SetPanes)
 int Hd3dInput_PaneCount(void);
 void Hd3dInput_ResetAll(void);
+// First person: local's view turns to where its Link faces (RAM 0x2F) when
+// it looks more than 50 degrees away from that.
+void Hd3dInput_FaceLink(int local, int facing);
 
 // ---- hd3d.c: drawing ----
 bool Hd3d_LocalSees3D(int local);                // local's pane was drawn in 3D last frame (remap gate)

@@ -131,7 +131,7 @@
 //   expect_view <p> <0|1>  local p-1's View button is down
 //   expect_luma <x0> <y0> <x1> <y1> <min> <max>  draw view 0: average luma (0-255) of pixels x0..x1-1, y0..y1-1
 //   expect_mouse_captured <0|1>  Hd3d_WantsRelativeMouse
-//   expect_3dstats <min quads> <min cards>  draw view 0: at least that many quads and cards were drawn
+//   expect_3dstats <min quads> <min cards> [max cards]  draw view 0: at least that many quads and cards were drawn
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart), as the game's loop: the overlay, then the
@@ -2541,14 +2541,14 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         g_failures++;
       }
     } else if (!strcmp(cmd, "expect_3dstats")) {
-      // expect_3dstats <min quads> <min cards>: draws the viewed player's view
+      // expect_3dstats <min quads> <min cards> [max cards]: draws the viewed player's view
       DrawView(view, pixels, width, render_flags);
       int quads = 0, cards = 0;
       Hd3d_GetStats(0, &quads, &cards);
       printf("expect_3dstats: %d quads, %d cards (%s)\n", quads, cards, Hd3d_PaneIs3D(0) ? "3D" : Hd3d_LastWhy2D(0));
-      if (quads < atoi(arg1) || cards < atoi(arg2)) {
-        printf("FAIL: %d quads and %d cards drawn, expected at least %s and %s at frame %d\n", quads, cards, arg1, arg2,
-               frame);
+      if (quads < atoi(arg1) || cards < atoi(arg2) || (arg3[0] && cards > atoi(arg3))) {
+        printf("FAIL: %d quads and %d cards drawn, expected at least %s and %s%s%s at frame %d\n", quads, cards, arg1,
+               arg2, arg3[0] ? ", at most " : "", arg3, frame);
         g_failures++;
       }
     } else {

@@ -449,7 +449,10 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
   *Controls turn with camera* switches this off in third person. Link still
   faces and swings his sword in the game's four directions.
 - **First person.** The view is at Link's eye height and starts facing where
-  he faces. Your own Link is hidden; teammates, enemies and items are cards.
+  he faces. Your own Link is hidden, but not his sword: a swing, a spin
+  attack or an item in his hand sweeps across the bottom of the view.
+  Teammates, enemies and items are cards. After stairs to another floor, a
+  building's door or a fall, the view turns to where Link comes out facing.
   *First-person view* sets the field of view (50-90 degrees). In split
   screen a player in first person always gets a pane of their own.
 - **Third person.** *Camera returns* (on by default) eases the camera back to

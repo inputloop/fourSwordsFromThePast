@@ -1,6 +1,7 @@
 // The 3D view: which object drew which OAM entries, and sprites as cards
 // standing in the scene (see hd3d_internal.h).
 #include <SDL.h>
+#include <math.h>
 #include <string.h>
 #include "hd3d_internal.h"
 #include "zelda_rtl.h"
@@ -104,9 +105,10 @@ void Hd3dSprites_Capture(Ppu *ppu, Hd3dSpriteFrame *out) {
 }
 
 // Fills in the tags that still hold, the objects, the cameras and the
-// leader. hide_player and xray_player are left at -1: the caller sets them
-// afterwards (hd3d.c: the pane player in first person is hidden, and gets
-// the x-ray when its camera is turned, Cam3d_IsTurned).
+// leader. hide_player and xray_player are left at -1 and weapon_ancillae at
+// 0: the caller sets them afterwards (hd3d.c: the pane player in first
+// person is hidden, with his sword sparkles, and gets the x-ray when its
+// camera is turned, Cam3d_IsTurned).
 void Hd3dSprites_ReadWorld(Hd3dSpriteFrame *out) {
   int w = Inst_Current();
   const Hd3dTag *tags = g_hd3d_tagging && (unsigned)w < kInstMax ? g_hd3d_tags[w] : NULL;
@@ -159,6 +161,7 @@ void Hd3dSprites_ReadWorld(Hd3dSpriteFrame *out) {
   out->shaken_x = (int16)BG2HOFS_copy, out->shaken_y = (int16)BG2VOFS_copy;
   out->leader = (int8)g_mp.leader;
   out->hide_player = out->xray_player = -1;
+  out->weapon_ancillae = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +176,13 @@ enum {
   kSprMaxEntries = 128 + kPpuMaxExtraSpriteSets * kPpuMaxExtraSprites,
   kSprMaxCard = 256,          // a group bigger than this either way is left out
   kSprLutBanks = 129,         // lut index of extra palette bank 1, color 0
+  // A first-person weapon (SprWeaponCard).
+  kWpnMax = 64,               // its picture is cut to this many px either way
+  kWpnFine = 2,               // the turned picture has this many texels per picture px either way
+  kWpnScreenPx = 52,          // the picture's height is this many picture px (4.3 screen px each at 224 rows)
 };
+#define kWpnAhead 16.0f       // its hands: this far ahead of the eye
+#define kWpnBelow 11.0f       // and this far below it
 
 // How an entry finds its group.
 enum {
@@ -191,6 +200,7 @@ typedef struct SprEnt {
   int8 set;                  // -1 regular; else the extra set, whose tiles replace VRAM 0x4000-0x41FF
   uint8 kind, index, join;
   bool shadow;
+  bool weapon;               // the first-person player's weapon, or a sparkle of it
   int16 parent;              // union-find
   int16 next;                // the next entry of its group, in OAM order (-1: last)
 } SprEnt;
@@ -201,6 +211,7 @@ typedef struct SprGroup {
   uint8 kind, index;
   uint16 order;              // the lowest OAM order of its other (not shadow) entries
   uint8 prio;                // the OAM priority of that entry
+  bool weapon;
 } SprGroup;
 
 typedef struct SprShelf { int x, y, h; } SprShelf;
@@ -229,6 +240,17 @@ static bool SprTouch(const SprEnt *a, const SprEnt *b) {
 static bool SprIsShadow(uint16 oam1) {
   int c = oam1 & 0x1ff, pal = (oam1 >> 9) & 7;
   return (pal == 4 || pal == 5) && (c == 0x6c || c == 0x6e || c == 0x7e || c == 0x28 || c == 0x38);
+}
+
+// An entry of a Link that is his weapon: the sword or rod tiles (chars 5, 6,
+// 0x15, 0x16), the tiles of an item in his hand (9, 0xA, 0x19, 0x1A: the
+// bow, the hammer...) or the glint at the tip of his sword. (His body is
+// 0-4 and 0x10-0x14, the shield 7, 8, 0x17, 0x18; player_oam.c.)
+static bool SprIsWeapon(uint16 oam1) {
+  int c = oam1 & 0x1ff;
+  if (c < 0x20)
+    return (c & 0xf) == 5 || (c & 0xf) == 6 || (c & 0xf) == 9 || (c & 0xf) == 0xa;
+  return c == 0x2f || c == 0x3e || c == 0x3f;
 }
 
 static void BoxAdd(int b[4], int x0, int y0, int x1, int y1) {
@@ -261,14 +283,14 @@ static uint32 SprFetch(const Hd3dSpriteFrame *sf, int vaddr, const uint16 *tiles
   return sf->obj_vram[o] | (uint32)sf->obj_vram[o + 8] << 16;
 }
 
-// Draws entry e into the w x h picture at dst (atlas pitch), its top-left at
-// (dx, dy) there, only into pixels that are still 0 (the lower OAM order
-// wins, as on the video chip). dst NULL: only measures. bb gets the box of
-// the opaque pixels (picture-relative, x1 and y1 exclusive).
+// Draws entry e into the w x h picture at dst (pitch bytes a row), its
+// top-left at (dx, dy) there, only into pixels that are still 0 (the lower
+// OAM order wins, as on the video chip). dst NULL: only measures. bb gets
+// the box of the opaque pixels (picture-relative, x1 and y1 exclusive).
 // The same decoding as ppu_drawSpriteRow: name select, flips, the wrap within
 // 16x16 tile pages, extra sets' own Link tiles and palette banks.
-static void SprDrawEntry(const Hd3dSpriteFrame *sf, const SprEnt *e, uint8 *dst, int dx, int dy, int w, int h,
-                         int bb[4]) {
+static void SprDrawEntry(const Hd3dSpriteFrame *sf, const SprEnt *e, uint8 *dst, int pitch, int dx, int dy, int w,
+                         int h, int bb[4]) {
   int size = e->size, oam1 = e->oam1;
   int obj_adr = (oam1 & 0x100) ? sf->obj_adr2 : sf->obj_adr1;
   int pal = (oam1 >> 9) & 7;
@@ -292,20 +314,22 @@ static void SprDrawEntry(const Hd3dSpriteFrame *sf, const SprEnt *e, uint8 *dst,
         if (!pixel || (unsigned)x >= (unsigned)w)
           continue;
         BoxAdd(bb, x, y, x + 1, y + 1);
-        if (dst && !dst[y * kHd3dAtlasW + x])
-          dst[y * kHd3dAtlasW + x] = (uint8)(base + pixel);
+        if (dst && !dst[y * pitch + x])
+          dst[y * pitch + x] = (uint8)(base + pixel);
       }
     }
   }
 }
 
-// Draws a group's shadows or its other entries; box: their box in picture px.
+// Draws a group's shadows or its other entries into the atlas; box: their
+// box in picture px.
 static void SprDrawGroup(const Hd3dSpriteFrame *sf, const SprEnt *ents, const SprGroup *g, bool shadows,
                          const int box[4], uint8 *dst, int bb[4]) {
   bb[0] = bb[1] = bb[2] = bb[3] = 0;
   for (int i = g->first; i >= 0; i = ents[i].next)
     if (ents[i].shadow == shadows)
-      SprDrawEntry(sf, &ents[i], dst, ents[i].x - box[0], ents[i].y - box[1], box[2] - box[0], box[3] - box[1], bb);
+      SprDrawEntry(sf, &ents[i], dst, kHd3dAtlasW, ents[i].x - box[0], ents[i].y - box[1], box[2] - box[0],
+                   box[3] - box[1], bb);
 }
 
 // A place for a w x h picture in the atlas, with a clear 1 px border around it
@@ -337,7 +361,87 @@ static const Hd3dObject *SprFindObject(const Hd3dSpriteFrame *sf, int kind, int 
   return NULL;
 }
 
-int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, uint8 atlas_slot,
+// A first-person player's weapon (his Link is hidden, so it would never
+// show). It is drawn as if seen over his shoulder: the 2D picture around his
+// Link turned so that the way the camera looks is up, his middle (pivot, in
+// picture px) at his hands a little ahead of and below the eye, at a fixed
+// size. So a swing sweeps across the bottom of the view, and the sword held
+// out points ahead. Its sparkles are laid out the same way, so they stay on
+// it. It is a front card: never hidden by a wall right in front.
+// False: nothing to draw, or no room in the atlas (*dropped).
+static bool SprWeaponCard(const Hd3dSpriteFrame *sf, const SprEnt *ents, const SprGroup *g, const R3dCamera *cam,
+                          const float pivot[2], SprShelf *shelf, uint8 *atlas, uint8 atlas_slot, R3dCard *c,
+                          bool *dropped) {
+  static uint8 src[kWpnMax * kWpnMax];
+  *dropped = false;
+  // The picture as the 2D view has it (cut to kWpnMax px).
+  int sw = IntMin(g->box[2] - g->box[0], kWpnMax), sh = IntMin(g->box[3] - g->box[1], kWpnMax);
+  if (sw <= 0 || sh <= 0)
+    return false;
+  memset(src, 0, sizeof(src));
+  int bb[4] = { 0, 0, 0, 0 };
+  for (int i = g->first; i >= 0; i = ents[i].next)
+    if (!ents[i].shadow)
+      SprDrawEntry(sf, &ents[i], src, kWpnMax, ents[i].x - g->box[0], ents[i].y - g->box[1], sw, sh, bb);
+  if (bb[2] <= bb[0])
+    return false;
+  // Turned by the camera's heading: a picture offset (x, y) from the pivot
+  // shows at (x co + y si, y co - x si), the way it looks being up.
+  float co = cam->right[0], si = cam->right[1], len = sqrtf(co * co + si * si);
+  if (!(len > 1e-3f))
+    return false;
+  co /= len, si /= len;
+  float px = pivot[0] - (float)g->box[0], py = pivot[1] - (float)g->box[1];  // (in src)
+  float lo[2] = { 1e9f, 1e9f }, hi[2] = { -1e9f, -1e9f };
+  for (int k = 0; k < 4; k++) {
+    float ox = (float)bb[k & 1 ? 2 : 0] - px, oy = (float)bb[k & 2 ? 3 : 1] - py;
+    float tx = ox * co + oy * si, ty = oy * co - ox * si;
+    lo[0] = tx < lo[0] ? tx : lo[0], hi[0] = tx > hi[0] ? tx : hi[0];
+    lo[1] = ty < lo[1] ? ty : lo[1], hi[1] = ty > hi[1] ? ty : hi[1];
+  }
+  // The turned picture, kWpnFine texels per px (crisp edges at any angle).
+  int u0 = (int)floorf(lo[0] * kWpnFine), v0 = (int)floorf(lo[1] * kWpnFine);
+  int dw = (int)floorf(hi[0] * kWpnFine) + 1 - u0, dh = (int)floorf(hi[1] * kWpnFine) + 1 - v0;
+  int ax = 0, ay = 0;
+  uint8 *dst = SprAtlasAlloc(shelf, atlas, dw, dh, &ax, &ay);
+  if (!dst) {
+    *dropped = true;
+    return false;
+  }
+  int tb[4] = { 0, 0, 0, 0 };
+  for (int v = 0; v < dh; v++) {
+    float ty = ((float)(v0 + v) + 0.5f) * (1.0f / kWpnFine);
+    for (int u = 0; u < dw; u++) {
+      float tx = ((float)(u0 + u) + 0.5f) * (1.0f / kWpnFine);
+      float sx = px + tx * co - ty * si, sy = py + tx * si + ty * co;
+      if (!(sx >= 0.0f && sy >= 0.0f && sx < (float)sw && sy < (float)sh))
+        continue;
+      uint8 t = src[(int)sy * kWpnMax + (int)sx];
+      if (t) {
+        dst[v * kHd3dAtlasW + u] = t;
+        BoxAdd(tb, u, v, u + 1, v + 1);
+      }
+    }
+  }
+  if (tb[2] <= tb[0])
+    return false;
+  // Its hands: ahead along the camera's heading and below the eye. The
+  // picture's height decides the size, not the distance.
+  memset(c, 0, sizeof(*c));
+  c->foot[0] = cam->eye[0] + si * kWpnAhead;
+  c->foot[1] = cam->eye[1] - co * kWpnAhead;
+  c->foot[2] = cam->eye[2] - kWpnBelow;
+  c->atlas_x = (int16)(ax + tb[0]), c->atlas_y = (int16)(ay + tb[1]);
+  c->w = (int16)(tb[2] - tb[0]), c->h = (int16)(tb[3] - tb[1]);
+  c->foot_x = (int16)(-u0 - tb[0]), c->foot_y = (int16)(-v0 - tb[1]);
+  c->order = g->order;
+  c->tex = atlas_slot;
+  c->flags = kR3dCard_Front;
+  c->scale = 2.0f * cam->cy / (float)(kWpnScreenPx * kWpnFine);
+  return true;
+}
+
+int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, const R3dCamera *cam, uint8 atlas_slot,
                       uint8 *atlas, uint32 *lut, R3dCard *cards, int max_cards,
                       R3dQuad *decals, int max_decals, int *num_decals) {
   // The colors: 0 see-through, 1-128 cgram 0x80-0xFF, 129-176 the extra
@@ -414,17 +518,22 @@ int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, uint8 a
       }
       e->x = x + (unshaken ? sf->cam_x : sf->shaken_x);
       e->y = y + (unshaken ? sf->cam_y : sf->shaken_y) + 1;
+      // First person: the hidden Link's weapon and its sparkles are drawn on their own.
+      e->weapon = sf->hide_player >= 0 &&
+                  ((e->kind == kHd3dTag_Link && e->index == sf->hide_player && SprIsWeapon(oam1)) ||
+                   (e->kind == kHd3dTag_Ancilla && e->index < 16 && (sf->weapon_ancillae >> e->index & 1)));
       n++;
     }
   }
 
-  // Groups: an object's entries; touching untagged ones; each projectile alone.
+  // Groups: an object's entries (a hidden Link's weapon apart); touching
+  // untagged ones; each projectile alone.
   for (int i = 0; i < n; i++) {
     SprEnt *a = &ents[i];
     for (int j = 0; j < i; j++) {
       SprEnt *b = &ents[j];
       if (a->join == kJoin_Key && b->join == kJoin_Key) {
-        if (a->kind == b->kind && a->index == b->index && a->set == b->set) {
+        if (a->kind == b->kind && a->index == b->index && a->set == b->set && a->weapon == b->weapon) {
           SprUnion(ents, i, j);
           break;  // (that object's earlier entries are one group already)
         }
@@ -451,6 +560,7 @@ int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, uint8 a
       g->first = g->last = (int16)i;
       g->kind = e->kind, g->index = e->index;
       g->order = 0xffff;
+      g->weapon = e->weapon;
     } else {
       g = &groups[group_of[r]];
       ents[g->last].next = (int16)i;
@@ -475,12 +585,26 @@ int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, uint8 a
     Hd3dScene_GetInfo(scene, &info);
   SprShelf shelf = { 1, 1, 0 };
   int nc = 0, nd = 0, dropped = 0;
+  // The middle of the hidden Link's picture (his weapon turns around it).
+  const Hd3dObject *hidden = sf->hide_player >= 0 ? SprFindObject(sf, kHd3dTag_Link, sf->hide_player) : NULL;
+  float pivot[2] = { 0.0f, 0.0f };
+  if (hidden)
+    pivot[0] = (float)hidden->x, pivot[1] = (float)(hidden->y - 12 - hidden->z);
   for (int pass = 0; pass < 2; pass++) {
     for (int gi = 0; gi < ng; gi++) {
       const SprGroup *g = &groups[gi];
       bool link = g->kind == kHd3dTag_Link;
       if (link != (pass == 0))
         continue;
+      if (g->weapon) {
+        bool full = nc >= max_cards, drop = false;
+        if (hidden && cam && !full &&
+            SprWeaponCard(sf, ents, g, cam, pivot, &shelf, atlas, atlas_slot, &cards[nc], &drop))
+          nc++;
+        if (drop || (hidden && cam && full))
+          dropped++;
+        continue;
+      }
       if (link && g->index == sf->hide_player)
         continue;  // (first person: your own Link and his shadow)
       const Hd3dObject *obj = NULL;

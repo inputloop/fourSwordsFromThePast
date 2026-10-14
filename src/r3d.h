@@ -61,6 +61,7 @@ typedef struct R3dQuad {
 enum {
   kR3dCard_Link = 1,         // a Link: its hidden pixels show 3:2 when R3dFrame.see_through
   kR3dCard_XRay = 2,         // the pane player's own Link: a silhouette where hidden, when R3dFrame.xray
+  kR3dCard_Front = 4,        // a first-person weapon: drawn at R3dCard.scale over everything, after the other cards
 };
 
 // A sprite: a flat picture facing the camera, standing on its foot point,
@@ -74,6 +75,7 @@ typedef struct R3dCard {
   uint8 tex;
   uint8 flags;               // kR3dCard_*
   uint32 xray_rgb;
+  float scale;               // kR3dCard_Front: screen px per texel (0: the foot's scale, as any card)
 } R3dCard;
 
 typedef struct R3dLight {

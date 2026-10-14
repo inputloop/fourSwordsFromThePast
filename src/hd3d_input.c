@@ -167,6 +167,19 @@ int Hd3dInput_PaneCount(void) {
   return g_in.panes_set ? g_in.npanes : 1;
 }
 
+void Hd3dInput_FaceLink(int local, int facing) {
+  if (!ValidLocal(local) || !g_hd3d_cam[local].first_person)
+    return;
+  // RAM 0x2F: 0 up, 2 down, 4 left, 6 right (as Cam3d_SetFirstPerson).
+  static const float kFacingYaw[4] = { 0.0f, 180.0f, 270.0f, 90.0f };
+  Cam3d *c = &g_hd3d_cam[local];
+  float yaw = kFacingYaw[(facing >> 1) & 3];
+  if (fabsf(Wrap180(c->fp_yaw - yaw)) <= 50.0f)
+    return;
+  c->fp_yaw = yaw;
+  c->rate_yaw = 0.0f;
+}
+
 void Hd3dInput_ResetAll(void) {
   for (int i = 0; i < kHd3dMaxLocal; i++) {
     Cam3d_Reset(&g_hd3d_cam[i]);

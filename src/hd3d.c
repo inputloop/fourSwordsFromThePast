@@ -65,6 +65,7 @@ typedef struct Pane {
   bool drawn;                // drawn at least once (the clock runs)
   bool is3d;                 // the last picture was 3D
   bool had_2d;               // tick_2d is set
+  bool had_scene;            // info is the scene of the last 3D picture
   uint8 why;                 // kHd3dWhy_* of the last picture
   uint8 frame;               // its world's frame_counter at the last picture
   int inst;                  // the world it showed
@@ -502,6 +503,28 @@ static void ReadPose(Pane *p, int player, float dt, bool snap) {
   p->link[0] = bx, p->link[1] = by + (float)g, p->link[2] = (float)g;
 }
 
+static bool SameScene(const Hd3dSceneInfo *a, const Hd3dSceneInfo *b) {
+  return a->indoors == b->indoors && a->bg1_role == b->bg1_role && a->origin_x == b->origin_x &&
+         a->origin_y == b->origin_y && a->size == b->size;
+}
+
+// The ancillae that belong to player's sword: the arc of a swing, the spin
+// attack's sparkles, the sparkles while it charges and at its tip.
+static uint16 WeaponAncillae(int player) {
+  uint16 bits = 0;
+  for (int k = 0; k < 10; k++) {
+    uint8 t = ancilla_type[k];
+    if (t != 0x0d && t != 0x26 && t != 0x2a && t != 0x2b && t != 0x3b && t != 0x3c)
+      continue;
+    int owner = Mp_Active() ? g_mp.ancilla_owner[k] : g_mp.leader;
+    if (owner >= kMpMaxPlayers || !g_mp.p[owner].joined)
+      owner = g_mp.leader;  // (as Mp_PreAncilla)
+    if (owner == player)
+      bits |= (uint16)(1 << k);
+  }
+  return bits;
+}
+
 static void ReadScene(Pane *p, Hd3dScene *scene, float dt) {
   p->scene = scene;
   Hd3dScene_GetInfo(scene, &p->info);
@@ -555,16 +578,25 @@ static void ReadWorld(Pane *p, uint32 flags, int step, bool same_world, Hd3dScen
   Intersect(p->rect, reach);
 
   float dt = (float)step * (1.0f / 60.0f);
+  Hd3dSceneInfo before = p->info;
   ReadScene(p, scene, dt);
   Hd3dSprites_ReadWorld(p->sf);
+  int player = PanePlayer(local);
+  bool test = g_test_camera;
+  // First person back in 3D in another room after a stretch in 2D (stairs to
+  // another floor, a building's door, a fall): the view turns to where the
+  // Link faces, as on entering first person, unless it already looks about
+  // that way. (Not between overworld areas: a sideways walk keeps its view.)
+  if (p->had_scene && !p->is3d && !test && !SameScene(&before, &p->info) && (before.indoors || p->info.indoors))
+    Hd3dInput_FaceLink(local, *Mp_PlayerRam(player, 0x2F));  // link_direction_facing
+  p->had_scene = true;
   p->cam3d = g_hd3d_cam[local];
   Hd3dInput_Tuning(&p->tuning);
-  int player = PanePlayer(local);
   bool snap = !same_world || !p->is3d;
   ReadPose(p, player, dt, snap);
-  bool test = g_test_camera;
   p->sf->hide_player = (int8)(!test && p->cam3d.blend > 0.5f ? player : -1);
   p->sf->xray_player = (int8)(!test && Cam3d_IsTurned(&p->cam3d) ? player : -1);
+  p->sf->weapon_ancillae = p->sf->hide_player >= 0 ? WeaponAncillae(player) : 0;
   int br = ppu->brightness & 15;
   memset(p->bg_lut, 0, sizeof(p->bg_lut));
   for (int i = 0; i < 128; i++)
@@ -714,11 +746,6 @@ static void BlurRows(int y0, int y1, void *ctx) {
   }
 }
 
-static bool SameScene(const Hd3dSceneInfo *a, const Hd3dSceneInfo *b) {
-  return a->indoors == b->indoors && a->bg1_role == b->bg1_role && a->origin_x == b->origin_x &&
-         a->origin_y == b->origin_y && a->size == b->size;
-}
-
 static void FinishPane(Pane *p, int view) {
   bool test = g_test_camera;
   int w = p->w, h = p->h;
@@ -776,7 +803,7 @@ static void FinishPane(Pane *p, int view) {
     nq += IntMax(0, IntMin(n, kHd3dMaxQuads - nq));
   }
   int nd = 0;
-  int nc = Hd3dSprites_Build(p->sf, scene, kAtlasSlot, g_atlas, g_sprite_lut, g_cards, kHd3dMaxCards,
+  int nc = Hd3dSprites_Build(p->sf, scene, &f->cam, kAtlasSlot, g_atlas, g_sprite_lut, g_cards, kHd3dMaxCards,
                              g_quads + nq, IntMin(kHd3dMaxDecals, kHd3dMaxQuads - nq), &nd);
   nq += IntMax(0, IntMin(nd, IntMin(kHd3dMaxDecals, kHd3dMaxQuads - nq)));
   f->quads = g_quads, f->num_quads = nq;

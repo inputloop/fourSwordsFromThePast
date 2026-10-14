@@ -1,0 +1,119 @@
+# 3D view, first person. Your own Link is hidden, but not his sword: a
+# swing, the sword held out while it charges and a spin attack are drawn in
+# front of the camera, with their sparkles on the sword, also right in front
+# of a wall. After stairs to another floor the view turns to where the Link
+# comes out facing; through a building's door it stays as it was.
+view3d 1
+load 5
+drawrun 30
+clearsprites
+pos 1 2032 1640
+hold 1 D
+drawrun 6
+hold 1 -
+drawrun 2
+cam3d 1 fp 180 8
+drawrun 2
+# Standing still: nothing of the Link shows.
+expect_3dstats 100 0 0
+hold 1 B
+drawrun 4
+expect_3dstats 100 1
+drawrun 90
+# The sword held out, charged (a glint at its tip).
+expect_3dstats 100 1
+# In third person the sword is part of the Link card again.
+cam3d 1 tp 0 45
+expect_3dstats 100 1
+cam3d 1 fp 180 8
+hold 1 -
+drawrun 20
+expect_3dstats 100 1
+drawrun 60
+expect_3dstats 100 0 0
+# Turned away from where the Link faces: the swing is still drawn (to the side).
+cam3d 1 fp 250 8
+hold 1 B
+drawrun 6
+expect_3dstats 100 1
+hold 1 -
+drawrun 40
+# Right in front of a wall, in a dark cave lit by the Lamp.
+load 2
+drawrun 30
+poke f34a 1
+enter f0
+drawrun 200
+cam3d 1 fp 0 8
+drawrun 2
+expect_3dstats 100 0 0
+hold 1 B
+drawrun 8
+expect_3dstats 100 1
+hold 1 -
+drawrun 40
+# Player 2 on the same computer, in first person in a pane of their own
+# (drawn through the extra sprite sets): their sword shows too.
+load 5
+run 30
+localjoin 2
+tick 30
+clearsprites
+pos 1 2060 1640
+pos 2 2000 1640
+viewbutton 2
+expect_fp 2 1
+cam3d 2 fp 180 8
+tick 2
+view 2
+expect_3dstats 100 0 0
+hold 2 B
+tick 6
+expect_3dstats 100 1
+hold 2 -
+tick 40
+view 1
+# Spiral stairs to the floor above (Tower of Hera): the Link walks in facing
+# up and comes out facing down. The view turns with him.
+load 4
+drawrun 30
+enter 77
+drawrun 150
+clearsprites
+pos 1 3940 3940
+drawrun 2
+cam3d 1 fp 0 8
+drawrun 2
+hold 1 U
+drawrun 30
+hold 1 -
+expect_3d 0 module
+drawuntil 7 0 400
+drawrun 2
+expect_3d 1
+expect_cam3d 1 180 8 1
+# Looking back up the stairs then walking off: the view stays where it is put.
+cam3d 1 fp 20 8
+drawrun 30
+expect_cam3d 1 20 8 1
+# Into the Eastern Palace and out again: the view keeps looking the way the
+# Link walks (within 50 degrees of his facing it is left alone).
+load 2
+drawrun 30
+clearsprites
+cam3d 1 fp 30 8
+hold 1 U
+drawuntil 7 0 600
+hold 1 -
+drawrun 30
+expect_module 7
+expect_3d 1
+expect_cam3d 1 30 8 1
+cam3d 1 fp 170 8
+hold 1 U
+drawuntil 9 0 600
+hold 1 -
+drawrun 30
+expect_module 9
+expect_3d 1
+expect_cam3d 1 170 8 1

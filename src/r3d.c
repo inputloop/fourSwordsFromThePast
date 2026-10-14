@@ -1151,17 +1151,19 @@ static int PrepCards(R3dWork *w) {
     ToCamera(cam, src->foot, c);
     if (!(c[2] >= cam->znear) || (cam->zfar > 0 && c[2] > cam->zfar))
       continue;
-    float s = cam->ortho ? cam->focal : cam->focal / c[2];
-    float fx = cam->ortho ? cam->cx + cam->focal * c[0] : cam->cx + s * c[0];
+    // (A front card has its own scale, passes every depth test and sorts last.)
+    bool front = (src->flags & kR3dCard_Front) && src->scale > 0.0f;
+    float s = front ? src->scale : cam->ortho ? cam->focal : cam->focal / c[2];
+    float fx = cam->ortho ? cam->cx + cam->focal * c[0] : cam->cx + cam->focal / c[2] * c[0];
     float fy = cam->ortho ? cam->cy - cam->fy * c[1] : cam->cy - cam->fy * c[1] / c[2];
     if (!InRange(fx, 1e7f) || !InRange(fy, 1e7f) || !(s > 1e-4f && s < 1e4f))
       continue;
     PCard *pc = &w->cards[w->num_cards];
     pc->index = i;
-    pc->z = c[2];
+    pc->z = front ? 0.0f : c[2];
     float zt = c[2] - 2.0f;
     zt = zt > kMinNear * 0.5f ? zt : kMinNear * 0.5f;
-    pc->test = 1.0f / zt;
+    pc->test = front ? 1e30f : 1.0f / zt;
     pc->left = fx - (float)src->foot_x * s, pc->top = fy - (float)src->foot_y * s;
     pc->inv_s = 1.0f / s;
     float right = pc->left + (float)src->w * s, bottom = pc->top + (float)src->h * s;

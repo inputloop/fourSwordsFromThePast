@@ -326,8 +326,9 @@ static void RandomCard(R3dCard *c, const float center[3], const R3dCamera *cam) 
     c->foot_x = 32767, c->foot_y = -32768;
   c->order = (uint16)RandInt(0, 3);
   c->tex = (uint8)RandInt(0, 7);
-  c->flags = (uint8)RandInt(0, 3);
+  c->flags = (uint8)RandInt(0, 7);
   c->xray_rgb = Rand();
+  c->scale = (c->flags & kR3dCard_Front) ? Weird(RandF(0.25f, 8.0f)) : 0.0f;
 }
 
 typedef struct FuzzBuffers {
@@ -883,6 +884,15 @@ static void TestSemantics(void) {
   f.xray = false, f.see_through = true;
   R3d_Draw(work, &f, &T.t, NULL, &st);
   CHECK(Center(&T) == 0x990066, "see-through: %06x", Center(&T));
+  // A front card (a first-person weapon): over the wall, at its own scale (3 px a texel).
+  f.see_through = false;
+  cards[0].flags = kR3dCard_Front, cards[0].scale = 3.0f;
+  R3d_Draw(work, &f, &T.t, NULL, &st);
+  CHECK(Center(&T) == 0xff0000 && T.pixels[(h / 2 - 10) * w + w / 2 + 10] == 0xff0000 &&
+        T.pixels[(h / 2 - 14) * w + w / 2 + 14] == 0x0000ff && st.cards_drawn == 1,
+        "front card: %06x %06x %06x", Center(&T), T.pixels[(h / 2 - 10) * w + w / 2 + 10],
+        T.pixels[(h / 2 - 14) * w + w / 2 + 14]);
+  cards[0].flags = 0, cards[0].scale = 0.0f;
   // Light at the foot, at least card_min_light.
   f.see_through = false, f.num_quads = 1;
   f.ambient[0] = f.ambient[1] = f.ambient[2] = 0.25f;

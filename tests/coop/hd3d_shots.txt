@@ -1,6 +1,6 @@
 # 3D view screenshot checks (with the 2D-HD look): outdoors at Link's house
-# in third person, the Sanctuary in first person and a dark cave lit by the
-# Lamp. Each is compared with tests/baseline/<name>.ppm, made from your own
+# in third person, the Sanctuary in first person (also with the sword swung)
+# and a dark cave lit by the Lamp. Each is compared with tests/baseline/<name>.ppm, made from your own
 # ROM on the first run (never committed, and not written once a check has
 # failed); after an intended change to how the 3D view looks, refresh them
 # with ZELDA3_UPDATE_BASELINES=1 ./zelda3 --mptest tests/coop/hd3d_shots.txt.
@@ -21,6 +21,12 @@ cam3d 1 fp 0 4
 drawrun 2
 expect_3d 1
 expect_shot hd3d_sanctuary_fp 2 12
+# The sword swung in first person (in front of the camera).
+hold 1 B
+drawrun 6
+expect_shot hd3d_fp_sword 2 12
+hold 1 -
+drawrun 30
 cam3d 1 tp 0 45
 load 2
 drawrun 30
