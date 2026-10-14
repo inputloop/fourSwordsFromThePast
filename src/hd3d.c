@@ -94,6 +94,7 @@ typedef struct Pane {
   int32 live[4];             // the live rectangle (picture px: x0, y0, x1, y1)
   int shown_x0, shown_x1, shown_h;  // the same in the pane's columns and rows (the 2D picture blanks the rest)
   int32 rect[4], prev_rect[4];  // what each scene emits
+  int32 reach[4];            // where this world's camera can go (rect never leaves it)
   Cam3d cam3d;
   Cam3dTuning tuning;
   Cam3dPose pose;
@@ -576,6 +577,7 @@ static void ReadWorld(Pane *p, uint32 flags, int step, bool same_world, Hd3dScen
   Grow(p->rect, kHd3dFogMargin);
   memcpy(p->prev_rect, p->rect, sizeof(p->prev_rect));  // (a frozen scene clips it to its own)
   Intersect(p->rect, reach);
+  memcpy(p->reach, reach, sizeof(p->reach));
 
   float dt = (float)step * (1.0f / 60.0f);
   Hd3dSceneInfo before = p->info;
@@ -779,6 +781,21 @@ static void FinishPane(Pane *p, int view) {
   at->log2_w = 9, at->log2_h = 8;  // kHd3dAtlasW x kHd3dAtlasH
   at->subtract_from = 65;          // the game's darkness reaches OBJ palettes 4-7
 
+  // How far past the original screen the scene shows: a little at the
+  // classic view (the game runs nothing further out), more once the camera
+  // is turned or in first person, where the room's or area's own walls and
+  // ground are worth seeing although no enemy moves out there. (Before, tall
+  // things just past the screen stood as grey blocks of mist next to a
+  // turned camera, and the far walls of a room were lost in first person.)
+  float yaw = c->yaw - 360.0f * floorf((c->yaw + 180.0f) / 360.0f);  // (-180..180)
+  float turn = fabsf(yaw), tilt = fabsf(c->pitch - 45.0f);
+  float wide = test ? 0.0f : Clampf((((turn > tilt ? turn : tilt) - 4.0f) / 16.0f), 0.0f, 1.0f);
+  wide = b > wide ? b : wide;
+  int margin = kHd3dFogMargin + (int)(wide * (float)(kHd3dWideMargin - kHd3dFogMargin));
+  memcpy(p->rect, p->live, sizeof(p->rect));
+  Grow(p->rect, margin);
+  Intersect(p->rect, p->reach);
+
   Hd3dEmit e;
   memset(&e, 0, sizeof(e));
   e.cam = &f->cam, e.w = w, e.h = h;
@@ -828,7 +845,7 @@ static void FinishPane(Pane *p, int view) {
     f->fog_rgb = fog;
     f->live_x0 = (float)p->live[0], f->live_y0 = (float)p->live[1];
     f->live_x1 = (float)p->live[2], f->live_y1 = (float)p->live[3];
-    f->live_fog0 = 8.0f, f->live_fog1 = 72.0f;
+    f->live_fog0 = 8.0f + 88.0f * wide, f->live_fog1 = (float)margin;
     if (b > 0.01f)
       f->dist_fog0 = 160.0f / b, f->dist_fog1 = 320.0f / b;  // (first person: it comes in with the blend)
     if (p->ov_mode == 2 && b <= 0.0f)
@@ -938,7 +955,7 @@ bool Hd3d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int 
     shown[2] = shown[0] + w, shown[3] = shown[1] + h;
     ReachRect(reach, shown, h);
     memcpy(decode, shown, sizeof(decode));
-    Grow(decode, kHd3dFogMargin);
+    Grow(decode, kHd3dWideMargin);
     Intersect(decode, reach);
     decode[1] -= kHd3dMaxRelief;
     why = kHd3dWhy_Room;

@@ -524,7 +524,7 @@ static void DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags
   UiView uv[4];
   for (int v = 0; v < n; v++)
     uv[v] = (UiView){ n > 1 ? (v & 1) * width : 0, n > 1 ? (v >> 1) * height : 0, width, height,
-                      pane_local[v] >= 0 ? Ui_WatchedPlayer(pane_local[v]) : -1 };
+                      pane_local[v] >= 0 ? Ui_WatchedPlayer(pane_local[v]) : -1, pane_local[v] };
   Ui_SetViews(uv, n);
   int home = Inst_Current();
   if (n == 1) {
@@ -770,7 +770,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         for (size_t i = px; i < px + guard; i++)
           buf[i] = 0xdeadbeef;
         g_mp_local_mask = 1 << view;
-        Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+        Ui_SetViews(&(UiView){ 0, 0, width, height, view, LocalOfPlayer(view) }, 1);
         UsePane(view);
         Hd2d_DrawFrame((uint8 *)buf, width * scale * 4, render_flags, 0);
         Ui_Draw((uint8 *)buf, width * scale * 4, width * scale, height * scale, scale);
@@ -795,7 +795,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       Inst_Switch(home);
     } else if (!strcmp(cmd, "shot")) {
       g_mp_local_mask = 1 << view;
-      Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+      Ui_SetViews(&(UiView){ 0, 0, width, height, view, LocalOfPlayer(view) }, 1);
       UsePane(view);
       Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
@@ -818,7 +818,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // makes them. On a mismatch tests/out/<name>.ppm and <name>_diff.ppm
       // (changed pixels in red) show what changed.
       g_mp_local_mask = 1 << view;
-      Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+      Ui_SetViews(&(UiView){ 0, 0, width, height, view, LocalOfPlayer(view) }, 1);
       UsePane(view);
       Hd2d_DrawFrame((uint8 *)pixels, width * 4, render_flags, 0);
       Ui_Draw((uint8 *)pixels, width * 4, width, height, 1);
@@ -1134,7 +1134,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Inst_Switch(Inst_ViewOfPlayer(ps[v]));
         uint32 *dst = quad + (v & 1) * width + (v >> 1) * height * width * 2;
         Hd2d_DrawFrame((uint8 *)dst, width * 2 * 4, render_flags & ~kPpuRenderFlags_4x4Mode7, v);
-        uv[v] = (UiView){ (v & 1) * width, (v >> 1) * height, width, height, ps[v] };
+        uv[v] = (UiView){ (v & 1) * width, (v >> 1) * height, width, height, ps[v], locals[v] };
         g_mp_local_mask |= 1 << ps[v];
       }
       Hd3d_FinishPanes();
@@ -2433,7 +2433,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           buf[k] = 0xdeadbeef;
         uint32 *pane = buf + 2 * pitch + w;
         g_mp_local_mask = 1 << view;
-        Ui_SetViews(&(UiView){ 0, 0, width, height, view }, 1);
+        Ui_SetViews(&(UiView){ 0, 0, width, height, view, LocalOfPlayer(view) }, 1);
         int8 local = (int8)LocalOfPlayer(view);
         Hd3d_SetPanes(&local, 1);
         Hd3d_BeginPanes(true);

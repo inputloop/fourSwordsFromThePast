@@ -22,6 +22,7 @@ enum {
   kHd3dPitDepth = 32,        // the deepest painted pit, below its rim
   kHd3dFarPlane = -96,       // a parallax room's far BG1
   kHd3dFogMargin = 72,       // geometry is kept this far beyond the original screen (fading out)
+  kHd3dWideMargin = 200,     // ... and this far once the camera is turned or in first person
   kHd3dMaxRelief = 64,       // the highest surface: picture rows this far above the screen can show
   kHd3dBandMax = 8,          // the widest dungeon wall band, in 8 px cells
   kHd3dMaxLinks = 4,         // players (kMpMaxPlayers)

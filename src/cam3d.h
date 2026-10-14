@@ -24,6 +24,7 @@ typedef struct Cam3d {
 typedef struct Cam3dRemap {
   float latched_yaw;         // third person: the yaw when a direction was first pressed
   bool latched;
+  bool latched_fp;           // the latch is first person's (the live view steers)
   int8 sector;               // the last of the 8 directions picked (-1: none)
   uint16 last_dirs;          // the raw direction bits it was picked for
 } Cam3dRemap;

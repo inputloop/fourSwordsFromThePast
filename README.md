@@ -453,7 +453,9 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
   he faces. Your own Link is hidden, but not his sword: a swing, a spin
   attack or an item in his hand sweeps across the bottom of the view.
   Teammates, enemies and items are cards. After stairs to another floor, a
-  building's door or a fall, the view turns to where Link comes out facing.
+  building's door or a fall, the view turns to where Link comes out facing
+  (unless it already looks about that way). Indoors the walls stand tall
+  around you, and pots, statues and chests are standing pictures.
   *First-person view* sets the field of view (50-90 degrees). In split
   screen a player in first person always gets a pane of their own.
 - **Third person.** *Camera returns* (on by default) eases the camera back to
@@ -483,11 +485,15 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
   (measured on a 4-core 2.1 GHz machine; with the 2D-HD look on, about 1 ms
   more than the 2D-HD look alone). It all runs on the CPU, so it works with
   every output method.
-- **Known limits (beta).** Heights are worked out from the tiles, so some
-  spots look odd: cliffs are blocks, stairs and ledges are flat, diagonal
-  walls are steps, and the far side of a turned wall shows what the art
-  drew there. Rooms whose floor or water moves, and a few boss rooms, stay
-  2D.
+- **Heights.** They are worked out from the tiles. Outdoors the ground
+  steps up in terraces at its ledges, so a ledge you can jump off is a drop
+  you see over, not a wall. Trees and houses stand tall, and treetops, cave
+  mouths and doorways that Link walks under are raised over his head where
+  the art allows.
+- **Known limits (beta).** Some spots still look odd: cliffs are blocks,
+  stairs are flat, diagonal walls are steps in third person, and the far
+  side of a turned wall shows what the art drew there. Rooms whose floor or
+  water moves, and a few boss rooms, stay 2D.
 
 The code is in `src/hd3d*.c` (scene, sprites, camera input, drawing),
 `src/r3d.c` (the software rasterizer) and `src/cam3d.c` (the camera and

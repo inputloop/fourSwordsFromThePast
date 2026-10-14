@@ -1,0 +1,61 @@
+# 3D view, first person: the view starts where it should. Switching to
+# first person while walking keeps the Link walking the same way (the d-pad
+# is not turned under a held direction until it is let go). Turning the 3D
+# view off and on again in first person looks the way the Link now faces.
+# Straight stairs to another floor turn the view to where the Link comes
+# out facing.
+load 2
+run 30
+view3d 1
+drawtick 1
+tick 3
+clearsprites
+# Walking south, then a left click: still walking south.
+hold 1 D
+tick 20
+markpos 1
+click left
+tick 30
+expect_fp 1 1
+expect_cam3d 1 180 8
+expect_moved 1 south
+# Let go, then down again: now the d-pad turns with the view, and down
+# walks back from where it looks (north).
+hold 1 -
+tick 2
+hold 1 D
+markpos 1
+tick 20
+expect_moved 1 north
+hold 1 -
+tick 2
+# Off, a walk south in 2D, on again: first person looks south.
+cam3d 1 fp 90 8
+tick 3
+view3d 0
+hold 1 D
+tick 20
+hold 1 -
+tick 2
+view3d 1
+tick 3
+expect_fp 1 1
+expect_3d 1
+expect_cam3d 1 180 8
+# Straight stairs from room 0x0c to another floor (room 0x6b): the Link
+# walks in facing up and comes out facing down.
+view3d 1
+load 2
+drawrun 30
+enter c
+drawrun 150
+clearsprites
+cam3d 1 fp 0 8
+drawrun 2
+hold 1 U
+drawuntil 7 e 600
+drawuntil 7 0 600
+hold 1 -
+drawrun 10
+expect_cam3d 1 180 8 5
+expect_3d 1

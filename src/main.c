@@ -633,7 +633,7 @@ int main(int argc, char** argv) {
       case SDL_MOUSEWHEEL:
         if (SDL_GetModState() & KMOD_CTRL && event.wheel.y != 0)
           ChangeWindowScale(event.wheel.y > 0 ? 1 : -1);
-        else if (event.wheel.which != SDL_TOUCH_MOUSEID)
+        else if (event.wheel.which != SDL_TOUCH_MOUSEID && !g_paused)
           Hd3d_OnMouseWheel(event.wheel.y);  // (the 3D view's zoom)
         break;
       case SDL_MOUSEBUTTONDOWN:
@@ -650,7 +650,9 @@ int main(int argc, char** argv) {
                            SDL_GetModState(), event.button.which == SDL_TOUCH_MOUSEID);
         break;
       case SDL_MOUSEMOTION:
-        if (event.motion.which != SDL_TOUCH_MOUSEID)
+        // (Only while the 3D view has the mouse: moves of the free cursor,
+        // during a pause say, would all turn the camera at once later.)
+        if (event.motion.which != SDL_TOUCH_MOUSEID && relative_mouse)
           Hd3d_OnMouseMotion(event.motion.xrel, event.motion.yrel);
         break;
       case SDL_WINDOWEVENT:

@@ -325,10 +325,12 @@ uint16 Hd3d_RemapLocal(int local, int player, uint16 input) {
   SyncFirstPerson(cl);
   const Cam3d *c = &g_hd3d_cam[cl];
   uint8 m = Inst_PlayerViewModule(player), s = Inst_PlayerViewSubmodule(player);
-  // Only where the camera was really seen in 3D, while walking around (not
-  // in menus, text boxes or transitions), and in third person only with
-  // "Controls turn with camera".
-  if (!Hd3d_LocalSees3D(cl) || !(m == 7 || m == 9 || m == 11) || s != 0 ||
+  // Only in the world's own modules (not in menus or text boxes), where the
+  // camera was really seen in 3D while walking around, and in third person
+  // only with "Controls turn with camera". (Through the game's own scrolls
+  // and transitions it keeps turning: they ignore the d-pad until their last
+  // frame, whose word the game then plays on the first frame of plain play.)
+  if (!(m == 7 || m == 9 || m == 11) || (s == 0 && !Hd3d_LocalSees3D(cl)) ||
       !(c->first_person || g_hd3d.turn_controls)) {
     Cam3d_RemapReset(r);
     return input;
@@ -438,6 +440,10 @@ void Hd3d_ResetCamera(int local) {
 void Hd3d_SetEnabled(bool on) {
   g_hd3d.enabled = on;
   g_hd3d_tagging = on;
+  // (First person is entered again when 3D comes back, facing where Link
+  // faces then: fp_wanted is kept.)
+  for (int i = 0; i < kHd3dMaxLocal && !on; i++)
+    Cam3d_SetFirstPerson(&g_hd3d_cam[i], false, 0);
 }
 
 // --- (Tests) ---

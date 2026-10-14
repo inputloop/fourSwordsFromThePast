@@ -231,28 +231,37 @@ static void RandomCamera(R3dCamera *c, int w, int h, const float center[3]) {
   float zfar = RandInt(0, 2) ? 0.0f : RandF(1.0f, 5000.0f);
   if (mode <= 3) {
     // Third person around the scene.
-    OrbitCamera(c, center, yaw, RandF(20.0f, 89.0f), RandF(50.0f, 2000.0f), RandF(50.0f, 2000.0f), stretch, w, h,
-                znear, zfar);
+    // (Each draw in its own statement: the order of a call's arguments is
+    // up to the compiler, and the frames must be the same everywhere.)
+    float opitch = RandF(20.0f, 89.0f), odist = RandF(50.0f, 2000.0f), ofocal = RandF(50.0f, 2000.0f);
+    OrbitCamera(c, center, yaw, opitch, odist, ofocal, stretch, w, h, znear, zfar);
     c->cx = cx, c->cy = cy;
   } else if (mode <= 6) {
     // An eye inside the geometry, looking anywhere.
-    float eye[3] = { center[0] + RandF(-64.0f, 64.0f), center[1] + RandF(-64.0f, 64.0f),
-                     center[2] + RandF(-20.0f, 40.0f) };
+    float eye[3];
+    eye[0] = center[0] + RandF(-64.0f, 64.0f);
+    eye[1] = center[1] + RandF(-64.0f, 64.0f);
+    eye[2] = center[2] + RandF(-20.0f, 40.0f);
     LookCamera(c, eye, yaw, pitch, RandF(20.0f, 600.0f), stretch, cx, cy, znear, zfar);
   } else if (mode <= 8) {
     ObliqueCamera(c, center[0] - (float)w * 0.5f, center[1] - (float)h * 0.5f, w, h, RandF(-200.0f, 5000.0f));
     if (RandInt(0, 1))
       c->focal = RandF(0.25f, 4.0f), c->cx = cx, c->cy = cy;
   } else {
-    float eye[3] = { RandF(-1e5f, 1e5f), RandF(-1e5f, 1e5f), RandF(-1e5f, 1e5f) };
+    float eye[3];
+    eye[0] = RandF(-1e5f, 1e5f);
+    eye[1] = RandF(-1e5f, 1e5f);
+    eye[2] = RandF(-1e5f, 1e5f);
     LookCamera(c, eye, yaw, pitch, RandF(0.01f, 1e6f), stretch, cx, cy, znear, zfar);
     c->ortho = RandInt(0, 1);
   }
   // Now and then a broken value anywhere.
   float *fields[] = { &c->eye[0], &c->eye[2], &c->right[0], &c->up[1], &c->fwd[2], &c->focal, &c->stretch_y,
                       &c->cx, &c->cy, &c->znear, &c->zfar };
-  if (RandInt(0, 9) == 0)
-    *fields[RandInt(0, 10)] = Weird(FloatBits(0x7fc00000));
+  if (RandInt(0, 9) == 0) {
+    int k = RandInt(0, 10);  // (before Weird, which draws too)
+    *fields[k] = Weird(FloatBits(0x7fc00000));
+  }
 }
 
 static void RandomVertex(R3dVertex *v, const float center[3], float radius) {
@@ -270,10 +279,11 @@ static void RandomQuad(R3dQuad *q, const float center[3]) {
     // A cell of a room near the center: a top or a face.
     float x = center[0] + (float)(RandInt(-12, 12) * 8), y = center[1] + (float)(RandInt(-12, 12) * 8);
     float z = (float)(RandInt(-2, 6) * 8);
-    if (RandInt(0, 1))
-      FloorQuad(q, x, y, x + 8.0f * (float)RandInt(1, 4), y + 8.0f, z, (uint8)RandInt(0, 7), 0);
+    int floor = RandInt(0, 1), len = RandInt(1, 4), tex = RandInt(0, 7);
+    if (floor)
+      FloorQuad(q, x, y, x + 8.0f * (float)len, y + 8.0f, z, (uint8)tex, 0);
     else
-      SouthFace(q, x, x + 8.0f, y, z - 8.0f * (float)RandInt(1, 4), z, (uint8)RandInt(0, 7), 0);
+      SouthFace(q, x, x + 8.0f, y, z - 8.0f * (float)len, z, (uint8)tex, 0);
   } else {
     float radius = kind <= 6 ? 200.0f : kind == 7 ? 30000.0f : 20.0f;
     for (int k = 0; k < 4; k++)
@@ -308,8 +318,10 @@ static void RandomCard(R3dCard *c, const float center[3], const R3dCamera *cam) 
     c->foot[i] = center[i] + RandF(-150.0f, 150.0f);
   if (kind == 0) {
     // Behind the camera.
-    for (int i = 0; i < 3; i++)
-      c->foot[i] = cam->eye[i] - cam->fwd[i] * RandF(0.0f, 300.0f) + RandF(-5.0f, 5.0f);
+    for (int i = 0; i < 3; i++) {
+      float along = RandF(0.0f, 300.0f), jitter = RandF(-5.0f, 5.0f);
+      c->foot[i] = cam->eye[i] - cam->fwd[i] * along + jitter;
+    }
   } else if (kind == 1) {
     for (int i = 0; i < 3; i++)
       c->foot[i] = Weird(RandF(-30000.0f, 30000.0f));
@@ -405,14 +417,18 @@ static void TestFuzz(void) {
       w = kR3dMaxW + RandInt(1, 40);  // (wider than allowed: only kR3dMaxW columns are drawn)
     R3dWork *work = works[iter % 13 == 0];
     // The scene.
-    float center[3] = { RandF(-1000.0f, 5000.0f), RandF(-1000.0f, 5000.0f), RandF(-50.0f, 50.0f) };
+    float center[3];
+    center[0] = RandF(-1000.0f, 5000.0f);
+    center[1] = RandF(-1000.0f, 5000.0f);
+    center[2] = RandF(-50.0f, 50.0f);
     if (iter % 7 == 0)
       center[0] = RandF(-30000.0f, 30000.0f), center[1] = RandF(-30000.0f, 30000.0f);
     R3dFrame f;
     DefaultFrame(&f, w, h);
     RandomCamera(&f.cam, w, h, center);
     for (int i = 0; i < kR3dMaxTextures; i++) {
-      MakeTexture(&tt[i], &f.tex[i], RandInt(0, 9), RandInt(0, 9), RandInt(0, 50));
+      int lw = RandInt(0, 9), lh = RandInt(0, 9), zp = RandInt(0, 50);
+      MakeTexture(&tt[i], &f.tex[i], lw, lh, zp);
       f.tex[i].origin_x = RandInt(0, 3) ? 0 : (int32)Rand();
       f.tex[i].origin_y = RandInt(0, 3) ? 0 : (int32)Rand();
       static const uint8 kFrom[] = { 0, 65, 255, 1, 200 };
@@ -646,7 +662,10 @@ static void TestWatertight(void) {
     R3dFrame f;
     DefaultFrame(&f, w, h);
     float mid = (float)kN * cell * 0.5f;
-    float target[3] = { mid + RandF(-20.0f, 20.0f), mid + RandF(-20.0f, 20.0f), 0 };
+    float target[3];
+    target[0] = mid + RandF(-20.0f, 20.0f);
+    target[1] = mid + RandF(-20.0f, 20.0f);
+    target[2] = 0;
     // Steep enough that the mesh fills the picture; the last ones put the eye
     // a few px over it, so the near plane cuts the quads at the bottom (with
     // the horizon in view, so some of the mesh lies beyond the near plane).
@@ -654,7 +673,8 @@ static void TestWatertight(void) {
     float pitch = low ? RandF(5.0f, 25.0f) : RandF(40.0f, 89.0f);
     float dist = low ? RandF(0.5f, 2.5f) : RandF(150.0f, 400.0f) * cell / 8.0f;
     float focal = low ? RandF(100.0f, 200.0f) : RandF(150.0f, 600.0f);
-    OrbitCamera(&f.cam, target, RandF(-180.0f, 180.0f), pitch, dist, focal, RandInt(0, 1) ? kSqrt2 : 1.0f, w, h,
+    float yaw = RandF(-180.0f, 180.0f), stretch = RandInt(0, 1) ? kSqrt2 : 1.0f;
+    OrbitCamera(&f.cam, target, yaw, pitch, dist, focal, stretch, w, h,
                 low ? 2.0f : 8.0f, 0.0f);
     f.quads = quads, f.num_quads = n;
     R3dStats stats;
@@ -916,17 +936,23 @@ static void TestProject(void) {
   int fails = 0;
   for (int iter = 0; iter < 20000; iter++) {
     R3dCamera c;
-    float target[3] = { RandF(0.0f, 4096.0f), RandF(0.0f, 4096.0f), RandF(-16.0f, 16.0f) };
+    float target[3];
+    target[0] = RandF(0.0f, 4096.0f);
+    target[1] = RandF(0.0f, 4096.0f);
+    target[2] = RandF(-16.0f, 16.0f);
     int w = RandInt(64, 448), h = RandInt(64, 240);
     if (iter % 5 == 4) {
       ObliqueCamera(&c, target[0], target[1], w, h, RandF(0.0f, 500.0f));
       c.focal = RandF(0.5f, 3.0f);
     } else {
-      OrbitCamera(&c, target, RandF(-180.0f, 180.0f), RandF(-89.0f, 89.0f), RandF(20.0f, 900.0f), RandF(100.0f, 900.0f),
-                  RandF(1.0f, 1.5f), w, h, RandF(1.0f, 8.0f), 0.0f);
+      float yaw = RandF(-180.0f, 180.0f), pitch = RandF(-89.0f, 89.0f), dist = RandF(20.0f, 900.0f);
+      float focal = RandF(100.0f, 900.0f), stretch = RandF(1.0f, 1.5f), znear = RandF(1.0f, 8.0f);
+      OrbitCamera(&c, target, yaw, pitch, dist, focal, stretch, w, h, znear, 0.0f);
     }
-    float p[3] = { target[0] + RandF(-300.0f, 300.0f), target[1] + RandF(-300.0f, 300.0f),
-                   target[2] + RandF(-64.0f, 64.0f) };
+    float p[3];
+    p[0] = target[0] + RandF(-300.0f, 300.0f);
+    p[1] = target[1] + RandF(-300.0f, 300.0f);
+    p[2] = target[2] + RandF(-64.0f, 64.0f);
     float sx, sy, depth;
     bool front = R3d_Project(&c, p, &sx, &sy, &depth);
     float d[3] = { p[0] - c.eye[0], p[1] - c.eye[1], p[2] - c.eye[2] };

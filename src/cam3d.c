@@ -367,11 +367,13 @@ uint16 Cam3d_Remap(Cam3dRemap *r, const Cam3d *c, uint16 input, float move_x, fl
     return input;
   }
   float yaw;
-  if (c->first_person) {
+  if (c->first_person && (!r->latched || r->latched_fp)) {
     // The live view. It is also latched, so leaving first person while
-    // walking keeps walking that way until the d-pad is let go.
+    // walking keeps walking that way until the d-pad is let go. (A walk
+    // begun before entering first person keeps its way too: the view now
+    // faces where Link faces, and the held direction would turn him round.)
     yaw = c->fp_yaw;
-    r->latched_yaw = yaw, r->latched = true;
+    r->latched_yaw = yaw, r->latched = true, r->latched_fp = true;
   } else {
     // A turning (or returning) camera never steers a walk in progress.
     if (!r->latched)
