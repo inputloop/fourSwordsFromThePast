@@ -1001,6 +1001,11 @@ static void FinishPane(Pane *p, int view) {
     f->live_x0 = (float)p->live[0], f->live_y0 = (float)p->live[1];
     f->live_x1 = (float)p->live[2], f->live_y1 = (float)p->live[3];
     f->live_fog0 = 8.0f + 88.0f * wide, f->live_fog1 = (float)margin;
+    // (Scenery the turned camera passes close by, on the way to its Link,
+    // stays clear: the edge of what is built is never that near.)
+    float lx = p->link[0] - f->cam.eye[0], ly = p->link[1] - f->cam.eye[1], lz = p->link[2] - f->cam.eye[2];
+    float reach = sqrtf(lx * lx + ly * ly + lz * lz);
+    f->live_near0 = 0.4f * reach, f->live_near1 = 0.95f * reach;
     if (b > 0.01f)
       f->dist_fog0 = 160.0f / b, f->dist_fog1 = 320.0f / b;  // (first person: it comes in with the blend)
     if (p->ov_mode == 2 && b <= 0.0f)

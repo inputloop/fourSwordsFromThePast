@@ -137,8 +137,9 @@ typedef struct Prep {
   int num_lights;
   int sub[3];                // the frame's subtraction, 0-255
   bool any_sub, sub_lights, sub_cards;
-  bool live_fog, dist_fog, any_fog;
+  bool live_fog, dist_fog, any_fog, live_near;
   float live[4], live_f0, live_inv, dist_f0, dist_inv;  // (inv: 1 / (fog1 - fog0))
+  float near0, near_inv;     // live_near: the live fog comes in with the distance from the eye
   uint32 fog_rgb;
   const uint32 *bg;
   int bg_pitch;
@@ -302,6 +303,11 @@ static float FogAt(const Prep *P, const float p[3]) {
     float d2 = dx * dx + dy * dy;
     if (d2 > 0 && (P->live_f0 < 0 || d2 > P->live_f0 * P->live_f0))
       fog = SmoothStep(P->live_f0, P->live_inv, sqrtf(d2));
+    if (fog > 0 && P->live_near) {
+      const float *e = P->cam.eye;
+      float ex = p[0] - e[0], ey = p[1] - e[1], ez = p[2] - e[2];
+      fog *= SmoothStep(P->near0, P->near_inv, sqrtf(ex * ex + ey * ey + ez * ez));
+    }
   }
   if (P->dist_fog) {
     const float *e = P->cam.eye;
@@ -1265,6 +1271,10 @@ static void PrepFrame(R3dWork *w, const R3dFrame *f, const R3dTarget *t, int wpx
   P->live[0] = f->live_x0, P->live[1] = f->live_y0, P->live[2] = f->live_x1, P->live[3] = f->live_y1;
   P->live_f0 = f->live_fog0;
   P->live_inv = P->live_fog ? 1.0f / (f->live_fog1 - f->live_fog0) : 0.0f;
+  P->live_near = P->live_fog && InRange(f->live_near0, 1e6f) && InRange(f->live_near1, 1e6f) &&
+                 f->live_near1 > f->live_near0;
+  P->near0 = f->live_near0;
+  P->near_inv = P->live_near ? 1.0f / (f->live_near1 - f->live_near0) : 0.0f;
   P->dist_fog = InRange(f->dist_fog0, 1e7f) && InRange(f->dist_fog1, 1e7f) && f->dist_fog1 > 0.0f &&
                 f->dist_fog1 > f->dist_fog0;
   P->dist_f0 = f->dist_fog0;

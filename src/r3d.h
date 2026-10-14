@@ -120,6 +120,9 @@ typedef struct R3dFrame {
   // from the eye (dist_fog0..dist_fog1; dist_fog1 == 0: none). The larger wins.
   float live_x0, live_y0, live_x1, live_y1;
   float live_fog0, live_fog1;
+  float live_near0, live_near1;  // the live fog comes in with the distance from the eye (smoothstep
+                             // near0..near1 px; near1 <= near0: at once), so scenery passing close by
+                             // the camera is not a wall of mist
   float dist_fog0, dist_fog1;
   uint32 fog_rgb;
   const uint32 *background;  // drawn first: w x h, background_pitch pixels a row; NULL: fog_rgb
