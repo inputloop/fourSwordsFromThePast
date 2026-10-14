@@ -423,9 +423,13 @@ it; switch to first person and you walk through it at Link's eye height.
 
 *The camera turned (left). Split screen: a player in first person gets a pane of their own (right).*
 
-<p align="center"><img src="docs/screenshots/3d-first-person.png" width="100%" alt="First person: on the left the Sanctuary's red carpet between brick walls, on the right the castle courtyard with a soldier standing close by as a flat card"></p>
+<p align="center"><img src="docs/screenshots/3d-outdoors.png" width="100%" alt="Outdoors with the camera turned: on the left Link's house on its raised yard, the ground stepping down at its ledges; on the right a Kakariko house with its fence, hedges and tall trees"></p>
 
-*First person in the Sanctuary (left) and in the castle courtyard (right).*
+*Outdoors: Link's house on its raised yard, with the ground stepping down at its ledges (left), and a Kakariko house with its fence, hedges and trees (right).*
+
+<p align="center"><img src="docs/screenshots/3d-first-person.png" width="100%" alt="First person: on the left the Sanctuary's red carpet between tall walls with stained glass, the sword swinging in front of the view; on the right the castle courtyard with a soldier standing close by as a flat card"></p>
+
+*First person in the Sanctuary, swinging the sword (left), and in the castle courtyard (right).*
 
 **Turning it on.** *Pause menu > Video and HD options > 3D view (beta)*, or
 `Hd3d = 1` in the `[Graphics]` section of `zelda3.ini`. It is off by

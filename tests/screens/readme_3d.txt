@@ -25,12 +25,51 @@ shot tests/out/readme_3d_turned.ppm
 cam3d 1 fp 150 8
 drawrun 2
 shot tests/out/readme_3d_fp_out.ppm
-# First person in the Sanctuary.
+# Outdoors: Link's house on its raised yard (the ground steps down at its
+# ledges), then a Kakariko house with its fence, hedges and trees.
+cam3d 1 tp 0 45
+load 2
+drawrun 30
+enter 104
+drawrun 200
+hold 1 D
+drawrun 150
+hold 1 -
+drawrun 30
+clearsprites
+cam3d 1 tp -40 35
+drawrun 2
+shot tests/out/readme_3d_house.ppm
+load 2
+drawrun 30
+enter f2
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 30
+cam3d 1 tp -35 35
+drawrun 2
+shot tests/out/readme_3d_kakariko.ppm
+# First person in the Sanctuary, a few steps in from the door (in the
+# doorway its sides fill the view), swinging the sword.
+cam3d 1 tp 0 45
+load 2
+drawrun 30
 enter 12
 drawrun 120
+hold 1 U
+drawrun 40
+hold 1 -
+drawrun 5
 cam3d 1 fp 0 4
 drawrun 2
 shot tests/out/readme_3d_fp_sanctuary.ppm
+hold 1 B
+drawrun 6
+shot tests/out/readme_3d_fp_sword.ppm
+hold 1 -
+drawrun 30
 # Two players on one computer: player 2 in first person gets a pane.
 cam3d 1 tp 0 45
 localjoin 2

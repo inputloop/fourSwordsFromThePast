@@ -4,7 +4,8 @@
 # neighbor, so the pixels stay sharp) into docs/screenshots/:
 #   3d-compare.png       the original picture and the 3D view side by side
 #   3d-turned.png        the camera turned
-#   3d-first-person.png  first person in the Sanctuary and outdoors
+#   3d-outdoors.png      the camera turned at Link's house and in Kakariko
+#   3d-first-person.png  first person in the Sanctuary (swinging the sword) and outdoors
 #   3d-split.png         split screen, player 2 in first person
 # Needs the game built (make), zelda3_assets.dat and Python 3 with Pillow.
 # Only these PNGs are committed (the screenshots are from the game's own
@@ -32,6 +33,7 @@ def save(im, name):
 
 save(pair(load('readme_2d'), load('readme_3d_tp')), '3d-compare.png')
 save(load('readme_3d_turned'), '3d-turned.png')
-save(pair(load('readme_3d_fp_sanctuary'), load('readme_3d_fp_out')), '3d-first-person.png')
+save(pair(load('readme_3d_house'), load('readme_3d_kakariko')), '3d-outdoors.png')
+save(pair(load('readme_3d_fp_sword'), load('readme_3d_fp_out')), '3d-first-person.png')
 save(load('readme_3d_split'), '3d-split.png')
 EOF
