@@ -45,7 +45,8 @@ enum {
   kR3dQuad_Half = 4,         // 50% blend over what is behind; writes no depth
   kR3dQuad_Add = 8,          // added to what is behind; writes no depth
   kR3dQuad_Decal = 16,       // pulled 1 px toward the camera (shadows on the ground)
-  kR3dQuad_Dither = 32,      // only every other pixel (faded scenery)
+  kR3dQuad_Faded = 32,       // faded scenery: 50% over what is behind, after the opaque quads (far to near);
+                             // writes no depth, so cards behind it are drawn whole over it
 };
 
 // A planar convex quad. Its front is the side (v1 - v0) x (v2 - v0) points to.

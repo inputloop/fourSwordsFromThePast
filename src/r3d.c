@@ -10,7 +10,8 @@
 // - Binning, here: the cards are sorted far to near, the kR3dBands row
 //   bands are sized so that each has about the same work, and every quad
 //   left goes in the list of each band it touches (opaque quads, then
-//   decals, then see-through ones, each kind in the caller's order).
+//   decals, then see-through ones, each kind in the caller's order, then
+//   the faded ones sorted far to near).
 // - Bands, on the runner: a band clears its rows to the background, draws
 //   its list and then the cards. A span steps 1/z, u/z and v/z (one divide
 //   per pixel) and the light, darkness and fog taken along the quad's edges.
@@ -75,7 +76,7 @@ typedef struct CVert { float c[kNumC]; } CVert;
 enum {
   kSpan_Plain,               // perspective, textured, opaque, as painted (lut[texel])
   kSpan_Lit,                 // perspective, textured, opaque, with light, darkness or fog
-  kSpan_General,             // anything else: ortho, flat, dithered, decals, half and add
+  kSpan_General,             // anything else: ortho, flat, faded, decals, half and add
 };
 
 // What a lit quad's spans have to do besides white light at most as painted.
@@ -91,13 +92,17 @@ typedef struct Poly {
   int16 x0, x1;              // the columns it covers at most
   uint8 n;                   // vertices (0: not drawn)
   uint8 span;                // kSpan_*
-  uint8 pass;                // 0 opaque, 1 decal, 2 half or add
+  uint8 pass;                // 0 opaque, 1 decal, 2 half or add, 3 faded
   uint8 vary;                // kVary_*
+  float zsort;               // faded: the corners' mean depth (drawn far to near)
   float ox, oy;              // the screen point the gradients start at
   float g[3][3];             // 1/z, u/z, v/z (ortho: z, u, v) there, then per px right and per px down
   float ulo, uhi, vlo, vhi;  // the rebased texel range
   uint32 ou, ov;             // added to a rebased texel coordinate: the rebase minus the texture origin
 } Poly;
+
+// A faded quad waiting to be sorted.
+typedef struct FadedKey { float z; int index; } FadedKey;
 
 // A card after setup.
 typedef struct PCard {
@@ -156,6 +161,7 @@ struct R3dWork {
   PCard *cards;
   int *card_order, *card_tmp;
   int num_cards;
+  FadedKey *faded;           // up to max_quads
   uint8 scratch_cls[kR3dBands][kR3dMaxW];
   int row_cost[kR3dMaxH];
   int band_y[kR3dBands + 1]; // band b draws rows band_y[b] .. band_y[b + 1] - 1
@@ -395,6 +401,7 @@ static void SetupQuad(R3dWork *w, int qi, const Cam *cam, CornerCache *cache) {
   CVert buf[2][kClipCap];
   float wp[4][3];
   int out_and = 0x1f, out_or = 0, beyond = 0;
+  float zsum = 0.0f;
   for (int k = 0; k < 4; k++) {
     wp[k][0] = q->v[k].x, wp[k][1] = q->v[k].y, wp[k][2] = q->v[k].z;
     float *c = buf[0][k].c;
@@ -402,9 +409,11 @@ static void SetupQuad(R3dWork *w, int qi, const Cam *cam, CornerCache *cache) {
     int code = OutCode(cam, c);
     out_and &= code, out_or |= code;
     beyond += cam->zfar > 0 && c[2] > cam->zfar;
+    zsum += c[2];
   }
   if (out_and || beyond == 4)
     return;
+  poly->zsort = zsum * 0.25f;
   // Absurd coordinates: NaN, the infinities, or far beyond any world.
   float umin = 0, umax = 0, vmin = 0, vmax = 0;
   for (int k = 0; k < 4; k++) {
@@ -553,13 +562,14 @@ static void SetupQuad(R3dWork *w, int qi, const Cam *cam, CornerCache *cache) {
     poly->g[a][2] = (d2 * dx1 - d1 * dx2) * inv;
   }
   poly->ox = sx[0], poly->oy = sy[0];
-  int pass = q->flags & (kR3dQuad_Half | kR3dQuad_Add) ? 2 : q->flags & kR3dQuad_Decal ? 1 : 0;
+  int pass = q->flags & kR3dQuad_Faded ? 3 : q->flags & (kR3dQuad_Half | kR3dQuad_Add) ? 2 :
+             q->flags & kR3dQuad_Decal ? 1 : 0;
   poly->y0 = (int16)y0, poly->y1 = (int16)y1;
   poly->x0 = (int16)x0, poly->x1 = (int16)x1;
   poly->n = (uint8)n;
   poly->pass = (uint8)pass;
   poly->vary = (uint8)vary;
-  poly->span = cam->ortho || flat || pass || (q->flags & kR3dQuad_Dither) ? kSpan_General :
+  poly->span = cam->ortho || flat || pass ? kSpan_General :
                plain && !(vary & (kVary_Dark | kVary_Fog)) ? kSpan_Plain : kSpan_Lit;
   if (flat) {
     poly->ou = poly->ov = 0;
@@ -617,7 +627,7 @@ typedef struct Raster {
   int sub[3];
   uint32 fog_rgb;
   uint8 cls, pass;
-  bool flat, dither, decal, add, ortho;
+  bool flat, decal, add, ortho;
 } Raster;
 
 R3D_INLINE uint32 ShadePixel(uint32 c, int t, int lr, int lg, int lb, int sr, int sg, int sb, int fog,
@@ -774,15 +784,13 @@ static void SpanLit(const Raster *R, int vary, int xs, int xe, float a0, float a
   }
 }
 
-// Everything else: ortho, flat, dithered, decals, half and add.
-static void SpanGeneral(const Raster *R, int y, int xs, int xe, float a0, float a1, float a2, const Shades *at,
+// Everything else: ortho, flat, faded, decals, half and add.
+static void SpanGeneral(const Raster *R, int xs, int xe, float a0, float a1, float a2, const Shades *at,
                         const Shades *step, uint32 *prow, float *zrow, uint8 *crow) {
   float d0 = R->d[0], d1 = R->d[1], d2 = R->d[2];
   int lr = at->L[0], lg = at->L[1], lb = at->L[2], sr = at->S[0], sg = at->S[1], sb = at->S[2], f = at->F;
   for (int x = xs; x < xe; x++, a0 += d0, a1 += d1, a2 += d2, lr += step->L[0], lg += step->L[1], lb += step->L[2],
        sr += step->S[0], sg += step->S[1], sb += step->S[2], f += step->F) {
-    if (R->dither && ((x + y) & 1))
-      continue;
     // (Ortho: a0 is the depth itself, and u, v are affine.)
     if (!(a0 > 0))
       continue;
@@ -807,7 +815,7 @@ static void SpanGeneral(const Raster *R, int y, int xs, int xe, float a0, float 
       c = R->lut[t];
     }
     c = ShadeWith(c, t, lr, lg, lb, sr, sg, sb, f, true, true, true, R->sub_from, R->fog_rgb);
-    if (R->pass == 2) {
+    if (R->pass >= 2) {  // (half, add and faded)
       prow[x] = R->add ? BlendAdd(prow[x], c) : BlendHalf(prow[x], c);
     } else {
       if (R->pass == 0)
@@ -904,7 +912,6 @@ static void DrawPoly(R3dWork *w, int qi, int by0, int by1, uint8 *scratch) {
   R.fog_rgb = P->fog_rgb;
   R.cls = q->cls;
   R.pass = p->pass;
-  R.dither = (q->flags & kR3dQuad_Dither) != 0;
   R.decal = (q->flags & kR3dQuad_Decal) != 0;
   R.add = (q->flags & kR3dQuad_Add) != 0;
   R.ortho = P->cam.ortho;
@@ -946,7 +953,7 @@ static void DrawPoly(R3dWork *w, int qi, int by0, int by1, uint8 *scratch) {
     if (p->span == kSpan_Lit)
       SpanLit(&R, p->vary, xs, xe, a0, a1, a2, &at, &step, prow, zrow, crow);
     else
-      SpanGeneral(&R, y, xs, xe, a0, a1, a2, &at, &step, prow, zrow, crow);
+      SpanGeneral(&R, xs, xe, a0, a1, a2, &at, &step, prow, zrow, crow);
   }
 }
 
@@ -1082,8 +1089,24 @@ static void BandJob(int begin, int end, void *ctx) {
 
 // ---- Binning and cards ----
 
+static void BinPoly(R3dWork *w, int i, const int *band_y0, const int *band_y1) {
+  const Poly *p = &w->polys[i];
+  for (int b = 0; b < kR3dBands; b++) {
+    if (p->y0 < band_y1[b] && p->y1 > band_y0[b])
+      w->bins[(size_t)b * w->max_quads + w->bin_count[b]++] = i;
+  }
+}
+
+// Far to near; as far, the caller's order (so the result is unique).
+static int CompareFaded(const void *a, const void *b) {
+  const FadedKey *ka = (const FadedKey *)a, *kb = (const FadedKey *)b;
+  if (ka->z != kb->z)
+    return ka->z > kb->z ? -1 : 1;
+  return ka->index < kb->index ? -1 : ka->index > kb->index;
+}
+
 static int Bin(R3dWork *w) {
-  int band_y0[kR3dBands], band_y1[kR3dBands], drawn = 0;
+  int band_y0[kR3dBands], band_y1[kR3dBands], drawn = 0, faded = 0;
   for (int b = 0; b < kR3dBands; b++)
     BandRows(w, b, &band_y0[b], &band_y1[b]), w->bin_count[b] = 0;
   for (int pass = 0; pass < 3; pass++) {
@@ -1092,13 +1115,21 @@ static int Bin(R3dWork *w) {
       if (!p->n || p->pass != pass)
         continue;
       drawn++;
-      for (int b = 0; b < kR3dBands; b++) {
-        if (p->y0 < band_y1[b] && p->y1 > band_y0[b])
-          w->bins[(size_t)b * w->max_quads + w->bin_count[b]++] = i;
-      }
+      BinPoly(w, i, band_y0, band_y1);
     }
   }
-  return drawn;
+  // The faded quads blend over everything opaque and write no depth, so
+  // they are drawn far to near (what is in front blends last).
+  for (int i = 0; i < w->num_quads; i++) {
+    const Poly *p = &w->polys[i];
+    if (p->n && p->pass == 3)
+      w->faded[faded].z = p->zsort, w->faded[faded++].index = i;
+  }
+  if (faded > 1)
+    qsort(w->faded, (size_t)faded, sizeof(FadedKey), CompareFaded);
+  for (int k = 0; k < faded; k++)
+    BinPoly(w, w->faded[k].index, band_y0, band_y1);
+  return drawn + faded;
 }
 
 // a is drawn before b: farther, or as far with a higher order (lower draws
@@ -1273,7 +1304,8 @@ R3dWork *R3d_NewWork(int max_quads, int max_cards) {
   w->cards = (PCard *)malloc(nc * sizeof(PCard));
   w->card_order = (int *)malloc(nc * sizeof(int));
   w->card_tmp = (int *)malloc(nc * sizeof(int));
-  if (!w->polys || !w->v4 || !w->v5 || !w->bins || !w->cards || !w->card_order || !w->card_tmp) {
+  w->faded = (FadedKey *)malloc(nq * sizeof(FadedKey));
+  if (!w->polys || !w->v4 || !w->v5 || !w->bins || !w->cards || !w->card_order || !w->card_tmp || !w->faded) {
     R3d_FreeWork(w);
     return NULL;
   }
@@ -1290,6 +1322,7 @@ void R3d_FreeWork(R3dWork *work) {
   free(work->cards);
   free(work->card_order);
   free(work->card_tmp);
+  free(work->faded);
   free(work);
 }
 

@@ -93,7 +93,7 @@ typedef struct Hd3dEmit {
   float rise;
   int32 rect[4];             // world px whose geometry is emitted
   uint8 tex_bg2, tex_bg1;    // R3dFrame.tex slots of this scene
-  bool fade;                 // scenery near the segment fade_a..fade_b gets kR3dQuad_Dither
+  bool fade;                 // scenery near the segment fade_a..fade_b gets kR3dQuad_Faded
   float fade_a[3], fade_b[3];
   uint32 exit_rgb;           // indoors in first person: the daylight seen through an exit door
 } Hd3dEmit;

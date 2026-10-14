@@ -2626,9 +2626,10 @@ static void Orient(R3dQuad *q, float nx, float ny, float nz) {
   }
 }
 
-// Scenery near the line from the camera to the player's Link is dithered:
-// what stands above that line (outdoors a raised terrace further off is
-// under it and stays solid).
+// Scenery near the line from the camera to the player's Link is faded (see
+// through, with Links and the rest drawn whole over it): what stands above
+// that line (outdoors a raised terrace further off is under it and stays
+// solid).
 static void Fade(const EmitCtx *x, R3dQuad *q) {
   const Hd3dEmit *e = x->e;
   if (!e->fade)
@@ -2651,7 +2652,7 @@ static void Fade(const EmitCtx *x, R3dQuad *q) {
   float ex = e->fade_a[0] + dx * t - px, ey = e->fade_a[1] + dy * t - py;
   float za = e->fade_a[2] + 12.0f, zl = za + (e->fade_b[2] - za) * t;
   if (ex * ex + ey * ey < 28.0f * 28.0f && zt > zl)
-    q->flags |= kR3dQuad_Dither;
+    q->flags |= kR3dQuad_Faded;
 }
 
 static bool BoxVisible(const EmitCtx *x, float x0, float y0, float z0, float x1, float y1, float z1) {

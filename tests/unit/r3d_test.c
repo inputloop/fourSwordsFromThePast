@@ -12,7 +12,7 @@
 // - The oblique test camera shows a floor, a raised block, a pit, a shadow
 //   and a card exactly as the flat picture (texel for pixel).
 // - Shared edges: a mesh drawn additively covers every pixel exactly once.
-// - Depth, decals, back faces, half, add, dither, light, subtraction, fog,
+// - Depth, decals, back faces, half, add, faded, light, subtraction, fog,
 //   card order, x-ray and see-through.
 // - R3d_Project round trips, R3d_ScaleAt and R3d_BoxVisible.
 // "./r3d_test <seed>" runs other random frames; "./r3d_test bench [frames [view 0-5]]"
@@ -306,7 +306,7 @@ static void RandomQuad(R3dQuad *q, const float center[3]) {
   q->tex = (uint8)RandInt(0, 7);
   q->flags = (uint8)(Rand() & 63);
   if (RandInt(0, 2))
-    q->flags &= ~(kR3dQuad_Half | kR3dQuad_Add | kR3dQuad_Decal | kR3dQuad_Dither);
+    q->flags &= ~(kR3dQuad_Half | kR3dQuad_Add | kR3dQuad_Decal | kR3dQuad_Faded);
   q->shade = (uint8)(RandInt(0, 1) ? 255 : RandInt(0, 255));
   q->cls = (uint8)RandInt(0, 5);
 }
@@ -775,7 +775,8 @@ static void TestSemantics(void) {
   q[1].flags |= kR3dQuad_TwoSided;
   R3d_Draw(work, &f, &T.t, NULL, &st);
   CHECK(Center(&T) == 0xff0000 && st.quads_drawn == 2, "a two-sided quad was not drawn");
-  // Half and add blend over what is behind, and don't hide what comes later; dither draws every other pixel.
+  // Half and add blend over what is behind, and don't hide what comes later; so does faded scenery,
+  // which is drawn far to near whatever its order.
   FloorQuad(&q[0], -20, -20, 20, 20, 0, 0, kR3dQuad_Flat);
   q[0].color = 0x808080;
   FloorQuad(&q[1], -20, -20, 20, 20, 5, 0, kR3dQuad_Flat | kR3dQuad_Half);
@@ -786,14 +787,25 @@ static void TestSemantics(void) {
   q[1].flags = kR3dQuad_Flat | kR3dQuad_Add, q[1].color = 0x90a000;
   R3d_Draw(work, &f, &T.t, NULL, &st);
   CHECK(Center(&T) == 0xffff80, "add: %06x", Center(&T));
-  q[1].flags = kR3dQuad_Flat | kR3dQuad_Dither, q[1].color = 0xffffff;
+  q[1].flags = kR3dQuad_Flat | kR3dQuad_Faded, q[1].color = 0xffffff;
   R3d_Draw(work, &f, &T.t, NULL, &st);
-  int lit = 0;
-  for (int y = 24; y < 40; y++) {
-    for (int x = 24; x < 40; x++)
-      lit += (T.pixels[y * w + x] == 0xffffff) == !((x + y) & 1);
-  }
-  CHECK(lit == 256, "dither: %d of 256 pixels right", lit);
+  CHECK(Center(&T) == 0xbfbfbf, "faded: %06x", Center(&T));
+  // A faded floor over the grey one, then an opaque floor between them given
+  // later: the faded one still blends over it (it is drawn after everything
+  // opaque). Two faded floors given near first: the far one blends first.
+  FloorQuad(&q[2], -20, -20, 20, 20, 2, 0, kR3dQuad_Flat);
+  q[2].color = 0x000000;
+  f.num_quads = 3;
+  R3d_Draw(work, &f, &T.t, NULL, &st);
+  CHECK(Center(&T) == 0x7f7f7f, "faded over a later opaque quad: %06x", Center(&T));
+  FloorQuad(&q[1], -20, -20, 20, 20, 8, 0, kR3dQuad_Flat | kR3dQuad_Faded);
+  q[1].color = 0xffffff;
+  FloorQuad(&q[2], -20, -20, 20, 20, 4, 0, kR3dQuad_Flat | kR3dQuad_Faded);
+  q[2].color = 0x000000;
+  R3d_Draw(work, &f, &T.t, NULL, &st);
+  // far to near: (0x80 + 0) / 2 = 0x40, then (0x40 + 0xff) / 2 = 0x9f
+  CHECK(Center(&T) == 0x9f9f9f, "faded far to near: %06x", Center(&T));
+  f.num_quads = 2;
   // Light: ambient, the cap, a light (per vertex: four quads meet under it), face shade.
   f.num_quads = 1;
   q[0].color = 0xc08040;
