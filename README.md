@@ -436,7 +436,9 @@ walls, cliffs, pillars, statues and trees get real height, and Links,
 enemies and items stand in it as flat cards that always face you, like the
 sprites of HD-2D games. At its starting angle it looks almost exactly like
 the original screen, with depth. Turn the camera and the room turns with
-it; switch to first person and you walk through it at Link's eye height.
+it, like a dollhouse: the walls between you and the room are cut down to
+low bodies, the others stand; switch to first person and you walk through
+it at Link's eye height.
 
 <p align="center"><img src="docs/screenshots/3d-turned.png" width="49%" alt="The 3D view with the camera turned: the courtyard seen at an angle, the walls and pillars standing, Link between two soldiers"> <img src="docs/screenshots/3d-split.png" width="49%" alt="Split screen in the Sanctuary: player 1 in third person on the left, player 2 in first person on the right looking down the red carpet"></p>
 
@@ -484,8 +486,8 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
 - **Third person.** *Camera returns* (off by default) eases the camera back to
   the starting angle two seconds after you let go. Once it is turned, your
   own Link shows as a faint silhouette where scenery hides him, and scenery
-  right between the camera and Link is thinned out (*Fade scenery near
-  Link*).
+  right between the camera and Link is made see-through, with him drawn
+  whole over it (*Fade scenery near Link*).
 - **Faithful by default.** The game only runs what is on its own screen (and
   a little around it): enemies further away don't exist. So the world
   fades into mist where the original screen ends, a little further in first

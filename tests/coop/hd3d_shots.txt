@@ -1,6 +1,12 @@
 # 3D view screenshot checks (with the 2D-HD look): outdoors at Link's house
-# in third person, the Sanctuary in first person (also with the sword swung)
-# and a dark cave lit by the Lamp. Each is compared with tests/baseline/<name>.ppm, made from your own
+# in third person, the Sanctuary in first person (also with the sword swung),
+# a dark cave lit by the Lamp, and the camera turned: inside Link's house
+# from the north-east and the east (the walls between the camera and the
+# room are cut down to low bodies, the others stand), his yard from the
+# east (the raised ground's sides show the painted cliff) and the cave at
+# the foot of Death Mountain from the north-east (the cliff between the
+# camera and the Link is faded, the Link drawn whole over it).
+# Each is compared with tests/baseline/<name>.ppm, made from your own
 # ROM on the first run (never committed, and not written once a check has
 # failed); after an intended change to how the 3D view looks, refresh them
 # with ZELDA3_UPDATE_BASELINES=1 ./zelda3 --mptest tests/coop/hd3d_shots.txt.
@@ -35,3 +41,40 @@ enter f0
 drawrun 200
 expect_3d 1
 expect_shot hd3d_dark 2 12
+# The camera turned.
+load 2
+drawrun 30
+enter 104
+drawrun 200
+clearsprites
+cam3d 1 tp 135 20
+drawrun 2
+expect_3d 1
+expect_shot hd3d_house_ne 2 12
+cam3d 1 tp 90 15
+drawrun 2
+expect_shot hd3d_house_e 2 12
+cam3d 1 tp 0 45
+hold 1 D
+drawrun 150
+hold 1 -
+drawrun 60
+clearsprites
+cam3d 1 tp 90 20
+drawrun 2
+expect_3d 1
+expect_shot hd3d_yard_e 2 12
+cam3d 1 tp 0 45
+load 2
+drawrun 30
+enter e2
+drawrun 200
+hold 1 D
+drawrun 60
+hold 1 -
+drawrun 40
+clearsprites
+cam3d 1 tp 135 20
+drawrun 2
+expect_3d 1
+expect_shot hd3d_cliff_ne 2 12
