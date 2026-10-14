@@ -82,6 +82,7 @@ typedef struct Pane {
   uint8 *layer2d;            // its layers (2: the HUD)
   uint32 *last;
   uint8 *overlay;            // the outdoor BG1 overlay as palette indices (allocated when one shows)
+  uint8 *clouds;             // its first 256x256 screen, unscrolled (Death Mountain's sky)
   Hd3dSpriteFrame *sf;
   // This frame, from phase A for phase B.
   bool pending;
@@ -111,6 +112,9 @@ typedef struct Pane {
   uint8 ov_mode;             // the outdoor overlay: 0 none, 1 above everything, 2 below (the background)
   bool ov_sub, ov_half, ov_obj;
   uint32 ov_fixed;           // the fixed color (where the overlay is see-through)
+  bool sky;                  // outdoors: a sky where the ground ends
+  uint32 sky_mid, sky_top, cloud_rgb;  // (lit; the horizon is the fog)
+  int cloud_x, cloud_y;      // Death Mountain: the overlay's scroll (its drift)
 } Pane;
 
 static Pane g_panes[kHd3dMaxPanes];
@@ -277,7 +281,9 @@ static bool AllocPane(Pane *p, bool overlay) {
     p->sf = (Hd3dSpriteFrame *)calloc(1, sizeof(Hd3dSpriteFrame));
   if (overlay && !p->overlay)
     p->overlay = (uint8 *)malloc(kPicPixels);
-  return p->pic2d && p->layer2d && p->last && p->sf && (!overlay || p->overlay);
+  if (overlay && !p->clouds)
+    p->clouds = (uint8 *)malloc(256 * 256);
+  return p->pic2d && p->layer2d && p->last && p->sf && (!overlay || (p->overlay && p->clouds));
 }
 
 // ---- Phase A: reading the world ----
@@ -359,19 +365,19 @@ static void FrameHook(struct Ppu *ppu) {
     Hd3dSprites_Capture(ppu, g_capture);
 }
 
-// The outdoor BG1 overlay (fog, rain, canopy, clouds) exactly where the 2D
-// picture has it: it is anchored to the screen, not the world.
-static void DecodeOverlay(const Ppu *ppu, uint8 *out, int w, int h) {
+// The outdoor BG1 overlay (fog, rain, canopy, clouds) from tilemap pixel
+// (x0, y0) on: at its scroll it is exactly where the 2D picture has it,
+// anchored to the screen, not the world.
+static void DecodeOverlay(const Ppu *ppu, uint8 *out, int pitch, int x0, int y0, int w, int h) {
   const BgLayer *bg = &ppu->bgLayer[0];
-  int e = ppu->extraLeftRight;
   for (int r = 0; r < h; r++) {
-    uint8 *dst = out + r * kPicW;
-    int y = bg->vScroll + r + 1;
+    uint8 *dst = out + r * pitch;
+    int y = y0 + r;
     int sc = bg->tilemapAdr + (((y >> 3) & 0x1f) << 5);
     if ((y & 0x100) && bg->tilemapHigher)
       sc += bg->tilemapWider ? 0x800 : 0x400;
     for (int d = 0; d < w;) {
-      int x = (bg->hScroll + d - e) & 0x1ff;
+      int x = (x0 + d) & 0x1ff;
       int half = (x >> 8 & 1) && bg->tilemapWider ? 0x400 : 0;
       uint16 tile = ppu->vram[(sc + half + ((x >> 3) & 0x1f)) & 0x7fff];
       int row = tile & 0x8000 ? 7 - (y & 7) : y & 7;
@@ -460,12 +466,34 @@ static void ReadOverlay(Pane *p, const Ppu *ppu, uint8 mode) {
   p->ov_mode = mode;
   if (!mode)
     return;
-  DecodeOverlay(ppu, p->overlay, p->w, p->h);
+  const BgLayer *bg = &ppu->bgLayer[0];
+  DecodeOverlay(ppu, p->overlay, kPicW, bg->hScroll - ppu->extraLeftRight, bg->vScroll + 1, p->w, p->h);
+  // (Under everything it is Death Mountain's clouds: its sky's too.)
+  if (mode == 2)
+    DecodeOverlay(ppu, p->clouds, 256, 0, 0, 256, 256);
+  p->cloud_x = bg->hScroll, p->cloud_y = bg->vScroll;
   p->ov_sub = ppu->subtractColor;
   p->ov_half = ppu->halfColor;
   p->ov_obj = (ppu->mathEnabled & 0x10) != 0;
   uint16 fixed = (uint16)(ppu->fixedColorR | ppu->fixedColorG << 5 | ppu->fixedColorB << 10);
   p->ov_fixed = Rgb555(fixed, ppu->brightness & 15);
+}
+
+// The sky outdoors, from the fog at the horizon up: blue over the Light
+// World, violet-red over the Dark World, grey over Death Mountain (whose
+// own clouds drift in it). Indoors the fog goes on (a dark void).
+static void ReadSky(Pane *p, const Ppu *ppu) {
+  p->sky = !player_is_indoors;
+  int br = ppu->brightness & 15;
+  uint32 mid, top, cloud;
+  if (p->ov_mode == 2)
+    mid = 0xa0a8b8, top = 0x707c94, cloud = 0xd8dce4;
+  else if (overworld_screen_index & 0x40)
+    mid = 0x9c5c7c, top = 0x482858, cloud = 0xe0b0c0;
+  else
+    mid = 0x88b4ec, top = 0x3c74d4, cloud = 0xf4f8fc;
+  p->sky_mid = ScaleRgb(mid, br, 15), p->sky_top = ScaleRgb(top, br, 15);
+  p->cloud_rgb = ScaleRgb(cloud, br, 15);
 }
 
 static void SmoothTo(float *v, float to, float dt, float tau, bool snap) {
@@ -607,6 +635,7 @@ static void ReadWorld(Pane *p, uint32 flags, int step, bool same_world, Hd3dScen
     p->bg_lut[i] = Rgb555(ppu->cgram[i], br);
   ReadLight(p, ppu, (int)p->tz);
   ReadOverlay(p, ppu, ov_mode);
+  ReadSky(p, ppu);
   uint8 m = main_module_index;
   if (m == 14)
     m = saved_module_for_menu;
@@ -637,17 +666,89 @@ static uint32 OverlayMath(const Pane *p, uint32 c, uint8 idx) {
   return (uint32)(r << 16 | g << 8 | b);
 }
 
+enum {
+  kSkySteps = 64,            // the sky's colors by the sine of the elevation
+  kNoiseSize = 64,           // the clouds' noise (tiles)
+};
+
 typedef struct BackgroundJob {
   const Pane *p;
   const R3dFrame *f;
-  float horizon, top;        // the sky: a little darker at the top, down to the horizon row
+  float horizon, top;        // indoors: a little darker at the top, down to the horizon row
   uint32 ground;             // the ground's color near the camera
+  uint32 sky[kSkySteps];     // outdoors: the sky, and how much cloud shows, by elevation
+  uint8 cloud[kSkySteps];
+  float cloud_u, cloud_v;    // where the clouds have drifted (noise texels)
 } BackgroundJob;
+
+static uint8 g_noise[kNoiseSize * kNoiseSize];
+
+static uint32 Hash32(uint32 x) {
+  x ^= x >> 16, x *= 0x7feb352d, x ^= x >> 15, x *= 0x846ca68b, x ^= x >> 16;
+  return x;
+}
+
+// Soft tiling value noise in three octaves: the clouds' shapes. Made once,
+// on the main thread, before any rows run.
+static void MakeNoise(void) {
+  static bool done;
+  if (done)
+    return;
+  done = true;
+  for (int y = 0; y < kNoiseSize; y++) {
+    for (int x = 0; x < kNoiseSize; x++) {
+      float v = 0.0f, amp = 0.55f;
+      for (int o = 0, cell = 16; o < 3; o++, cell >>= 1, amp *= 0.5f) {
+        int n = kNoiseSize / cell, cx = x / cell, cy = y / cell;
+        float fx = (float)(x % cell) / cell, fy = (float)(y % cell) / cell;
+        fx = fx * fx * (3.0f - 2.0f * fx), fy = fy * fy * (3.0f - 2.0f * fy);
+        float c[4];
+        for (int i = 0; i < 4; i++) {
+          uint32 h = Hash32((uint32)(((cy + (i >> 1)) % n) * 64 + (cx + (i & 1)) % n) + (uint32)o * 4096u);
+          c[i] = (float)(h & 0xffff) / 65535.0f;
+        }
+        v += amp * (c[0] + (c[1] - c[0]) * fx + (c[2] - c[0] + (c[3] - c[2] - c[1] + c[0]) * fx) * fy);
+      }
+      g_noise[y * kNoiseSize + x] = (uint8)(Clampf(v, 0.0f, 1.0f) * 255.0f);
+    }
+  }
+}
+
+// The sky along a ray going up (dz > 0): the color for its elevation, then
+// the clouds, on a plane above, so they shrink toward the horizon.
+static uint32 SkyAt(const BackgroundJob *j, float dx, float dy, float dz) {
+  float e = dz / sqrtf(dx * dx + dy * dy + dz * dz);
+  int i = (int)(e * (kSkySteps - 1) + 0.5f);
+  i = i < 0 ? 0 : i >= kSkySteps ? kSkySteps - 1 : i;
+  uint32 c = j->sky[i];
+  if (!j->cloud[i])
+    return c;
+  const Pane *p = j->p;
+  float s = 1.0f / dz;
+  if (p->ov_mode == 2) {
+    // Death Mountain: the game's own clouds, pixel for pixel.
+    int u = (int)(dx * s * 96.0f + 4096.0f) + p->cloud_x, v = (int)(dy * s * 96.0f + 4096.0f) + p->cloud_y;
+    uint8 idx = p->clouds[(v & 255) * 256 + (u & 255)];
+    return idx ? LerpRgb(c, OverlayMath(p, c, idx), j->cloud[i] * (1.0f / 255.0f)) : c;
+  }
+  // (8 bits of fraction, wrapped: bilinear on the tiling noise.)
+  int u = (int)((dx * s * 6.0f + j->cloud_u) * 256.0f), v = (int)((dy * s * 6.0f + j->cloud_v) * 256.0f);
+  int x0 = u >> 8 & (kNoiseSize - 1), y0 = v >> 8 & (kNoiseSize - 1), fx = u & 255, fy = v & 255;
+  int x1 = (x0 + 1) & (kNoiseSize - 1), y1 = (y0 + 1) & (kNoiseSize - 1);
+  const uint8 *r0 = g_noise + y0 * kNoiseSize, *r1 = g_noise + y1 * kNoiseSize;
+  int a = r0[x0] * 256 + (r0[x1] - r0[x0]) * fx, b = r1[x0] * 256 + (r1[x1] - r1[x0]) * fx;
+  int n = (a * 256 + (b - a) * fy) >> 16;
+  int k = (n - 108) * 3;  // (only the noise's peaks are clouds, with soft edges)
+  if (k <= 0)
+    return c;
+  k = (k > 255 ? 255 : k) * j->cloud[i] >> 8;
+  return LerpRgb(c, p->cloud_rgb, k * (1.0f / 256.0f));
+}
 
 // What shows where nothing is drawn. Below the horizon it is the ground: the
 // backdrop color (the game's own ground wherever a background tile is
 // see-through, as outdoors at Skull Woods), fogged as the ground there would
-// be. Above it, the fog, or in first person the sky.
+// be. Above it, outdoors, the sky; indoors the fog.
 static void BackgroundRows(int y0, int y1, void *ctx) {
   const BackgroundJob *j = (const BackgroundJob *)ctx;
   const Pane *p = j->p;
@@ -668,7 +769,7 @@ static void BackgroundRows(int y0, int y1, void *ctx) {
       float dx = ry[0] + c->right[0] * vx, dy = ry[1] + c->right[1] * vx, dz = ry[2] + c->right[2] * vx;
       float t = dz < -1e-6f ? -c->eye[2] / dz : -1.0f;  // (where the ray meets z = 0)
       if (!(t > 0.0f && t < 1e6f)) {
-        row[x] = sky;
+        row[x] = !p->sky ? sky : dz > 0.0f ? SkyAt(j, dx, dy, dz) : j->sky[0];
         continue;
       }
       float gx = c->eye[0] + t * dx, gy = c->eye[1] + t * dy;
@@ -702,6 +803,21 @@ static void MakeBackground(const Pane *p, const R3dFrame *f, float b) {
   j.top = 1.0f - 0.15f * Clampf(b, 0.0f, 1.0f);
   // (Indoors in first person no ground goes on past the room: it is the fog.)
   j.ground = p->info.indoors ? LerpRgb(p->backdrop, f->fog_rgb, Clampf(b, 0.0f, 1.0f)) : p->backdrop;
+  if (p->sky) {
+    // From the fog at the horizon (so the far ground runs into it) to the
+    // zenith; the clouds in a band above the horizon's haze.
+    MakeNoise();
+    for (int i = 0; i < kSkySteps; i++) {
+      float e = (float)i / (kSkySteps - 1);
+      j.sky[i] = e < 0.16f ? LerpRgb(f->fog_rgb, p->sky_mid, SmoothStep(0.0f, 0.16f, e))
+                           : LerpRgb(p->sky_mid, p->sky_top, SmoothStep(0.16f, 0.7f, e));
+      j.cloud[i] = (uint8)(255.0f * SmoothStep(0.03f, 0.12f, e) * (1.0f - 0.6f * SmoothStep(0.25f, 0.7f, e)));
+    }
+    // (The pane's clock: a drift as slow as real clouds, and a little
+    // parallax as the camera walks.)
+    j.cloud_u = (float)(p->ticks % (kNoiseSize * 300u)) / 300.0f + cam->eye[0] * (1.0f / 512.0f);
+    j.cloud_v = cam->eye[1] * (1.0f / 512.0f);
+  }
   Hd2d_ParallelFor(p->h, BackgroundRows, &j);
 }
 

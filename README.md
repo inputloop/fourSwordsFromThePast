@@ -470,7 +470,9 @@ of field from the real depth, bloom, color grade and the 2D-HD lighting.
 - **Faithful by default.** The game only runs what is on its own screen (and
   a little around it): enemies further away don't exist. So the world
   fades into mist where the original screen ends, a little further in first
-  person. Dark rooms stay as dark as in the original (pitch black without
+  person. Outdoors a sky rises out of that mist, with slow drifting clouds:
+  blue over the Light World, violet-red over the Dark World and grey over
+  Death Mountain, where the game's own clouds drift in it. Dark rooms stay as dark as in the original (pitch black without
   the Lamp), or are lit by the 2D-HD lighting when that is on.
 - **What stays 2D.** The item menu, the maps, the title and file select,
   the world map, game over, and moments the game draws with special screen
