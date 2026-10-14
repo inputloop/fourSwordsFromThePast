@@ -51,6 +51,12 @@ enum {
   kVoidTexels = 56,          // a solid cell with this many see-through or near-black texels is void
   kCornerReach = kHd3dBandMax,
   kOwSkirt = 16,             // outdoors: world rows kept past the area's north and south edges
+  kMaxProps = 512,           // small props drawn as standing pictures, per scene
+  kPropMaxCells = 4,         // a prop that fits in 4 x 4 cells (pots, statues, chests) is one
+  kFpWallHeight = 64,        // in first person room walls are at least this tall (the eye is at 20)
+  kBandStep = 0x80,          // (PanelCell.b) the band ends at another floor: a step, not a room wall
+  kBandLip = 0x40,           // (PanelCell.b) the upper floor's painted edge over a lower floor: it lies flat
+  kBandKinds = kBandStep | kBandLip,
 };
 
 // Cell classes.
@@ -68,17 +74,20 @@ enum {
   kCf_Shell = 0x100,         // part of a room's shell (its walls)
   kCf_Panel = 0x200,         // drawn as part of a wall panel
   kCf_Overhead = 0x400,      // outdoors: walkable, but drawn over Links (canopies, eaves)
+  kCf_Prop = 0x800,          // indoors: part of a small prop drawn as a standing picture (PropCard)
 };
 
 // What a picture cell becomes in the relief (Layer.pk).
 // (Level: a prop without a foot, flat at the base; Flat: the void and shell
-// cells no panel took, flat and without faces.)
-enum { kPk_Hole, kPk_Ground, kPk_Level, kPk_Flat, kPk_Top, kPk_Face, kPk_PitWall, kPk_PitFloor, kPk_Panel };
+// cells no panel took, flat and without faces; Prop: under a standing
+// picture, floor at the base.)
+enum { kPk_Hole, kPk_Ground, kPk_Level, kPk_Flat, kPk_Top, kPk_Face, kPk_PitWall, kPk_PitFloor, kPk_Panel, kPk_Prop };
 
 // World cell flags (Layer.wf). Bits 4-6: how many 16 px steps north an
-// inpainted cell takes its texels from. kWf_Flat (outdoors): an inpainted
-// cell seen through see-through texels: the backdrop's color.
-enum { kWf_Set = 1, kWf_NoFace = 2, kWf_Empty = 4, kWf_Inpaint = 8, kWf_Flat = 0x80 };
+// inpainted cell takes its texels from (indoors, south with kWf_South;
+// outdoors 5-7 mean south). kWf_Flat (outdoors): an inpainted cell seen
+// through see-through texels: the backdrop's color.
+enum { kWf_Set = 1, kWf_NoFace = 2, kWf_Empty = 4, kWf_Inpaint = 8, kWf_South = 0x80, kWf_Flat = 0x100 };
 
 // Panel directions: where the wall lies from its floor (ties go in this order).
 enum { kDir_N, kDir_W, kDir_E, kDir_S, kDir_None = 0xff };
@@ -94,8 +103,20 @@ typedef struct PanelCell {
   uint16 cell;               // picture cell (row * n + column)
   uint16 line;
   uint8 d;                   // band distance: 1 next to the floor
+  uint8 b;                   // the band of its column (how many cells the wall is painted with there), | kBandStep or kBandLip
   uint8 other;               // a corner: the direction of the other panel it can go with (kDir_None: not a corner)
+  int8 s0, s1;               // the hinge's offset (px) at its two ends along the foot (diagonal walls)
 } PanelCell;
+
+// A small prop indoors (a pot, a statue, a chest, a torch stand): its whole
+// picture stands up on its front line and turns to face the camera. At the
+// default view it stands where its painted face is, so it shows exactly the
+// picture (the relief rule); from the side it is the same picture, not a
+// box with smeared sides.
+typedef struct PropCard {
+  uint8 layer;
+  uint8 c0, r0, w, h;        // picture cells (rows r0 .. r0 + h - 1)
+} PropCard;
 
 typedef struct Layer {
   uint16 *word;              // tilemap word of each cell
@@ -104,7 +125,7 @@ typedef struct Layer {
   uint8 *cls;                // kCls_*
   uint8 *pk;                 // kPk_*
   int8 *wz;                  // world cells: the surface height (px)
-  uint8 *wf;                 // world cells: kWf_*
+  uint16 *wf;                // world cells: kWf_*
   int16 *rec[2];             // panel cells of each picture cell (-1: none; corners have two)
   int8 *zlo, *zhi;           // per chunk: the lowest and highest relief (zlo > zhi: none)
   uint8 *tex;                // size x size texels
@@ -154,6 +175,8 @@ struct Hd3dScene {
   int num_lines;
   PanelCell *pcells;
   int num_pcells;
+  PropCard *props;
+  int num_props;
   // The allocation (kept while the shape stays the same).
   void *mem;
   int32 mem_size;
@@ -173,8 +196,10 @@ static uint64 g_spread[2][256];                   // a bitplane byte over 8 byte
 static int16 g_list[kMaxCells];
 static uint8 g_mark[kMaxCells];
 static uint8 g_own_d[kMaxCells];
+static uint8 g_own_b[kMaxCells];
 static int16 g_own_line[kMaxCells];
 static int16 g_strip_line[4][kMaxCells];          // the band strip a floor cell starts, per direction (-1: none)
+static uint8 g_strip_len[4][kMaxCells];           // and its length
 static int16 g_line_of[2][4][kMaxN + 1];          // [layer][dir][hinge / 8]: the line (-1: none)
 static uint8 g_dist[kMaxCells];                   // chessboard distance to ground
 static int8 g_col_z[kMaxN];
@@ -294,10 +319,10 @@ static void *Carve(uint8 **p, size_t bytes) {
 // Lays out the scene's arrays in one block (kept while its shape stays).
 static bool AllocScene(Hd3dScene *s, int32 size, int layers, bool panels) {
   int n = size / 8, cells = n * n, chunks = (n / kChunkCells) * (n / kChunkCells);
-  size_t per_layer = (size_t)cells * (2 + 1 + 2 + 1 + 1 + 1 + 1 + 4) + (size_t)chunks * 2 + (size_t)size * size +
+  size_t per_layer = (size_t)cells * (2 + 1 + 2 + 1 + 1 + 1 + 2 + 4) + (size_t)chunks * 2 + (size_t)size * size +
                      16 * 12;  // (the arrays below, each rounded up to 16 bytes)
-  size_t total = per_layer * layers +
-                 (panels ? sizeof(PanelLine) * kMaxLines + sizeof(PanelCell) * kMaxPanelCells + 32 : 0);
+  size_t total = per_layer * layers + (panels ? sizeof(PanelLine) * kMaxLines + sizeof(PanelCell) * kMaxPanelCells +
+                                                    sizeof(PropCard) * kMaxProps + 48 : 0);
   bool same = s->mem && s->mem_size == size && s->mem_layers == layers && s->mem_panels == panels;
   if (!same) {
     FreeScene(s);
@@ -318,7 +343,7 @@ static bool AllocScene(Hd3dScene *s, int32 size, int layers, bool panels) {
     ly->cls = (uint8 *)Carve(&p, cells);
     ly->pk = (uint8 *)Carve(&p, cells);
     ly->wz = (int8 *)Carve(&p, cells);
-    ly->wf = (uint8 *)Carve(&p, cells);
+    ly->wf = (uint16 *)Carve(&p, cells * 2);
     ly->rec[0] = (int16 *)Carve(&p, cells * 2);
     ly->rec[1] = (int16 *)Carve(&p, cells * 2);
     ly->zlo = (int8 *)Carve(&p, chunks);
@@ -327,6 +352,7 @@ static bool AllocScene(Hd3dScene *s, int32 size, int layers, bool panels) {
   }
   s->lines = panels ? (PanelLine *)Carve(&p, sizeof(PanelLine) * kMaxLines) : NULL;
   s->pcells = panels ? (PanelCell *)Carve(&p, sizeof(PanelCell) * kMaxPanelCells) : NULL;
+  s->props = panels ? (PropCard *)Carve(&p, sizeof(PropCard) * kMaxProps) : NULL;
   return true;
 }
 
@@ -356,7 +382,7 @@ static bool InitScene(Hd3dScene *s, int inst, const SceneKey *k) {
   s->anim_lo = 0xfffe, s->anim_hi = 0;  // (no range matches: everything is decoded first)
   memset(s->dark, 0, sizeof(s->dark));
   s->void_rgb = 0;
-  s->num_lines = s->num_pcells = 0;
+  s->num_lines = s->num_pcells = s->num_props = 0;
   int cells = s->n * s->n;
   for (int L = 0; L < layers; L++)
     for (int i = 0; i < cells; i++)
@@ -785,7 +811,7 @@ static void Classify(Hd3dScene *s, int L) {
   if (s->indoors)
     memcpy(ly->attr, s->src_attr[L], 4096);
   for (int i = 0; i < cells; i++) {
-    uint16 f = ly->cf[i] & ~(kCf_Thin | kCf_Shell | kCf_Panel | kCf_Overhead);
+    uint16 f = ly->cf[i] & ~(kCf_Thin | kCf_Shell | kCf_Panel | kCf_Overhead | kCf_Prop);
     if (!(f & kCf_Decoded) && !(f & kCf_Empty)) {
       f &= ~(kCf_Blank | kCf_Holes);
       f |= CharCoverage(vram, ly->word[i]);
@@ -845,13 +871,14 @@ static int FindLine(Hd3dScene *s, int L, int dir, int hinge) {
   return s->num_lines++;
 }
 
-static void AddPanelCell(Hd3dScene *s, int L, int cell, int line, int d, uint8 other) {
+static void AddPanelCell(Hd3dScene *s, int L, int cell, int line, int d, int b, uint8 other) {
   Layer *ly = &s->layer[L];
   int slot = ly->rec[0][cell] < 0 ? 0 : ly->rec[1][cell] < 0 ? 1 : -1;
   if (slot < 0 || s->num_pcells >= kMaxPanelCells)
     return;
   PanelCell *p = &s->pcells[s->num_pcells];
-  p->cell = (uint16)cell, p->line = (uint16)line, p->d = (uint8)d, p->other = other;
+  p->cell = (uint16)cell, p->line = (uint16)line, p->d = (uint8)d, p->other = other, p->s0 = p->s1 = 0;
+  p->b = (uint8)(IntMax(b & ~kBandKinds, d) | (b & kBandKinds));
   ly->rec[slot][cell] = (int16)s->num_pcells++;
   ly->cf[cell] |= kCf_Panel;
   if (d > s->lines[line].bmax)
@@ -862,8 +889,8 @@ static bool LintelCandidate(const Layer *ly, int i) {
   return ly->cls[i] == kCls_Ground && (ly->cf[i] & kCf_Prio) && ly->rec[0][i] < 0;
 }
 
-// The (line, d) two cells share, on a line of one of the two directions (-1: none).
-static int SharedBand(const Hd3dScene *s, const Layer *ly, int i, int j, int dir_a, int dir_b, int *d) {
+// The (line, d) two cells share, on a line of one of the two directions (-1: none), and the band there.
+static int SharedBand(const Hd3dScene *s, const Layer *ly, int i, int j, int dir_a, int dir_b, int *d, int *band) {
   for (int a = 0; a < 2; a++) {
     int ra = ly->rec[a][i];
     if (ra < 0)
@@ -875,7 +902,7 @@ static int SharedBand(const Hd3dScene *s, const Layer *ly, int i, int j, int dir
     for (int b = 0; b < 2; b++) {
       int rb = ly->rec[b][j];
       if (rb >= 0 && s->pcells[rb].line == pa->line && s->pcells[rb].d == pa->d) {
-        *d = pa->d;
+        *d = pa->d, *band = pa->b;
         return pa->line;
       }
     }
@@ -902,12 +929,99 @@ static void AddLintels(Hd3dScene *s, int L) {
         if (v0 == 0 || v >= n || v - v0 > 8)
           continue;
         int before = vertical ? (v0 - 1) * n + u : u * n + v0 - 1, after = vertical ? v * n + u : u * n + v;
-        int d, line = vertical ? SharedBand(s, ly, before, after, kDir_W, kDir_E, &d)
-                               : SharedBand(s, ly, before, after, kDir_N, kDir_S, &d);
+        int d, band, line = vertical ? SharedBand(s, ly, before, after, kDir_W, kDir_E, &d, &band)
+                                     : SharedBand(s, ly, before, after, kDir_N, kDir_S, &d, &band);
         if (line < 0)
           continue;
         for (int k = v0; k < v; k++)
-          AddPanelCell(s, L, vertical ? k * n + u : u * n + k, line, d, kDir_None);
+          AddPanelCell(s, L, vertical ? k * n + u : u * n + k, line, d, band, kDir_None);
+      }
+    }
+  }
+}
+
+// What ends the band of b shell cells from floor cell (r, c) that way, in a
+// Normal room (two floors):
+// - the upper floor (BG2), for a wall of the lower floor (BG1): a step up to
+//   it (kBandStep), such as the sides of the castle's sunken walkways;
+// - the lower floor, seen where the upper one is empty, for a wall of the
+//   upper floor: the upper floor's painted edge (kBandLip), which stays flat.
+// Anything else (the void, the room's edge, floor of the same level past a
+// thin wall) makes a room wall (0).
+static int BandEnd(const Hd3dScene *s, int L, int r, int c, int dir, int b) {
+  const Layer *ly = &s->layer[L];
+  int n = s->n, rr = r + kDirY[dir] * (b + 1), cc = c + kDirX[dir] * (b + 1);
+  if (s->bg1_role != kHd3dBg1_LowerFloor || b >= kHd3dBandMax || rr < 0 || rr >= n || cc < 0 || cc >= n)
+    return 0;
+  int i = rr * n + cc;
+  if (L == 0 && ly->cls[i] == kCls_Empty && (s->src_map[1][i] & 0x3ff) != kEmptyChar)
+    return kBandLip;
+  uint8 up = s->layer[0].cls[i];
+  return L == 1 && up != kCls_Empty && up != kCls_Void ? kBandStep : 0;
+}
+
+// Whether the wall of direction dir has a band strip from the floor cell at
+// (fl, along) (fl: its floor row for north and south walls, else column).
+static bool StripAt(const Hd3dScene *s, int dir, int fl, int along) {
+  int n = s->n;
+  if (fl < 0 || fl >= n || along < 0 || along >= n)
+    return false;
+  return g_strip_line[dir][dir == kDir_N || dir == kDir_S ? fl * n + along : along * n + fl] >= 0;
+}
+
+// Walls at a diagonal: where the floor's edge steps one cell from one column
+// of a wall to the next, the two columns meet half way (4 px), so in first
+// person the wall is one slanted face, not a staircase of strips with gaps
+// between them. (Only there: the third-person views keep the painted steps.)
+static void SlantPanels(Hd3dScene *s, int first) {
+  int n = s->n;
+  for (int i = first; i < s->num_pcells; i++) {
+    PanelCell *p = &s->pcells[i];
+    const PanelLine *ln = &s->lines[p->line];
+    int dir = ln->dir, along = dir == kDir_N || dir == kDir_S ? p->cell % n : p->cell / n;
+    int fl = dir == kDir_N || dir == kDir_W ? ln->hinge / 8 : ln->hinge / 8 - 1;
+    if (!StripAt(s, dir, fl, along))
+      continue;  // (corners and door arches stay straight)
+    for (int end = 0; end < 2; end++) {
+      int nb = along + (end ? 1 : -1), off = 0;
+      if (!StripAt(s, dir, fl, nb))
+        off = StripAt(s, dir, fl + 1, nb) ? 4 : StripAt(s, dir, fl - 1, nb) ? -4 : 0;
+      if (end)
+        p->s1 = (int8)off;
+      else
+        p->s0 = (int8)off;
+    }
+  }
+}
+
+// The band of each column is as many cells as the column really has: a
+// thin wall between two floors is shared by its two faces (each takes the
+// cells nearer to it), so each face stands with half of it, as tall as a
+// whole wall.
+static void ColumnBands(Hd3dScene *s, int L, int first) {
+  const Layer *ly = &s->layer[L];
+  int n = s->n;
+  for (int i = first; i < s->num_pcells; i++) {
+    const PanelCell *top = &s->pcells[i];
+    int dir = s->lines[top->line].dir, r = top->cell / n + kDirY[dir], c = top->cell % n + kDirX[dir];
+    bool above = false;  // (another cell of this column further out)
+    for (int k = 0; k < 2 && r >= 0 && r < n && c >= 0 && c < n; k++) {
+      int rec = ly->rec[k][r * n + c];
+      above |= rec >= 0 && s->pcells[rec].line == top->line && s->pcells[rec].d > top->d;
+    }
+    if (above)
+      continue;
+    for (int d = 0; d < top->d; d++) {
+      int rr = top->cell / n - d * kDirY[dir], cc = top->cell % n - d * kDirX[dir], j = rr * n + cc;
+      if (rr < 0 || rr >= n || cc < 0 || cc >= n)
+        break;
+      for (int k = 0; k < 2; k++) {
+        int rec = ly->rec[k][j];
+        if (rec < 0 || s->pcells[rec].line != top->line)
+          continue;
+        PanelCell *p = &s->pcells[rec];
+        if ((p->b & ~kBandKinds) > top->d)
+          p->b = (uint8)(top->d | (p->b & kBandKinds));
       }
     }
   }
@@ -915,7 +1029,7 @@ static void AddLintels(Hd3dScene *s, int L) {
 
 static void BuildShell(Hd3dScene *s, int L, int *hist_n, int *hist_all) {
   Layer *ly = &s->layer[L];
-  int n = s->n, cells = n * n;
+  int n = s->n, cells = n * n, first = s->num_pcells;
   // Thin solids (railings) are props.
   for (int i = 0; i < cells; i++) {
     if (!IsSolid(ly->cls[i]))
@@ -984,20 +1098,22 @@ static void BuildShell(Hd3dScene *s, int L, int *hist_n, int *hist_all) {
         continue;
       if (b > s->lines[line].bmax)
         s->lines[line].bmax = (uint8)b;
-      g_strip_line[dir][i] = (int16)line;
-      hist_all[b]++;
-      if (dir == kDir_N)
-        hist_n[b]++;
+      g_strip_line[dir][i] = (int16)line, g_strip_len[dir][i] = (uint8)(b | BandEnd(s, L, r, c, dir, b));
+      if (!(g_strip_len[dir][i] & kBandKinds)) {  // (only room walls set the room's wall height)
+        hist_all[b]++;
+        if (dir == kDir_N)
+          hist_n[b]++;
+      }
       for (int k = 1; k <= b; k++) {
         int j = (r + kDirY[dir] * k) * n + c + kDirX[dir] * k;
         if (k < g_own_d[j] || (k == g_own_d[j] && dir < s->lines[g_own_line[j]].dir))
-          g_own_d[j] = (uint8)k, g_own_line[j] = (int16)line;
+          g_own_d[j] = (uint8)k, g_own_b[j] = g_strip_len[dir][i], g_own_line[j] = (int16)line;
       }
     }
   }
   for (int i = 0; i < cells; i++)
     if (g_own_d[i] != 0xff)
-      AddPanelCell(s, L, i, g_own_line[i], g_own_d[i], kDir_None);
+      AddPanelCell(s, L, i, g_own_line[i], g_own_d[i], g_own_b[i], kDir_None);
   // Corners: shell cells whose nearest floor is diagonal belong to both
   // walls that meet there (the camera decides which one each frame).
   for (int i = 0; i < cells; i++)
@@ -1023,7 +1139,7 @@ static void BuildShell(Hd3dScene *s, int L, int *hist_n, int *hist_all) {
       continue;
     // The nearest floor cell diagonally (rings of growing chessboard
     // distance, from the distance to the nearest floor of any kind).
-    int r = i / n, c = i % n, bs = 99, by = -1, bx = -1, bfr = 0, bfc = 0;
+    int r = i / n, c = i % n, bs = 99, by = -1, bx = -1, bfr = 0, bfc = 0, lby = 0, lbx = 0;
     for (int m = IntMax(g_dist[i], 1); m <= kCornerReach && bs == 99; m++) {
       for (int fr = -m; fr <= m; fr++) {
         int rr = r + fr, step = (fr == -m || fr == m) ? 1 : 2 * m;
@@ -1035,20 +1151,30 @@ static void BuildShell(Hd3dScene *s, int L, int *hist_n, int *hist_all) {
             continue;
           int ly_line = g_strip_line[fr > 0 ? kDir_N : kDir_S][f], lx_line = g_strip_line[fc > 0 ? kDir_W : kDir_E][f];
           int sum = abs(fr) + abs(fc);
-          if ((ly_line >= 0 || lx_line >= 0) && sum < bs)
+          if ((ly_line >= 0 || lx_line >= 0) && sum < bs) {
             bs = sum, by = ly_line, bx = lx_line, bfr = fr, bfc = fc;
+            lby = g_strip_len[fr > 0 ? kDir_N : kDir_S][f], lbx = g_strip_len[fc > 0 ? kDir_W : kDir_E][f];
+          }
         }
       }
     }
+    // (Not past the band of the floor it goes with: no wall stands under it
+    // there, so it would float.)
+    if (by >= 0 && abs(bfr) > (lby & ~kBandKinds))
+      by = -1;
+    if (bx >= 0 && abs(bfc) > (lbx & ~kBandKinds))
+      bx = -1;
     if (by < 0 && bx < 0)
       continue;
     uint8 dir_y = bfr > 0 ? kDir_N : kDir_S, dir_x = bfc > 0 ? kDir_W : kDir_E;
     if (by >= 0)
-      AddPanelCell(s, L, i, by, abs(bfr), bx >= 0 ? dir_x : kDir_None);
+      AddPanelCell(s, L, i, by, abs(bfr), lby, bx >= 0 ? dir_x : kDir_None);
     if (bx >= 0)
-      AddPanelCell(s, L, i, bx, abs(bfc), by >= 0 ? dir_y : kDir_None);
+      AddPanelCell(s, L, i, bx, abs(bfc), lbx, by >= 0 ? dir_y : kDir_None);
   }
   AddLintels(s, L);
+  SlantPanels(s, first);
+  ColumnBands(s, L, first);
 }
 
 static int MedianBand(const int *hist) {
@@ -1065,10 +1191,96 @@ static int MedianBand(const int *hist) {
   return kHd3dBandMax;
 }
 
+// ---- Geometry: small props indoors ----
+
+static bool PropSolid(const Layer *ly, int i) {
+  return IsSolid(ly->cls[i]) && !(ly->cf[i] & (kCf_Shell | kCf_Panel | kCf_Prop));
+}
+
+// Pots, statues, chests and torch stands: a piece of solid cells (4-connected,
+// not part of a wall) that fits in kPropMaxCells x kPropMaxCells and stands on
+// the floor becomes a PropCard. Floor, pit and its own cells may share its box
+// (a statue's middle), nothing else may.
+static void BuildProps(Hd3dScene *s, int L) {
+  Layer *ly = &s->layer[L];
+  int n = s->n, cells = n * n;
+  memset(g_mark, 0, cells);
+  for (int seed = 0; seed < cells && s->num_props < kMaxProps; seed++) {
+    if (g_mark[seed] || !PropSolid(ly, seed))
+      continue;
+    int head = 0, tail = 0, c0 = n, r0 = n, c1 = -1, r1 = -1;
+    bool big = false;
+    g_list[tail++] = (int16)seed;
+    g_mark[seed] = 1;
+    while (head < tail) {
+      int i = g_list[head++], r = i / n, c = i % n;
+      c0 = IntMin(c0, c), c1 = IntMax(c1, c), r0 = IntMin(r0, r), r1 = IntMax(r1, r);
+      if (c1 - c0 >= kPropMaxCells || r1 - r0 >= kPropMaxCells)
+        big = true;
+      for (int dir = 0; dir < 4; dir++) {
+        int rr = r + kDirY[dir], cc = c + kDirX[dir], j = rr * n + cc;
+        if (rr < 0 || rr >= n || cc < 0 || cc >= n || g_mark[j] || !PropSolid(ly, j))
+          continue;
+        g_mark[j] = 1;
+        if (tail < kMaxCells)
+          g_list[tail++] = (int16)j;
+      }
+    }
+    // (The marks stay: a piece too big is a relief, and is not tried again.)
+    if (big || r1 + 1 >= n)
+      continue;
+    // The box may hold only this piece, floor and pits.
+    for (int k = 0; k < tail; k++)
+      g_mark[g_list[k]] = 2;
+    bool ok = true;
+    for (int r = r0; r <= r1 && ok; r++) {
+      for (int c = c0; c <= c1 && ok; c++) {
+        int i = r * n + c;
+        uint8 cl = ly->cls[i];
+        if (ly->cf[i] & (kCf_Shell | kCf_Panel | kCf_Prop))
+          ok = false;
+        else if (IsSolid(cl))
+          ok = g_mark[i] == 2 && (ly->cf[i] & kCf_Decoded);
+        else
+          ok = cl == kCls_Ground || cl == kCls_Pit;
+      }
+    }
+    for (int k = 0; k < tail; k++)
+      g_mark[g_list[k]] = 1;
+    // It stands on the floor: one of the cells right south of it is floor.
+    bool foot = false;
+    for (int c = c0; c <= c1; c++) {
+      int f = (r1 + 1) * n + c;
+      foot |= ly->cls[f] == kCls_Ground && !(ly->cf[f] & kCf_Panel);
+    }
+    if (!ok || !foot)
+      continue;
+    // Its top often overlaps the floor north of it, painted over Links
+    // (walkable cells with the priority bit, like a canopy over a trunk).
+    for (int k = 0; k < 2 && r0 > 0 && r1 - r0 + 1 < kPropMaxCells; k++) {
+      bool over = false, walk = true;
+      for (int c = c0; c <= c1; c++) {
+        int i = (r0 - 1) * n + c;
+        walk &= ly->cls[i] == kCls_Ground && !(ly->cf[i] & (kCf_Shell | kCf_Panel | kCf_Prop));
+        over |= (ly->cf[i] & kCf_Prio) != 0;
+      }
+      if (!walk || !over)
+        break;
+      r0--;
+    }
+    for (int r = r0; r <= r1; r++)
+      for (int c = c0; c <= c1; c++)
+        ly->cf[r * n + c] |= kCf_Prop;
+    PropCard *p = &s->props[s->num_props++];
+    p->layer = (uint8)L, p->c0 = (uint8)c0, p->r0 = (uint8)r0;
+    p->w = (uint8)(c1 - c0 + 1), p->h = (uint8)(r1 - r0 + 1);
+  }
+}
+
 // ---- Geometry: the relief ----
 
 static bool ReliefSolid(const Layer *ly, int i) {
-  return IsSolid(ly->cls[i]) && !(ly->cf[i] & (kCf_Shell | kCf_Panel));
+  return IsSolid(ly->cls[i]) && !(ly->cf[i] & (kCf_Shell | kCf_Panel | kCf_Prop));
 }
 
 static bool OverheadGround(const Layer *ly, int i) {
@@ -1088,7 +1300,7 @@ static void BuildRelief(Hd3dScene *s, int L) {
   Layer *ly = &s->layer[L];
   int n = s->n, base = LayerBase(s, L), off = base / 8;
   memset(ly->wz, 0, (size_t)n * n);
-  memset(ly->wf, 0, (size_t)n * n);
+  memset(ly->wf, 0, (size_t)n * n * sizeof(uint16));
   for (int c = 0; c < n; c++) {
     for (int r = 0; r < n;) {
       int i = r * n + c;
@@ -1101,6 +1313,8 @@ static void BuildRelief(Hd3dScene *s, int L) {
       } else if (cl == kCls_Void || (f & kCf_Shell)) {
         // The void, and shell cells no panel took: flat, as painted.
         ly->pk[i] = kPk_Flat, g_col_z[r] = (int8)base, g_col_row[r] = (int16)(r + off), r++;
+      } else if (f & kCf_Prop) {
+        ly->pk[i] = kPk_Prop, r++;  // (the floor under it is inpainted)
       } else if (ReliefSolid(ly, i)) {
         int a = r, b;
         while (r < n && ReliefSolid(ly, r * n + c))
@@ -1130,7 +1344,7 @@ static void BuildRelief(Hd3dScene *s, int L) {
           ly->pk[k * n + c] = kPk_Face;
       } else if (cl == kCls_Pit) {
         int a = r;
-        while (r < n && ly->cls[r * n + c] == kCls_Pit && !(ly->cf[r * n + c] & kCf_Panel))
+        while (r < n && ly->cls[r * n + c] == kCls_Pit && !(ly->cf[r * n + c] & (kCf_Panel | kCf_Prop)))
           r++;
         // The first rows are its painted inner wall, shown by the face of
         // the surface right north of it (no such surface: a flat pit).
@@ -1154,7 +1368,7 @@ static void BuildRelief(Hd3dScene *s, int L) {
         continue;
       int j = wr * n + c;
       if (!(ly->wf[j] & kWf_Set) || g_col_z[r] > ly->wz[j])
-        ly->wz[j] = g_col_z[r], ly->wf[j] = (uint8)(kWf_Set | (pk == kPk_Flat ? kWf_NoFace : 0));
+        ly->wz[j] = g_col_z[r], ly->wf[j] = (uint16)(kWf_Set | (pk == kPk_Flat ? kWf_NoFace : 0));
     }
     // Holes, and inpainting what was uncovered.
     int above = base;
@@ -1175,21 +1389,32 @@ static void BuildRelief(Hd3dScene *s, int L) {
         have = false;
         continue;
       }
-      int z = have ? above : base, src = r - z / 8, k = 1;
+      bool prop = pk == kPk_Prop;  // (the floor under a standing prop is at the base)
+      int z = have && !prop ? above : base, src = r - z / 8, k = 1;
       // Texels from plain ground (or a pit's floor) 16 px steps north, which
       // keeps the floor patterns lined up. But where the surface in front of
       // it has see-through texels, its own (the same ones, so the picture
       // still shows what is behind them).
-      if (src < 0 || src >= n || (ly->cf[src * n + c] & kCf_Holes))
+      if (!prop && (src < 0 || src >= n || (ly->cf[src * n + c] & kCf_Holes)))
         k = 5;
       for (; k <= 4; k++) {
         int sr = src - 2 * k;
         if (sr >= 0 && sr < n && (ly->pk[sr * n + c] == kPk_Ground || ly->pk[sr * n + c] == kPk_PitFloor))
           break;
       }
+      uint8 south = 0;
+      if (k > 4 && prop) {
+        // (Under a prop with no floor north of it, floor from the south.)
+        for (k = 1; k <= 4; k++) {
+          int sr = src + 2 * k;
+          if (sr >= 0 && sr < n && ly->pk[sr * n + c] == kPk_Ground)
+            break;
+        }
+        south = (uint8)kWf_South;
+      }
       if (k > 4)
-        k = 0;
-      ly->wz[j] = (int8)z, ly->wf[j] = (uint8)(kWf_Set | kWf_Inpaint | k << 4);
+        k = 0, south = 0;
+      ly->wz[j] = (int8)z, ly->wf[j] = (uint16)(kWf_Set | kWf_Inpaint | south | k << 4);
       above = z, have = true;
     }
   }
@@ -1862,7 +2087,7 @@ static void BuildReliefOutdoors(Hd3dScene *s) {
   ComputeTerraces(s);
   OwObjects(s);
   memset(ly->wz, 0, (size_t)n * n);
-  memset(ly->wf, 0, (size_t)n * n);
+  memset(ly->wf, 0, (size_t)n * n * sizeof(uint16));
   memset(s->slab_lo, 0, (size_t)n * n);
   memset(s->slab_hi, 0, (size_t)n * n);
   for (int c = 0; c < n; c++) {
@@ -1958,7 +2183,7 @@ static void BuildReliefOutdoors(Hd3dScene *s) {
       // (Seen through the see-through texels of what is in front of it, it
       // shows what the picture shows there: the backdrop.)
       int flat = src >= 0 && src < n && (ly->cf[src * n + c] & kCf_Holes) ? kWf_Flat : 0;
-      ly->wz[j] = (int8)z, ly->wf[j] = (uint8)(kWf_Set | kWf_Inpaint | k << 4 | flat);
+      ly->wz[j] = (int8)z, ly->wf[j] = (uint16)(kWf_Set | kWf_Inpaint | k << 4 | flat);
       above = z, have = true;
     }
     // A slab resting on what is under it is part of it; so is one over
@@ -2054,7 +2279,7 @@ static void BuildGeometry(Hd3dScene *s) {
   int layers = GeometryLayers(s), hist_n[kHd3dBandMax + 1], hist_all[kHd3dBandMax + 1];
   memset(hist_n, 0, sizeof(hist_n));
   memset(hist_all, 0, sizeof(hist_all));
-  s->num_lines = s->num_pcells = 0;
+  s->num_lines = s->num_pcells = s->num_props = 0;
   for (int L = 0; L < layers; L++) {
     Layer *ly = &s->layer[L];
     for (int i = 0; i < s->n * s->n; i++)
@@ -2065,6 +2290,7 @@ static void BuildGeometry(Hd3dScene *s) {
         for (int h = 0; h <= kMaxN; h++)
           g_line_of[L][dir][h] = -1;
       BuildShell(s, L, hist_n, hist_all);
+      BuildProps(s, L);
     }
   }
   // East, west and south walls are as high as the north ones are wide.
@@ -2233,6 +2459,8 @@ typedef struct EmitCtx {
   int max, num;
   int c0, r0, c1, r1;        // the emission rectangle, in world cells
   float rise;
+  float fp;                  // Hd3dEmit.fp_blend (walls grow to kFpWallHeight)
+  bool dark_void;            // indoors in first person: the void is a dark flat color
   float k[4];                // the fold of each wall direction
   float cphi[4], sphi[4];    // cos and sin of its angle (90 degrees times k)
   int8 chunk_vis[2][kMaxN / kChunkCells * (kMaxN / kChunkCells)];  // panels: 0 unknown, 1 seen, -1 culled
@@ -2327,6 +2555,45 @@ static void EmitTop(EmitCtx *x, int L, int c, int r, int len, int z, int ink) {
   Fade(x, q);
 }
 
+// Indoors, the side and back faces of a raised block (a railing, a ledge, a
+// table) show its painted front: each height shows the front's row at that
+// height (not the slanted smear of one column the relief rule gives there),
+// and along the side the columns wrap around the corner from the front, back
+// and forth across the block's width. Called before the face is oriented.
+static void SideFromFront(const Hd3dScene *s, int L, int c, int r, int dir, R3dQuad *q) {
+  const Layer *ly = &s->layer[L];
+  int n = s->n, z = ly->wz[r * n + c];
+  if ((ly->wf[r * n + c] & kWf_Inpaint) || z <= LayerBase(s, L))
+    return;
+  // The front: the south end of this top, in this column.
+  int rs = r + 1;
+  while (rs < n && rs < r + 8 && (ly->wf[rs * n + c] & (kWf_Set | kWf_Inpaint)) == kWf_Set && ly->wz[rs * n + c] == z)
+    rs++;
+  float ys = (float)(s->origin_y + 8 * rs);
+  for (int i = 0; i < 4; i++)
+    q->v[i].v = ys - q->v[i].z;
+  if (dir == kDir_N)
+    return;
+  // How wide the top is from this side inward (the wrap goes back and forth over it).
+  int step = dir == kDir_E ? -1 : 1, wc = 1;
+  for (; wc < 8; wc++) {
+    int cc = c + step * wc;
+    if (cc < 0 || cc >= n || (ly->wf[r * n + cc] & (kWf_Set | kWf_Inpaint)) != kWf_Set || ly->wz[r * n + cc] != z)
+      break;
+  }
+  float wpx = 8.0f * (float)wc, edge = (float)(s->origin_x + 8 * (dir == kDir_E ? c + 1 : c));
+  // (Both rows of this cell's face fall in one sweep: widths and the front are whole cells.)
+  float d_mid = ys - (float)(s->origin_y + 8 * r) - 4.0f;
+  int sweep = (int)(d_mid / wpx);
+  for (int i = 0; i < 4; i++) {
+    float t = ys - q->v[i].y - (float)sweep * wpx;
+    if (sweep & 1)
+      t = wpx - t;
+    float in = 0.5f + t * (wpx - 1.0f) / wpx;  // (half a texel inside at both ends)
+    q->v[i].u = dir == kDir_E ? edge - in : edge + in;
+  }
+}
+
 // A vertical face of world cell (c, r) toward its neighbour that way, from zlo up to zhi.
 static void EmitFace(EmitCtx *x, int L, int c, int r, int dir, int zlo, int zhi) {
   static const uint8 kShade[4] = { 176, 216, 216, 255 };
@@ -2351,6 +2618,8 @@ static void EmitFace(EmitCtx *x, int L, int c, int r, int dir, int zlo, int zhi)
     SetVertex(&q->v[2], px, y1, zl, u, y1 - zl);
     SetVertex(&q->v[3], px, y0, zl, u, y0 - zl);
   }
+  if (s->indoors && dir != kDir_S)
+    SideFromFront(s, L, c, r, dir, q);
   Orient(q, (float)kDirX[dir], (float)kDirY[dir], 0);
   ApplyRise(x, q, LayerBase(s, L));
   Fade(x, q);
@@ -2406,6 +2675,35 @@ static void EmitFaceOw(EmitCtx *x, int c, int r, int dir, int zlo, int zhi, int 
   Fade(x, q);
 }
 
+// Indoors in first person, the void around a room (its filler, flat on the
+// floor) darkens toward the fog: seen from eye height it read as a beige or
+// green plain out to the horizon, past every doorway and low wall. One quad
+// per run of up to 8 void cells from (c, r); returns the run's length.
+static int EmitDarkVoid(EmitCtx *x, int L, int c, int r, int cb) {
+  Hd3dScene *s = x->s;
+  const Layer *ly = &s->layer[L];
+  int n = s->n, j = r * n + c, z = ly->wz[j], len = 1;
+  while (len < 8 && c + len < cb && (ly->wf[j + len] & (kWf_Set | kWf_NoFace)) == (kWf_Set | kWf_NoFace) &&
+         ly->wz[j + len] == z)
+    len++;
+  R3dQuad *q = NewQuad(x, L ? x->e->tex_bg1 : x->e->tex_bg2, 255, kR3dClass_World);
+  if (!q)
+    return len;
+  uint32 v = s->void_rgb;
+  int keep = (int)(256.0f * (1.0f - 0.85f * x->fp));
+  q->flags = kR3dQuad_Flat;
+  q->color = (uint32)((((v >> 16 & 0xff) * keep >> 8) << 16) | (((v >> 8 & 0xff) * keep >> 8) << 8) |
+                      ((v & 0xff) * keep >> 8));
+  float x0 = (float)(s->origin_x + 8 * c), x1 = x0 + 8.0f * (float)len;
+  float y0 = (float)(s->origin_y + 8 * r), y1 = y0 + 8.0f, zf = (float)z;
+  SetVertex(&q->v[0], x0, y0, zf, x0, y0 - zf);
+  SetVertex(&q->v[1], x1, y0, zf, x1, y0 - zf);
+  SetVertex(&q->v[2], x1, y1, zf, x1, y1 - zf);
+  SetVertex(&q->v[3], x0, y1, zf, x0, y1 - zf);
+  ApplyRise(x, q, LayerBase(s, L));
+  return len;
+}
+
 static void EmitRelief(EmitCtx *x, int L) {
   Hd3dScene *s = x->s;
   Layer *ly = &s->layer[L];
@@ -2427,12 +2725,16 @@ static void EmitRelief(EmitCtx *x, int L) {
       for (int r = IntMax(cy * kChunkCells, x->r0); r < rb; r++) {
         for (int c = IntMax(cx * kChunkCells, x->c0); c < cb;) {
           int j = r * n + c;
-          uint8 f = ly->wf[j];
-          int z = ly->wz[j], ink = f >> 4 & 7;
+          uint16 f = ly->wf[j];
+          int z = ly->wz[j], ink = (f >> 4 & 7) * (f & kWf_South ? -1 : 1);
           if (!s->indoors && ink > 4)
             ink = 4 - ink;  // (outdoors 5-7: south)
           if (!(f & kWf_Set)) {
             c++;
+            continue;
+          }
+          if ((f & kWf_NoFace) && x->dark_void) {
+            c += EmitDarkVoid(x, L, c, r, cb);
             continue;
           }
           // (A top whose texels aren't there, outside the area or not
@@ -2457,7 +2759,7 @@ static void EmitRelief(EmitCtx *x, int L) {
               if (rr < 0 || rr >= n || c2 < 0 || c2 >= n)
                 continue;
               int nb = rr * n + c2, zl;
-              uint8 nf = ly->wf[nb];
+              uint16 nf = ly->wf[nb];
               if (nf & kWf_Set) {
                 if ((nf & kWf_NoFace) || ly->wz[nb] >= z)
                   continue;
@@ -2636,14 +2938,35 @@ static bool PanelChunkVisible(EmitCtx *x, int L, int pr, int pc) {
   return *v > 0;
 }
 
+// How much a standing wall stretches its painted band (8 B px, B the band
+// of the cell's own column) upward. North walls are as high as painted (that
+// keeps the default view exact), the others as high as the room's north
+// walls. In first person the eye is 20 px up, so every wall grows to at
+// least kFpWallHeight: low bands at eye level read as railings, not walls.
+// (Per column: a few wide columns where walls meet must not flatten the
+// whole wall. Neighbour columns of other bands still reach the same top.)
+// A step between two floors is not a room wall: it never grows, and a step
+// up from the lower floor ends at the upper floor.
+static float PanelStretch(const Hd3dScene *s, int L, int dir, int b, float fp) {
+  float band = 8.0f * (float)(b & ~kBandKinds);
+  int base = LayerBase(s, L);
+  float tp = dir == kDir_N ? 1.0f : (float)(base < 0 && (b & kBandStep) ? -base : s->wall_height) / band;
+  if (b & kBandStep)
+    return tp;
+  float tall = (float)kFpWallHeight / band;
+  return fp > 0.0f && tall > tp ? tp + (tall - tp) * fp : tp;
+}
+
 // One cell of a wall panel: a point at band distance t (px) along the foot
-// is at hinge + R(t) (cos phi n + sin phi z), R(t) = t lerp(1, H / 8B, k).
+// is at hinge + R(t) (cos phi n + sin phi z), R(t) = t lerp(1, PanelStretch, k).
 static void EmitPanelCell(EmitCtx *x, int L, const PanelCell *p, int lid) {
   Hd3dScene *s = x->s;
   const PanelLine *ln = &s->lines[p->line];
   int dir = ln->dir, n = s->n, base = LayerBase(s, L);
   float k = x->k[dir], cp = x->cphi[dir], sp = x->sphi[dir];
-  float scale = dir == kDir_N ? 1.0f : 1.0f + ((float)s->wall_height / (8.0f * (float)ln->bmax) - 1.0f) * k;
+  if (p->b & kBandLip)
+    k = 0.0f, cp = 1.0f, sp = 0.0f;  // (the upper floor's edge lies as painted)
+  float scale = 1.0f + (PanelStretch(s, L, dir, p->b, x->fp) - 1.0f) * k;
   float nx = (float)kDirX[dir], ny = (float)kDirY[dir];
   int pr = p->cell / n, pc = p->cell % n;
   bool along_x = dir == kDir_N || dir == kDir_S;
@@ -2655,15 +2978,32 @@ static void EmitPanelCell(EmitCtx *x, int L, const PanelCell *p, int lid) {
   R3dQuad *q = NewQuad(x, L ? x->e->tex_bg1 : x->e->tex_bg2, shade, kR3dClass_World);
   if (!q)
     return;
+  // (A diagonal wall's slant, in first person; its texels go with the points.)
+  float slant = x->fp * k, s0 = slant * (float)p->s0, s1 = slant * (float)p->s1;
   for (int v = 0; v < 4; v++) {
-    float a = (v == 1 || v == 2) ? a1 : a0, tt = t[v >> 1], rr = tt * scale;
+    bool end = v == 1 || v == 2;
+    float a = end ? a1 : a0, tt = t[v >> 1], rr = tt * scale, h = hinge + (end ? s1 : s0);
     // hinge point, the folded point, and its texel (where it is painted)
-    float hx = along_x ? a : hinge, hy = along_x ? hinge : a;
+    float hx = along_x ? a : h, hy = along_x ? h : a;
     SetVertex(&q->v[v], ox + hx + nx * rr * cp, oy + hy + ny * rr * cp + zb, zb + rr * sp,
               ox + hx + nx * tt, oy + hy + ny * tt);
   }
   Orient(q, -nx * sp, -ny * sp, cp);
   Fade(x, q);
+  // Where the slanted foot leaves the painted floor's edge (it moves into the
+  // band), floor fills the corner, with the texels of the floor cell next to it.
+  float into = along_x ? -ny : -nx, g0 = s0 * into < 0.0f ? s0 : 0.0f, g1 = s1 * into < 0.0f ? s1 : 0.0f;
+  if (p->d == 1 && (g0 != 0.0f || g1 != 0.0f)) {
+    R3dQuad *f = NewQuad(x, L ? x->e->tex_bg1 : x->e->tex_bg2, 255, kR3dClass_World);
+    if (f) {
+      float fa[4] = { a0, a1, a1, a0 }, fg[4] = { 0.0f, 0.0f, g1, g0 };
+      for (int v = 0; v < 4; v++) {
+        float h = hinge + fg[v], hx = along_x ? fa[v] : h, hy = along_x ? h : fa[v];
+        SetVertex(&f->v[v], ox + hx, oy + hy + zb, zb, ox + hx - nx * 8.0f, oy + hy - ny * 8.0f);
+      }
+      Orient(f, 0, 0, 1);
+    }
+  }
   if (lid < 0 || k <= 0)
     return;
   // A lid over the wall top, out over the void past the band (lid cells).
@@ -2678,8 +3018,9 @@ static void EmitPanelCell(EmitCtx *x, int L, const PanelCell *p, int lid) {
   if (dir != kDir_N)
     q->flags = kR3dQuad_Flat, q->color = s->void_rgb;
   for (int v = 0; v < 4; v++) {
-    float a = (v == 1 || v == 2) ? a1 : a0, dist = v >> 1 ? outer : inner;
-    float hx = along_x ? a : hinge, hy = along_x ? hinge : a;
+    bool end = v == 1 || v == 2;
+    float a = end ? a1 : a0, dist = v >> 1 ? outer : inner, h = hinge + (end ? s1 : s0);
+    float hx = along_x ? a : h, hy = along_x ? h : a;
     float px = ox + hx + nx * dist, py = oy + hy + ny * dist + zb;
     SetVertex(&q->v[v], px, py, zt, px, py - zt);
   }
@@ -2732,6 +3073,43 @@ static void EmitPanels(EmitCtx *x, int L) {
     if (!PanelChunkVisible(x, L, pr, pc))
       continue;
     EmitPanelCell(x, L, p, IsColumnTop(s, ly, p) ? LidCells(s, ly, p) : -1);
+  }
+}
+
+// Small props: each stands as one picture of its whole box, turned to face the
+// camera about a point a little behind its front (so it turns like something
+// round). Facing the default camera it stands on its front line, where the
+// relief rule puts a face: the picture is exact there.
+static void EmitProps(EmitCtx *x, int L) {
+  Hd3dScene *s = x->s;
+  const Hd3dEmit *e = x->e;
+  int base = LayerBase(s, L), off = base / 8;
+  float vx = e->view_dir[0], vy = e->view_dir[1], zb = (float)base;
+  float rx = vy, ry = -vx;  // the viewer's right
+  for (int i = 0; i < s->num_props && x->num < x->max; i++) {
+    const PropCard *p = &s->props[i];
+    if (p->layer != L || p->r0 + off + p->h <= x->r0 || p->r0 + off >= x->r1 || p->c0 + p->w <= x->c0 ||
+        p->c0 >= x->c1)
+      continue;
+    float w = 8.0f * (float)p->w, h = 8.0f * (float)p->h;
+    float u0 = (float)(s->origin_x + 8 * p->c0), vb = (float)(s->origin_y + 8 * (p->r0 + p->h));
+    float rad = w < 16.0f ? w * 0.5f : 8.0f;
+    float cx = u0 + w * 0.5f, cy = vb + zb - rad;  // (the front line is at picture row vb, lowered with the base)
+    float reach = w * 0.5f + rad;
+    if (!BoxVisible(x, cx - reach, cy - reach, zb, cx + reach, cy + reach, zb + h))
+      continue;
+    R3dQuad *q = NewQuad(x, L ? e->tex_bg1 : e->tex_bg2, 255, kR3dClass_World);
+    if (!q)
+      return;
+    float fx = cx + vx * rad, fy = cy + vy * rad, hw = w * 0.5f;
+    SetVertex(&q->v[0], fx - rx * hw, fy - ry * hw, zb + h, u0, vb - h);
+    SetVertex(&q->v[1], fx + rx * hw, fy + ry * hw, zb + h, u0 + w, vb - h);
+    SetVertex(&q->v[2], fx + rx * hw, fy + ry * hw, zb, u0 + w, vb);
+    SetVertex(&q->v[3], fx - rx * hw, fy - ry * hw, zb, u0, vb);
+    Orient(q, vx, vy, 0);
+    q->flags |= kR3dQuad_TwoSided;
+    ApplyRise(x, q, base);
+    Fade(x, q);
   }
 }
 
@@ -2816,6 +3194,8 @@ int Hd3dScene_Emit(Hd3dScene *s, const Hd3dEmit *e, R3dQuad *out, int max) {
   if (x.c0 >= x.c1 || x.r0 >= x.r1)
     return 0;
   float fp = e->fp_blend < 0 ? 0 : e->fp_blend > 1 ? 1 : e->fp_blend;
+  x.fp = e->test_camera ? 0.0f : fp;
+  x.dark_void = s->indoors && x.fp > 0.0f;
   for (int dir = 0; dir < 4; dir++) {
     // m: the wall's inner normal (into the room); c: toward the eye.
     float dot = -(float)kDirX[dir] * e->view_dir[0] - (float)kDirY[dir] * e->view_dir[1], k;
@@ -2835,10 +3215,12 @@ int Hd3dScene_Emit(Hd3dScene *s, const Hd3dEmit *e, R3dQuad *out, int max) {
       EmitFlat(&x, L);
     } else {
       EmitRelief(&x, L);
-      if (s->indoors)
+      if (s->indoors) {
         EmitPanels(&x, L);
-      else
+        EmitProps(&x, L);
+      } else {
         EmitSlabs(&x), EmitSkirts(&x);
+      }
     }
   }
   if (s->bg1_role == kHd3dBg1_Far && s->num_layers > 1)
@@ -2871,7 +3253,9 @@ void Hd3dScene_Dump(const Hd3dScene *s, const char *ppm_path) {
       int r = i / n, c = i % n;
       uint8 col[3], hz[3];
       memcpy(col, kClsRgb[s->ready ? ly->cls[i] : (ly->cf[i] & kCf_Empty ? kCls_Empty : kCls_Ground)], 3);
-      if (geom && (ly->cf[i] & kCf_Thin))
+      if (geom && (ly->cf[i] & kCf_Prop))
+        col[0] = 255, col[1] = 120, col[2] = 200;  // standing props: pink
+      else if (geom && (ly->cf[i] & kCf_Thin))
         col[0] = 255, col[1] = 230, col[2] = 120;
       else if (geom && (ly->cf[i] & kCf_Shell) && !(ly->cf[i] & kCf_Panel))
         col[0] = 120, col[1] = 60, col[2] = 40;

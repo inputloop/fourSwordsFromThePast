@@ -605,6 +605,7 @@ typedef struct BackgroundJob {
   const Pane *p;
   const R3dFrame *f;
   float horizon, top;        // the sky: a little darker at the top, down to the horizon row
+  uint32 ground;             // the ground's color near the camera
 } BackgroundJob;
 
 // What shows where nothing is drawn. Below the horizon it is the ground: the
@@ -644,7 +645,7 @@ static void BackgroundRows(int y0, int y1, void *ctx) {
         float fd = Clampf((d - f->dist_fog0) / (f->dist_fog1 - f->dist_fog0), 0.0f, 1.0f);
         fog = fd > fog ? fd : fog;
       }
-      row[x] = LerpRgb(p->backdrop, f->fog_rgb, fog * fog * (3.0f - 2.0f * fog));
+      row[x] = LerpRgb(j->ground, f->fog_rgb, fog * fog * (3.0f - 2.0f * fog));
     }
   }
 }
@@ -663,6 +664,8 @@ static void MakeBackground(const Pane *p, const R3dFrame *f, float b) {
   }
   j.horizon = Clampf(j.horizon, 1.0f, (float)p->h);
   j.top = 1.0f - 0.15f * Clampf(b, 0.0f, 1.0f);
+  // (Indoors in first person no ground goes on past the room: it is the fog.)
+  j.ground = p->info.indoors ? LerpRgb(p->backdrop, f->fog_rgb, Clampf(b, 0.0f, 1.0f)) : p->backdrop;
   Hd2d_ParallelFor(p->h, BackgroundRows, &j);
 }
 
