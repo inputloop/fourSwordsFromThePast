@@ -139,6 +139,7 @@
 //   mark / rewind       snapshot / restore every world (Inst_SnapshotSave/Load)
 //   markpos <p>         remember player p's position
 //   hashmark <name>     remember Inst_HashState
+//   dumpstate <file>    (debug) write the current world's RAM and g_mp to a file (cmp two to find a hash difference)
 //   dump3d <file.ppm>   (debug) the viewed world's classes and heights
 //   expect_3d <0|1> [reason]  draw view 0: drawn in 3D (1) / fell back (0, optionally for that reason)
 //   expect_exact3d <max %> <tolerance>  draw in 2D, then in 3D with the oblique test camera; compare
@@ -2711,6 +2712,18 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         printf("FAIL: P%d moved %d,%d, expected 8 or more %s (under 4 across) at frame %d\n", p + 1, dx, dy, arg2,
                frame);
         g_failures++;
+      }
+    } else if (!strcmp(cmd, "dumpstate")) {
+      // dumpstate <file>: the hashed state as bytes (RAM, then g_mp)
+      FILE *df = fopen(arg1, "wb");
+      if (!df) {
+        printf("FAIL: can't write %s\n", arg1);
+        g_failures++;
+      } else {
+        fwrite(g_ram, 1, 0x20000, df);
+        fwrite(&g_mp, 1, sizeof(g_mp), df);
+        fclose(df);
+        printf("wrote %s\n", arg1);
       }
     } else if (!strcmp(cmd, "hashmark") || !strcmp(cmd, "expect_hashmark")) {
       // hashmark <name>: remember the state hash; expect_hashmark <name>: it is the same now

@@ -410,6 +410,13 @@ void Mp_OnStateLoaded() {
     g_mp_state_loaded_hook();
   g_mp.resident = g_mp.leader;
   g_mp.area_key = 0xffffffff;
+  // (What the frame before the load was in the middle of is over: a split
+  // off, the quadrant a room was entered in, the waits.)
+  g_mp.split_request = -1;
+  g_mp.split_travel = 0;
+  g_mp.quad_valid = 0;
+  g_mp.quad_room = 0;
+  g_mp.merge_grace = g_mp.regroup_grace = g_mp.exit_blocked_timer = 0;
   memcpy(g_mp.ancilla_seen, ancilla_type, 10);
   memcpy(g_mp.sprite_seen_state, sprite_state, 16);
   for (int p = 0; p < kMpMaxPlayers; p++) {
