@@ -474,7 +474,7 @@ typedef struct SfxSource {
   ApuQueue queue;
   struct ApuWriteEnt write;  // the ports pushed for it (ports 0 and 1 stay 0)
 } SfxSource;
-enum { kSfxSourceMax = kInstMax - 1 };
+enum { kSfxSourceMax = 3 };  // the other local players, at most
 enum { kSfxGain = 205 };  // 0.8 in 1/256ths
 static SfxSource g_sfx[kSfxSourceMax];
 static int16 *g_sfx_buffer;  // one block of one source
