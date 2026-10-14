@@ -1,0 +1,36 @@
+# Online sound (run together with net_sound_client.txt): each computer hears
+# its own first player's world, music included, and the sound effects of its
+# other local players' worlds. The host has two local players: P1 and,
+# dropped in on the couch, P3. P1 goes into Link's house (a world of its own)
+# while P3 stays outside and swings the sword: the host's main driver plays
+# the house's song, its extra driver sounds P3's swings, and the computers
+# stay in sync (no resync: the extra driver is outside the game's state).
+load 2
+run 30
+clearsprites
+host 47489
+waitplayers 2
+localjoin 2
+waitplayers 3
+expect_players 3
+tick 30
+audiotick 1
+hold 1 U
+tick 300
+hold 1 -
+expect_apart 1 3
+view 1
+expect_module 7
+audioreset
+hold 2 B
+tick 4
+hold 2 -
+tick 60
+hold 2 B
+tick 4
+hold 2 -
+tick 60
+expect_audio main 300 32767
+expect_audio sfx 50 32767
+tick 120
+expect_resyncs 0

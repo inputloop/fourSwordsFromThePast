@@ -183,7 +183,14 @@ Players can drop in and drop out at any time.
   - The flute's bird (and the mirror) take the whole shared screen along:
     the others are set down next to whoever played it (a downed teammate
     stays where it fell). The bird waits while its caller is in a menu.
-  - The sound is from the world of the first player on this computer.
+  - The music is from the world of the first player on this computer; the
+    sound effects of every local player's world are heard (a sword swung
+    or a chest opened by a couch teammate in another dungeon), unless
+    *Multiplayer > Everyone's sound effects* is off. Online, each computer
+    hears its own player's world with its music, and its other local
+    players' effects the same way. Ambient sounds (rain, wind) belong to
+    the music's world. Nothing plays twice: players in one world share its
+    sound.
 - **The leader.** In a group sharing a screen, whoever talks to someone or
   takes an exit becomes the leader that rooms, doors and cutscenes follow.
   A teammate who opens the item menu or the map on a shared screen leads
@@ -303,6 +310,29 @@ world is simulated in turn (`Inst_RunFrame`), switching `g_ram` and
   room is left as in the original game.
 - Snapshots and the netplay state hash cover all worlds, so netplay works
   unchanged.
+- **Hearing other worlds.** The game has one sound chip (`src/spc_player.c`,
+  `snes/dsp.c`), fed by the sound ports (music, ambient, two sound effect
+  ports) of the heard world: the world of the first local player, pushed
+  frame by frame to the audio thread (`ZeldaPushApuState`). For the other
+  local players' worlds `src/audio.c` runs an extra sound chip each (up to
+  three, `ZeldaPushSfxWorlds`, called from `Inst_RunFrame` with the same
+  "heard" gating that keeps rolled-back frames from being played twice).
+  An extra chip gets only its world's two sound effect ports (music and
+  ambient stay the heard world's), with the music voices muted the way
+  `musicoff` does for videos, and its output is added to the main chip's at
+  0.8. It starts with the world's current ports as what it last saw, so a
+  sound that ended earlier isn't replayed, and it is let go when nobody
+  local is in that world any more, or when the option is off. The extra
+  chips are display-only equivalents: nothing of them is in `g_ram`,
+  `g_mp`, a snapshot or the state hash, the game never reads them, and
+  the main chip renders byte for byte what it renders without them
+  (`tests/coop/couch_sound.txt` checks the loudness and the hash). They
+  are reset on a save state load (they are only effects). The main chip
+  holds the songs of the heard world only: a world loading its dungeon
+  songs (`LoadSongBank`) no longer cuts off the music of the world being
+  heard, and when the heard world changes, its songs are uploaded if they
+  differ (`ZeldaUseSongBank`). An extra chip costs about 0.05 ms per frame
+  of sound on a desktop CPU.
 - **Seeing other worlds.** Each world records its leader's Link sprites
   (`Mp_BeginLeaderOam` / `Mp_EndLeaderOam`) next to the other players'. When a
   screen is drawn, `Inst_LinksFromOtherWorlds` lists the Links of every other

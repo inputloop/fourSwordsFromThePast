@@ -566,6 +566,12 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
   arrows and mini map. Press it again for your own screen. It only changes
   the picture (handy for streaming or keeping an eye on a teammate far
   away); you still hear your own world.
+- **Sound.** On a couch, the music plays from player 1's place and you hear
+  the sound effects of everyone on the couch, wherever they are (player 2's
+  sword swings and chest jingles in another dungeon). Online, each computer
+  hears its own player's world with its music, plus the sound effects of its
+  other local players. *Multiplayer > Everyone's sound effects* (or
+  `CoopSoundEffects` in `zelda3.ini`) turns the extra effects off.
 - 3D view (when it is on): the right stick (or a right mouse drag) turns
   the camera, and a left click or L3 switches first person. See
   [3D view and first person](#3d-view-and-first-person-beta).

@@ -1,0 +1,13 @@
+# See net_sound_host.txt. The client (P2, its only local player) hears its
+# own world with its music; with one local player there is no extra driver.
+connect 127.0.0.1:47489
+waitplay
+waitplayers 3
+audiotick 1
+audioreset
+tick 300
+expect_audio main 300 32767
+expect_audio sfx 0 0
+tick 400
+expect_resyncs 0
+disconnect
