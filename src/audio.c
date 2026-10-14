@@ -461,12 +461,38 @@ void ZeldaRenderAudio(int16 *audio_buffer, int samples, int channels) {
   ZeldaPopApuState();
   SpcPlayer_GenerateSamples(g_zenv.player);
   dsp_getSamples(g_zenv.player->dsp, audio_buffer, samples, channels);
-  if (g_msu_player.f && channels == 2)
+  if (g_msu_player.f && channels == 2 && !g_zenv.player->music_off)
     MsuPlayer_Mix(&g_msu_player, audio_buffer, samples);
   ZeldaApuUnlock();
 }
 
+// Music off, sound effects on (videos without the music).
+void ZeldaSetMusicOff(bool off) {
+  ZeldaApuLock();
+  SpcPlayer_SetMusicOff(g_zenv.player, off);
+  ZeldaApuUnlock();
+}
+
+// Audio rendered for a recording (mptest record), where nothing else renders
+// it. The sound queue starts empty, so the sound is in step with the
+// pictures; and while it is on, the game keeps seeing the music state it saw
+// before (APUI00), so a recorded run plays exactly like one that isn't.
+static bool g_audio_capture, g_capture_music_playing;
+static bool IsMusicPlaying(void);
+void ZeldaSetAudioCapture(bool on) {
+  ZeldaApuLock();
+  if (on && !g_audio_capture)
+    g_capture_music_playing = IsMusicPlaying();
+  g_audio_capture = on;
+  ZeldaResetApuQueue();
+  ZeldaApuUnlock();
+}
+
 bool ZeldaIsMusicPlaying() {
+  return g_audio_capture ? g_capture_music_playing : IsMusicPlaying();
+}
+
+static bool IsMusicPlaying(void) {
   if (g_msu_player.state != kMsuState_Idle) {
     return g_msu_player.state != kMsuState_FinishedPlaying;
   } else {

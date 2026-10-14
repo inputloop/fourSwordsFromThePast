@@ -63,6 +63,7 @@ static void dsp_handleNoise(Dsp* dsp);
 Dsp* dsp_init(uint8_t *apu_ram) {
   Dsp* dsp = (Dsp*)malloc(sizeof(Dsp));
   dsp->apu_ram = apu_ram;
+  dsp->muteVoices = 0;
   return dsp;
 }
 
@@ -134,6 +135,8 @@ void dsp_cycle(Dsp* dsp) {
   int totalR = 0;
   for(int i = 0; i < 8; i++) {
     dsp_cycleChannel(dsp, i);
+    if (dsp->muteVoices & (1 << i))
+      continue;
     totalL += (dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6;
     totalR += (dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6;
     totalL = totalL < -0x8000 ? -0x8000 : (totalL > 0x7fff ? 0x7fff : totalL); // clamp 16-bit
@@ -190,7 +193,7 @@ static void dsp_handleEcho(Dsp* dsp, int* outputL, int* outputR) {
   // get echo input
   int inL = 0, inR = 0;
   for(int i = 0; i < 8; i++) {
-    if(dsp->channel[i].echoEnable) {
+    if(dsp->channel[i].echoEnable && !(dsp->muteVoices & (1 << i))) {
       inL += (dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6;
       inR += (dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6;
       inL = inL < -0x8000 ? -0x8000 : (inL > 0x7fff ? 0x7fff : inL); // clamp 16-bit

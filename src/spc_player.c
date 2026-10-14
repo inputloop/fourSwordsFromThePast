@@ -156,6 +156,13 @@ static void Dsp_Write(SpcPlayer *p, uint8_t reg, uint8 value) {
       hist->count++;
     }
   }
+  if (reg == KON) {
+    // A voice keyed on while a sound effect owns its channel plays the sound
+    // effect (until it is keyed on again), any other plays music.
+    p->sfx_voices = (p->sfx_voices & ~value) | (value & p->is_chan_on);
+    if (p->dsp)
+      p->dsp->muteVoices = p->music_off ? (uint8)~p->sfx_voices : 0;
+  }
   if (p->dsp)
     dsp_write(p->dsp, reg, value);
 }
@@ -1189,6 +1196,8 @@ SpcPlayer *SpcPlayer_Create() {
   SpcPlayer *p = (SpcPlayer *)malloc(sizeof(SpcPlayer));
   p->dsp = dsp_init(p->ram);
   p->reg_write_history = 0;
+  p->sfx_voices = 0;
+  p->music_off = false;
   return p;
 }
 
@@ -1445,3 +1454,10 @@ void RunAudioPlayer() {
   }
 }
 #endif  // WITH_SPC_PLAYER_DEBUGGING
+
+// Music off, sound effects on: the voices playing music are left out of the
+// mix (the music still runs, silently, so the game sees no difference).
+void SpcPlayer_SetMusicOff(SpcPlayer *p, bool off) {
+  p->music_off = off;
+  p->dsp->muteVoices = off ? (uint8)~p->sfx_voices : 0;
+}

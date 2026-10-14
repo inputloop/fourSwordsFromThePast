@@ -61,6 +61,11 @@ typedef struct SpcPlayer {
   DspRegWriteHistory *reg_write_history;
   uint8 timer_cycles;
   Dsp *dsp;
+  // Music off (sound effects only): the voices last keyed on by a sound
+  // effect; every other voice plays music and is muted. (Before
+  // new_value_from_snes, so a reset keeps them.)
+  uint8 sfx_voices;
+  bool music_off;
   uint8 new_value_from_snes[4];
   uint8 port_to_snes[4];
   uint8 last_value_from_snes[4];
@@ -143,3 +148,4 @@ void SpcPlayer_Initialize(SpcPlayer *p);
 void SpcPlayer_Upload(SpcPlayer *p, const uint8_t *data);
 void SpcPlayer_CopyVariablesFromRam(SpcPlayer *p);
 void SpcPlayer_CopyVariablesToRam(SpcPlayer *p);
+void SpcPlayer_SetMusicOff(SpcPlayer *p, bool off);

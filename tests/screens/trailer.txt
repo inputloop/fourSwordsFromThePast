@@ -1,0 +1,1319 @@
+# The trailer (tools/trailer.sh runs this and makes the video). Not a test:
+# tests/run_coop_tests.sh only runs tests/coop. Each scene is recorded with
+# "record $WORK/<scene>" ... "record off" ($WORK is the work directory); the
+# "#>" lines are the edit, in the order the video shows them (see
+# tools/trailer.sh). Only the game's own sound effects are heard: the music
+# is off. No title screens (they carry Nintendo's logo): the video opens on
+# its own title card.
+widescreen 71
+musicoff 1
+#> fade|0.5
+#> card|5|Four Swords from the Past|A Link to the Past as a native PC game, for up to four players
+#> clip|$WORK/items|0|7|caption|Four heroes at once|Each Link with his own hearts, magic and items
+#> clip|$WORK/couch|0.6|9|caption|Four players, one couch|Drop in, drop out: the screen splits when you split up
+#> clip|$WORK/throw|0.3|2.6|caption|Lift and throw your friends|
+#> clip|$WORK/hook|0.2|2.3|caption|Hookshot over to a teammate|
+#> clip|$WORK/rock|0.2|2.4|caption|Lift heavy rocks together|
+#> clip|$WORK/revive|1.6|5.4|caption|Ping for help, get back up|Look-here and help markers; teammates revive the fallen
+#> compare|$WORK/cmp2d|$WORK/cmphd|0|6|caption|An optional 2D-HD look|Light, bloom, depth of field and color grading|Original|2D-HD
+#> clip|$WORK/dark|0|-|caption|Light in the dark|Every Link's Lamp lights the cave
+#> clip|$WORK/turn|0|-|caption|A 3D view (beta)|From the classic angle...
+#> clip|$WORK/kak|0|3.2|none||
+#> clip|$WORK/fpwalk|1.0|4.5|caption|...to first person, under an open sky|
+#> clip|$WORK/fpkak|1.3|3.5|none||
+#> clip|$WORK/fp_sanct|0|3.8|none||
+#> clip|$WORK/tracker|0|6.2|caption|A built-in item randomizer|Close the map: the check tracker shows what is left
+#> clip|$WORK/ap|0|4.5|caption|Archipelago multiworld|The game connects to the server itself
+#> clip|$WORK/watch|0|7|caption|Play online too|Room codes, rollback netcode, and Watch everyone: every world at once
+#> card|5|Four Swords from the Past|Free and open source, built on snesrev/zelda3. Bring your own ROM.
+
+# Four Links in the palace's entrance hall: bombs, arrows, the boomerang
+# and swords (P2 the bow, P3 the boomerang, P4 bombs).
+load 2
+poke f343 10
+poke f377 30
+run 30
+join 2
+join 3
+join 4
+hold 1 U
+hold 2 U
+hold 3 U
+hold 4 U
+run 120
+hold 1 -
+hold 2 R
+hold 3 L
+hold 4 D
+run 20
+hold 2 -
+hold 3 -
+hold 4 -
+pram 2 202 01
+pram 2 303 03
+pram 3 202 02
+pram 3 303 02
+pram 4 202 04
+pram 4 303 01
+spawn 41 1 40
+spawn 43 2 30
+spawn 41 3 -30
+spawn 42 4 30
+run 5
+record $WORK/items
+hold 2 Y
+hold 3 Y
+run 2
+hold 2 -
+hold 3 -
+hold 1 B
+run 12
+hold 1 -
+hold 4 Y
+run 2
+hold 4 -
+run 30
+hold 2 Y
+run 2
+hold 2 -
+run 20
+wander 200 11
+hold 4 Y
+hold 2 Y
+run 2
+hold 4 -
+hold 2 -
+run 60
+hold 3 Y
+run 2
+hold 3 -
+run 80
+record off
+leave 4
+leave 3
+leave 2
+
+# Four players on one computer, each in their own place: four panes.
+load 2
+run 30
+localjoin 2
+localjoin 3
+localjoin 4
+tick 20
+clearsprites
+pos 3 3700 1950
+pos 4 4000 1950
+tick 2
+spawn 41 3 40
+spawn 43 4 -40
+record $WORK/couch
+hold 1 U
+hold 2 D
+hold 3 D
+hold 4 R
+tick 60
+hold 2 B
+hold 3 L
+hold 4 D
+hold 2 B
+tick 8
+hold 2 -
+tick 8
+hold 2 B
+tick 8
+hold 2 -
+tick 6
+hold 2 U
+tick 30
+hold 1 UB
+hold 2 R
+hold 3 RB
+hold 4 LB
+hold 1 UB
+hold 3 RB
+hold 4 LB
+tick 8
+hold 1 U
+hold 3 R
+hold 4 L
+tick 8
+hold 1 UB
+hold 3 RB
+hold 4 LB
+tick 8
+hold 1 U
+hold 3 R
+hold 4 L
+tick 8
+hold 1 UB
+hold 3 RB
+hold 4 LB
+tick 8
+hold 1 U
+hold 3 R
+hold 4 L
+tick 8
+hold 1 UB
+hold 3 RB
+hold 4 LB
+tick 8
+hold 1 U
+hold 3 R
+hold 4 L
+tick 4
+hold 1 L
+hold 2 B
+hold 3 B
+hold 4 B
+hold 2 B
+hold 3 B
+hold 4 B
+tick 8
+hold 2 -
+hold 3 -
+hold 4 -
+tick 8
+hold 2 B
+hold 3 B
+hold 4 B
+tick 8
+hold 2 -
+hold 3 -
+hold 4 -
+tick 8
+hold 2 B
+hold 3 B
+hold 4 B
+tick 8
+hold 1 B
+hold 2 -
+hold 3 -
+hold 4 -
+hold 1 B
+tick 8
+hold 1 -
+tick 8
+hold 1 B
+tick 8
+hold 1 -
+tick 6
+hold 1 R
+hold 2 DB
+hold 3 UB
+hold 4 RB
+hold 2 DB
+hold 3 UB
+hold 4 RB
+tick 8
+hold 2 D
+hold 3 U
+hold 4 R
+tick 8
+hold 2 DB
+hold 3 UB
+hold 4 RB
+tick 8
+hold 2 D
+hold 3 U
+hold 4 R
+tick 8
+hold 2 DB
+hold 3 UB
+hold 4 RB
+tick 8
+hold 2 D
+hold 3 U
+hold 4 R
+tick 8
+hold 2 DB
+hold 3 UB
+hold 4 RB
+tick 2
+hold 1 B
+hold 2 L
+hold 3 L
+hold 4 U
+hold 1 B
+tick 8
+hold 1 -
+tick 8
+hold 1 B
+tick 8
+hold 1 -
+tick 8
+hold 1 B
+tick 8
+hold 1 -
+tick 8
+hold 1 B
+tick 2
+hold 1 D
+hold 2 B
+hold 3 B
+hold 4 B
+hold 2 B
+hold 3 B
+hold 4 B
+tick 8
+hold 2 -
+hold 3 -
+hold 4 -
+tick 8
+hold 2 B
+hold 3 B
+hold 4 B
+tick 8
+hold 2 -
+hold 3 -
+hold 4 -
+tick 8
+hold 2 B
+hold 3 B
+hold 4 B
+tick 8
+hold 2 -
+hold 3 -
+hold 4 -
+tick 8
+hold 2 B
+hold 3 B
+hold 4 B
+tick 8
+hold 2 -
+hold 3 -
+hold 4 -
+tick 4
+hold 1 B
+hold 2 R
+hold 3 D
+hold 4 L
+hold 1 B
+tick 8
+hold 1 -
+tick 8
+hold 1 B
+tick 8
+hold 1 -
+tick 8
+hold 1 B
+tick 8
+hold 1 -
+tick 8
+hold 1 B
+tick 2
+hold 1 U
+hold 2 B
+hold 3 RB
+hold 4 B
+hold 2 B
+hold 3 RB
+hold 4 B
+tick 8
+hold 2 -
+hold 3 R
+hold 4 -
+tick 8
+hold 2 B
+hold 3 RB
+hold 4 B
+tick 8
+hold 2 -
+hold 3 R
+hold 4 -
+tick 8
+hold 2 B
+hold 3 RB
+hold 4 B
+tick 8
+hold 2 -
+hold 3 R
+hold 4 -
+tick 8
+hold 2 B
+hold 3 RB
+hold 4 B
+tick 2
+hold 1 -
+hold 2 -
+hold 3 -
+hold 4 -
+tick 20
+record off
+localleave 4
+localleave 3
+localleave 2
+tick 10
+
+# P1 lifts P2 and throws him.
+load 2
+run 30
+join 2
+run 10
+clearsprites
+pos 1 3860 1690
+pos 2 3860 1705
+pram 1 2f 02
+run 10
+record $WORK/throw
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 20
+hold 1 R
+run 30
+hold 1 -
+run 10
+hold 1 A
+run 2
+hold 1 -
+run 90
+record off
+leave 2
+
+# P1 hookshots over a pit to P2 (Palace of Darkness).
+load 2
+run 30
+join 2
+run 10
+enter 4a
+run 200
+clearsprites
+poke f342 01
+pos 1 5370 2490
+pos 2 5370 2410
+hold 1 U
+run 6
+hold 1 -
+pram 1 2f 00
+pram 1 202 03
+pram 1 303 0e
+run 60
+clearsprites
+settiles 5352 2456 5399 2479 20
+record $WORK/hook
+run 20
+hold 1 Y
+run 2
+hold 1 -
+run 80
+hold 2 B
+run 12
+hold 2 -
+run 30
+record off
+leave 2
+
+# Two Links lift the heavy rock by the sanctuary together.
+load 1
+run 30
+hold 1 D
+run 420
+hold 1 -
+join 2
+run 30
+clearsprites
+pos 1 1756 1242
+pos 2 1772 1242
+pram 1 2f 02
+pram 2 2f 02
+run 90
+record $WORK/rock
+run 20
+hold 1 A
+hold 2 A
+run 2
+hold 1 -
+hold 2 -
+run 40
+hold 1 D
+run 20
+hold 1 -
+run 10
+hold 1 A
+run 2
+hold 1 -
+run 80
+record off
+leave 2
+
+# P2 goes down; P1 pings for help; P3 beats the soldier and revives P2.
+load 2
+poke f35c 2
+run 30
+join 2
+join 3
+hold 1 U
+hold 2 U
+hold 3 U
+run 200
+hold 1 -
+hold 2 -
+hold 3 -
+hold 2 R
+hold 3 L
+run 30
+hold 2 -
+hold 3 -
+hp 2 2
+spawn 41 2 0
+record $WORK/revive
+run 110
+hold 1 P
+run 30
+hold 1 -
+run 40
+clearsprites
+spawn 4f 3 -18
+hold 3 B
+run 2
+hold 3 -
+run 30
+clearsprites
+hold 3 R
+run 20
+hold 3 -
+run 100
+hold 2 B
+hold 3 B
+run 12
+hold 2 -
+hold 3 -
+run 100
+record off
+leave 3
+leave 2
+
+# The same moment without and with the 2D-HD look: out of a Kakariko
+# house, cutting bushes.
+load 2
+run 30
+enter f2
+run 200
+hold 1 D
+run 40
+hold 1 -
+run 20
+mark
+hd2d 0
+record $WORK/cmp2d
+hold 1 D
+run 30
+hold 1 R
+run 30
+hold 1 B
+hold 1 B
+run 8
+hold 1 -
+run 4
+hold 1 R
+run 40
+hold 1 DB
+hold 1 DB
+run 8
+hold 1 D
+run 4
+hold 1 D
+run 40
+hold 1 B
+hold 1 B
+run 8
+hold 1 -
+run 4
+hold 1 -
+run 220
+record off
+rewind
+hd2d 1
+record $WORK/cmphd
+hold 1 D
+run 30
+hold 1 R
+run 30
+hold 1 B
+hold 1 B
+run 8
+hold 1 -
+run 4
+hold 1 R
+run 40
+hold 1 DB
+hold 1 DB
+run 8
+hold 1 D
+run 4
+hold 1 D
+run 40
+hold 1 B
+hold 1 B
+run 8
+hold 1 -
+run 4
+hold 1 -
+run 220
+record off
+
+# Two Links with Lamps in a dark cave (2D-HD).
+load 2
+run 30
+join 2
+run 20
+enter f0
+run 120
+record $WORK/dark
+hold 1 U
+hold 2 U
+run 50
+hold 1 UB
+hold 2 B
+run 12
+hold 1 U
+hold 2 U
+run 60
+hold 1 B
+hold 2 LB
+run 12
+hold 1 D
+hold 2 D
+run 60
+hold 1 B
+hold 2 B
+run 12
+hold 1 -
+hold 2 -
+run 40
+record off
+leave 2
+
+# The 3D view: the classic angle, then the camera turns.
+load 2
+run 30
+join 2
+run 10
+view3d 1
+cam3d 1 tp 0 45
+drawrun 10
+record $WORK/turn
+hold 1 B
+run 10
+hold 1 -
+run 20
+cam3d 1 tp -0.00 45.00 100
+run 1
+cam3d 1 tp -0.01 44.99 100
+run 1
+cam3d 1 tp -0.03 44.98 100
+run 1
+cam3d 1 tp -0.05 44.97 100
+run 1
+cam3d 1 tp -0.07 44.95 100
+run 1
+cam3d 1 tp -0.11 44.93 100
+run 1
+cam3d 1 tp -0.14 44.91 100
+run 1
+cam3d 1 tp -0.19 44.88 100
+run 1
+cam3d 1 tp -0.24 44.85 100
+run 1
+cam3d 1 tp -0.29 44.82 100
+run 1
+cam3d 1 tp -0.35 44.78 100
+run 1
+cam3d 1 tp -0.41 44.74 100
+run 1
+cam3d 1 tp -0.49 44.70 100
+run 1
+cam3d 1 tp -0.56 44.65 100
+run 1
+cam3d 1 tp -0.64 44.60 100
+run 1
+cam3d 1 tp -0.73 44.55 100
+run 1
+cam3d 1 tp -0.82 44.49 100
+run 1
+cam3d 1 tp -0.91 44.43 100
+run 1
+cam3d 1 tp -1.01 44.37 100
+run 1
+cam3d 1 tp -1.12 44.30 100
+run 1
+cam3d 1 tp -1.23 44.23 100
+run 1
+cam3d 1 tp -1.35 44.16 99
+run 1
+cam3d 1 tp -1.47 44.08 99
+run 1
+cam3d 1 tp -1.59 44.01 99
+run 1
+cam3d 1 tp -1.72 43.93 99
+run 1
+cam3d 1 tp -1.85 43.84 99
+run 1
+cam3d 1 tp -1.99 43.76 99
+run 1
+cam3d 1 tp -2.13 43.67 99
+run 1
+cam3d 1 tp -2.28 43.58 99
+run 1
+cam3d 1 tp -2.43 43.48 99
+hold 1 B
+run 1
+cam3d 1 tp -2.59 43.38 99
+run 1
+cam3d 1 tp -2.74 43.28 99
+run 1
+cam3d 1 tp -2.91 43.18 99
+run 1
+cam3d 1 tp -3.07 43.08 99
+run 1
+cam3d 1 tp -3.25 42.97 99
+run 1
+cam3d 1 tp -3.42 42.86 99
+run 1
+cam3d 1 tp -3.60 42.75 99
+run 1
+cam3d 1 tp -3.78 42.64 99
+run 1
+cam3d 1 tp -3.97 42.52 99
+run 1
+cam3d 1 tp -4.16 42.40 98
+run 1
+cam3d 1 tp -4.35 42.28 98
+run 1
+cam3d 1 tp -4.55 42.16 98
+hold 1 -
+run 1
+cam3d 1 tp -4.75 42.03 98
+run 1
+cam3d 1 tp -4.96 41.90 98
+run 1
+cam3d 1 tp -5.16 41.77 98
+run 1
+cam3d 1 tp -5.37 41.64 98
+run 1
+cam3d 1 tp -5.59 41.51 98
+run 1
+cam3d 1 tp -5.81 41.37 98
+run 1
+cam3d 1 tp -6.03 41.23 98
+run 1
+cam3d 1 tp -6.25 41.09 98
+run 1
+cam3d 1 tp -6.48 40.95 98
+run 1
+cam3d 1 tp -6.71 40.81 97
+run 1
+cam3d 1 tp -6.94 40.66 97
+run 1
+cam3d 1 tp -7.17 40.52 97
+run 1
+cam3d 1 tp -7.41 40.37 97
+run 1
+cam3d 1 tp -7.65 40.22 97
+run 1
+cam3d 1 tp -7.90 40.07 97
+run 1
+cam3d 1 tp -8.14 39.91 97
+run 1
+cam3d 1 tp -8.39 39.76 97
+run 1
+cam3d 1 tp -8.64 39.60 97
+run 1
+cam3d 1 tp -8.89 39.44 97
+run 1
+cam3d 1 tp -9.15 39.28 97
+run 1
+cam3d 1 tp -9.41 39.12 96
+run 1
+cam3d 1 tp -9.67 38.96 96
+run 1
+cam3d 1 tp -9.93 38.79 96
+run 1
+cam3d 1 tp -10.19 38.63 96
+run 1
+cam3d 1 tp -10.46 38.46 96
+run 1
+cam3d 1 tp -10.73 38.30 96
+run 1
+cam3d 1 tp -11.00 38.13 96
+run 1
+cam3d 1 tp -11.27 37.96 96
+run 1
+cam3d 1 tp -11.54 37.79 96
+run 1
+cam3d 1 tp -11.82 37.61 96
+run 1
+cam3d 1 tp -12.10 37.44 95
+run 1
+cam3d 1 tp -12.38 37.27 95
+run 1
+cam3d 1 tp -12.66 37.09 95
+hold 1 B
+run 1
+cam3d 1 tp -12.94 36.91 95
+run 1
+cam3d 1 tp -13.22 36.74 95
+run 1
+cam3d 1 tp -13.51 36.56 95
+run 1
+cam3d 1 tp -13.79 36.38 95
+run 1
+cam3d 1 tp -14.08 36.20 95
+run 1
+cam3d 1 tp -14.37 36.02 95
+run 1
+cam3d 1 tp -14.66 35.84 95
+run 1
+cam3d 1 tp -14.95 35.66 94
+run 1
+cam3d 1 tp -15.24 35.47 94
+run 1
+cam3d 1 tp -15.53 35.29 94
+run 1
+cam3d 1 tp -15.83 35.11 94
+run 1
+cam3d 1 tp -16.12 34.92 94
+hold 1 -
+run 1
+cam3d 1 tp -16.42 34.74 94
+run 1
+cam3d 1 tp -16.71 34.55 94
+run 1
+cam3d 1 tp -17.01 34.37 94
+run 1
+cam3d 1 tp -17.31 34.18 94
+run 1
+cam3d 1 tp -17.61 34.00 93
+run 1
+cam3d 1 tp -17.90 33.81 93
+run 1
+cam3d 1 tp -18.20 33.62 93
+run 1
+cam3d 1 tp -18.50 33.44 93
+run 1
+cam3d 1 tp -18.80 33.25 93
+run 1
+cam3d 1 tp -19.10 33.06 93
+run 1
+cam3d 1 tp -19.40 32.87 93
+run 1
+cam3d 1 tp -19.70 32.69 93
+run 1
+cam3d 1 tp -20.00 32.50 92
+run 1
+cam3d 1 tp -20.30 32.31 92
+run 1
+cam3d 1 tp -20.60 32.13 92
+run 1
+cam3d 1 tp -20.90 31.94 92
+run 1
+cam3d 1 tp -21.20 31.75 92
+run 1
+cam3d 1 tp -21.50 31.56 92
+run 1
+cam3d 1 tp -21.80 31.38 92
+run 1
+cam3d 1 tp -22.10 31.19 92
+run 1
+cam3d 1 tp -22.39 31.00 92
+run 1
+cam3d 1 tp -22.69 30.82 91
+run 1
+cam3d 1 tp -22.99 30.63 91
+run 1
+cam3d 1 tp -23.29 30.45 91
+run 1
+cam3d 1 tp -23.58 30.26 91
+run 1
+cam3d 1 tp -23.88 30.08 91
+run 1
+cam3d 1 tp -24.17 29.89 91
+run 1
+cam3d 1 tp -24.47 29.71 91
+run 1
+cam3d 1 tp -24.76 29.53 91
+run 1
+cam3d 1 tp -25.05 29.34 91
+run 1
+cam3d 1 tp -25.34 29.16 90
+run 1
+cam3d 1 tp -25.63 28.98 90
+run 1
+cam3d 1 tp -25.92 28.80 90
+hold 1 B
+run 1
+cam3d 1 tp -26.21 28.62 90
+run 1
+cam3d 1 tp -26.49 28.44 90
+run 1
+cam3d 1 tp -26.78 28.26 90
+run 1
+cam3d 1 tp -27.06 28.09 90
+run 1
+cam3d 1 tp -27.34 27.91 90
+run 1
+cam3d 1 tp -27.62 27.73 90
+run 1
+cam3d 1 tp -27.90 27.56 90
+run 1
+cam3d 1 tp -28.18 27.39 89
+run 1
+cam3d 1 tp -28.46 27.21 89
+run 1
+cam3d 1 tp -28.73 27.04 89
+run 1
+cam3d 1 tp -29.00 26.87 89
+run 1
+cam3d 1 tp -29.27 26.70 89
+hold 1 -
+run 1
+cam3d 1 tp -29.54 26.54 89
+run 1
+cam3d 1 tp -29.81 26.37 89
+run 1
+cam3d 1 tp -30.07 26.21 89
+run 1
+cam3d 1 tp -30.33 26.04 89
+run 1
+cam3d 1 tp -30.59 25.88 89
+run 1
+cam3d 1 tp -30.85 25.72 88
+run 1
+cam3d 1 tp -31.11 25.56 88
+run 1
+cam3d 1 tp -31.36 25.40 88
+run 1
+cam3d 1 tp -31.61 25.24 88
+run 1
+cam3d 1 tp -31.86 25.09 88
+run 1
+cam3d 1 tp -32.10 24.93 88
+run 1
+cam3d 1 tp -32.35 24.78 88
+run 1
+cam3d 1 tp -32.59 24.63 88
+run 1
+cam3d 1 tp -32.83 24.48 88
+run 1
+cam3d 1 tp -33.06 24.34 88
+run 1
+cam3d 1 tp -33.29 24.19 88
+run 1
+cam3d 1 tp -33.52 24.05 87
+run 1
+cam3d 1 tp -33.75 23.91 87
+run 1
+cam3d 1 tp -33.97 23.77 87
+run 1
+cam3d 1 tp -34.19 23.63 87
+run 1
+cam3d 1 tp -34.41 23.49 87
+run 1
+cam3d 1 tp -34.63 23.36 87
+run 1
+cam3d 1 tp -34.84 23.23 87
+run 1
+cam3d 1 tp -35.04 23.10 87
+run 1
+cam3d 1 tp -35.25 22.97 87
+run 1
+cam3d 1 tp -35.45 22.84 87
+run 1
+cam3d 1 tp -35.65 22.72 87
+run 1
+cam3d 1 tp -35.84 22.60 87
+run 1
+cam3d 1 tp -36.03 22.48 86
+run 1
+cam3d 1 tp -36.22 22.36 86
+run 1
+cam3d 1 tp -36.40 22.25 86
+run 1
+cam3d 1 tp -36.58 22.14 86
+run 1
+cam3d 1 tp -36.75 22.03 86
+hold 1 B
+run 1
+cam3d 1 tp -36.93 21.92 86
+run 1
+cam3d 1 tp -37.09 21.82 86
+run 1
+cam3d 1 tp -37.26 21.72 86
+run 1
+cam3d 1 tp -37.41 21.62 86
+run 1
+cam3d 1 tp -37.57 21.52 86
+run 1
+cam3d 1 tp -37.72 21.42 86
+run 1
+cam3d 1 tp -37.87 21.33 86
+run 1
+cam3d 1 tp -38.01 21.24 86
+run 1
+cam3d 1 tp -38.15 21.16 86
+run 1
+cam3d 1 tp -38.28 21.07 86
+run 1
+cam3d 1 tp -38.41 20.99 86
+run 1
+cam3d 1 tp -38.53 20.92 86
+hold 1 -
+run 1
+cam3d 1 tp -38.65 20.84 86
+run 1
+cam3d 1 tp -38.77 20.77 85
+run 1
+cam3d 1 tp -38.88 20.70 85
+run 1
+cam3d 1 tp -38.99 20.63 85
+run 1
+cam3d 1 tp -39.09 20.57 85
+run 1
+cam3d 1 tp -39.18 20.51 85
+run 1
+cam3d 1 tp -39.27 20.45 85
+run 1
+cam3d 1 tp -39.36 20.40 85
+run 1
+cam3d 1 tp -39.44 20.35 85
+run 1
+cam3d 1 tp -39.51 20.30 85
+run 1
+cam3d 1 tp -39.59 20.26 85
+run 1
+cam3d 1 tp -39.65 20.22 85
+run 1
+cam3d 1 tp -39.71 20.18 85
+run 1
+cam3d 1 tp -39.76 20.15 85
+run 1
+cam3d 1 tp -39.81 20.12 85
+run 1
+cam3d 1 tp -39.86 20.09 85
+run 1
+cam3d 1 tp -39.89 20.07 85
+run 1
+cam3d 1 tp -39.93 20.05 85
+run 1
+cam3d 1 tp -39.95 20.03 85
+run 1
+cam3d 1 tp -39.97 20.02 85
+run 1
+cam3d 1 tp -39.99 20.01 85
+run 1
+cam3d 1 tp -40.00 20.00 85
+run 1
+cam3d 1 tp -40.00 20.00 85
+run 1
+hold 1 D
+hold 2 D
+run 50
+hold 1 B
+hold 2 B
+run 12
+hold 1 -
+hold 2 -
+run 30
+record off
+# First person out of the palace gate and down the steps, under the sky.
+cam3d 1 fp 180 2
+clearsprites
+run 2
+record $WORK/fpwalk
+remap3d 0
+hold 1 D
+run 40
+hold 1 DB
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 D
+run 30
+hold 1 DB
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 2
+hold 1 B
+hold 1 B
+run 8
+hold 1 -
+run 4
+hold 1 -
+run 20
+remap3d 1
+record off
+leave 2
+
+# A Kakariko house, the camera turned; then first person down the ledge.
+cam3d 1 tp 0 45
+load 2
+drawrun 30
+enter f2
+drawrun 200
+hold 1 D
+drawrun 40
+hold 1 -
+drawrun 30
+cam3d 1 tp -35 20 85
+drawrun 2
+record $WORK/kak
+hold 1 D
+run 40
+hold 1 R
+run 40
+hold 1 B
+run 12
+hold 1 R
+run 40
+hold 1 B
+run 12
+hold 1 -
+run 40
+record off
+cam3d 1 fp 170 3
+drawrun 2
+record $WORK/fpkak
+remap3d 0
+hold 1 D
+run 90
+hold 1 B
+hold 1 B
+run 8
+hold 1 -
+run 4
+hold 1 DB
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 8
+hold 1 D
+run 8
+hold 1 DB
+run 2
+hold 1 B
+hold 1 B
+run 8
+hold 1 -
+run 4
+hold 1 -
+remap3d 1
+run 20
+record off
+
+# First person in the Sanctuary, swinging the sword.
+cam3d 1 tp 0 45
+load 2
+drawrun 30
+enter 12
+drawrun 120
+hold 1 U
+drawrun 40
+hold 1 -
+drawrun 5
+cam3d 1 fp 0 4
+drawrun 2
+record $WORK/fp_sanct
+hold 1 U
+run 30
+hold 1 B
+run 12
+hold 1 -
+run 20
+hold 1 B
+run 12
+hold 1 L
+run 30
+hold 1 B
+run 12
+hold 1 -
+run 160
+record off
+view3d 0
+hd2d 0
+
+# Watch everyone: four players in four worlds, every world on screen.
+load 2
+run 30
+join 2
+run 20
+pos 2 3920 1900
+join 3
+join 4
+run 20
+pos 3 3600 1900
+pos 4 3600 1579
+run 120
+watch 1
+spawn 41 1 40
+spawn 43 2 30
+spawn 41 3 -30
+spawn 42 4 30
+record $WORK/watch
+hold 1 B
+hold 2 B
+hold 1 B
+hold 2 B
+run 8
+hold 1 -
+hold 2 -
+run 2
+hold 1 -
+hold 2 -
+hold 3 B
+hold 4 B
+hold 3 B
+hold 4 B
+run 8
+hold 3 -
+hold 4 -
+run 2
+hold 3 -
+hold 4 -
+wander 380 5
+record off
+watch 0
+leave 4
+leave 3
+leave 2
+tick 300
+
+# A randomized file: the map, then closing it shows the check tracker.
+rando 40
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+hold 1 D
+run 200
+hold 1 -
+run 100
+tick 10
+record $WORK/tracker
+hold 1 X
+tick 2
+hold 1 -
+tick 5
+hold 1 X
+tick 2
+hold 1 -
+tick 60
+hold 1 X
+tick 2
+hold 1 -
+tick 40
+hold 1 X
+tick 2
+hold 1 -
+tick 250
+record off
+hold 1 X
+tick 2
+hold 1 -
+tick 30
+rando off
+
+# An Archipelago file: the chest in Link's house holds another player's
+# item (the white crystal), then an item arrives from the room.
+aproom 12345678
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+pos 1 2500 8650
+record $WORK/ap
+run 20
+hold 1 U
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 120
+srun 2
+apitem 36
+srun 160
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+record off

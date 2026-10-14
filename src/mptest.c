@@ -95,6 +95,12 @@
 //                       overlay, under a new name (overlay: the overlay must have drawn something)
 //   expect_hotkey <key> <screenshot|screenshotclean|view3d|none>  what a key (e.g. Ctrl+F12) does
 //   benchdraw <n>       times n frames drawn (with the current 2D-HD setting)
+//   record <dir> [game|view]  until "record off", every frame that run, gamerun, drawrun, srun, tick,
+//                       wander, tickwander or drawuntil goes through is drawn (game: as the game's window, split
+//                       screen and overlay included; view: the viewed player, as shot) into <dir>/video.raw (bgr0,
+//                       twice the game's size) and its sound into <dir>/audio.raw (s16le stereo, 32040 Hz at 60 fps);
+//                       <dir>/info.txt says the sizes. The directory must exist. tools/trailer.sh makes videos of it
+//   musicoff <0|1>      silence the music, keep the sound effects (the music still runs, unheard)
 //   drawrun <n>         run n frames, drawing each into a buffer exactly the size the renderer asks for (fails on an overrun)
 //   stalewidth <p> <n>  p's world's video chip keeps n widescreen columns per side (drawing must use the setting)
 //   runcheckdraw <p> <n>  run n frames; player p (not its world's leader) must never be drawn with shrunken body pieces
@@ -222,6 +228,7 @@
 #include "upnp.h"
 #include "screenshot.h"
 #include "third_party/stb/stb_image.h"  // only the declarations: the code is in glsl_shader.c
+#include "audio.h"
 
 static int g_failures;
 
@@ -565,6 +572,119 @@ static int DrawLikeGame(uint32 *buf, int width, int height, uint32 render_flags,
   return n;
 }
 
+// --- Recording videos (record, musicoff) ---
+// record <dir> [game|view] appends every frame that run, gamerun, drawrun,
+// srun, tick, wander, tickwander and drawuntil go through to <dir>/video.raw
+// and its sound to <dir>/audio.raw, until "record off". The picture is always twice
+// the game's size (2W x 2H) and holds the window's picture as big as fits,
+// in the middle: one pane is doubled, two side by side are letterboxed (as a
+// 16:9 window shows them), three or four fill it. "game" (the default) draws
+// as the game's window does (a pane per world or first-person player, the
+// "Watch everyone" panes, the overlay); "view" draws only
+// the viewed player, as shot. video.raw is raw bgr0 frames (4 bytes a pixel);
+// audio.raw is s16le stereo, 534 samples a frame (the sound chip's own rate:
+// 32040 Hz with the frames at 60 fps). <dir>/info.txt has the sizes.
+// video.raw may be a named pipe that an encoder reads (tools/trailer.sh).
+static FILE *g_rec_video, *g_rec_audio;
+static char g_rec_dir[200];
+static int g_rec_w, g_rec_h, g_rec_frames;
+static bool g_rec_view;
+static uint32 *g_rec_canvas;
+enum { kRecSamples = 534 };
+
+// <dir>/info.txt: written when recording starts (before video.raw is
+// opened, so an encoder waiting for it knows the size) and again at the end
+// with the number of frames.
+static void RecordWriteInfo(int frames) {
+  char path[256];
+  snprintf(path, sizeof(path), "%s/info.txt", g_rec_dir);
+  FILE *f = fopen(path, "w");
+  if (f) {
+    fprintf(f, "width %d\nheight %d\nfps 60\naudio_rate %d\nchannels 2\n", g_rec_w, g_rec_h, kRecSamples * 60);
+    if (frames >= 0)
+      fprintf(f, "frames %d\n", frames);
+    fclose(f);
+  }
+}
+
+static void RecordStop(void) {
+  if (!g_rec_video)
+    return;
+  fclose(g_rec_video);
+  fclose(g_rec_audio);
+  g_rec_video = g_rec_audio = NULL;
+  free(g_rec_canvas);
+  g_rec_canvas = NULL;
+  ZeldaSetAudioCapture(false);
+  RecordWriteInfo(g_rec_frames);
+  printf("recorded %d frames to %s\n", g_rec_frames, g_rec_dir);
+}
+
+static bool RecordStart(const char *dir, bool view_only, int width, int height) {
+  RecordStop();
+  char path[256];
+  snprintf(g_rec_dir, sizeof(g_rec_dir), "%s", dir);
+  g_rec_w = width * 2, g_rec_h = height * 2;
+  snprintf(path, sizeof(path), "%s/audio.raw", dir);
+  g_rec_audio = fopen(path, "wb");
+  if (g_rec_audio)
+    RecordWriteInfo(-1);
+  snprintf(path, sizeof(path), "%s/video.raw", dir);
+  g_rec_video = g_rec_audio ? fopen(path, "wb") : NULL;
+  if (!g_rec_video) {
+    if (g_rec_audio)
+      fclose(g_rec_audio);
+    g_rec_audio = NULL;
+    return false;
+  }
+  g_rec_view = view_only, g_rec_frames = 0;
+  g_rec_canvas = malloc((size_t)g_rec_w * g_rec_h * 4);
+  ZeldaSetAudioCapture(true);
+  return true;
+}
+
+// Draws the frame just run and writes it with its sound. buf has room for
+// the picture at 4x.
+static void RecordFrame(uint32 *buf, int width, int height, uint32 render_flags, int view) {
+  if (!g_rec_video)
+    return;
+  int W = g_rec_w / 2, H = g_rec_h / 2, pw = 0, ph = 0;
+  if (width == W && height == H) {
+    memset(buf, 0, (size_t)width * height * 4 * 4);
+    if (g_rec_view) {
+      g_mp_local_mask = 1 << view;
+      Ui_SetViews(&(UiView){ 0, 0, width, height, view, LocalOfPlayer(view) }, 1);
+      UsePane(view);
+      Hd2d_DrawFrame((uint8 *)buf, width * 4, render_flags & ~kPpuRenderFlags_4x4Mode7, 0);
+      Ui_Draw((uint8 *)buf, width * 4, width, height, 1);
+      pw = width, ph = height;
+    } else if (!DrawLikeGame(buf, width, height, render_flags, &pw, &ph)) {
+      pw = ph = 0;
+    }
+  }
+  // The picture (pitch pw), as big as fits in the canvas, in the middle:
+  // one pane (at its render scale) doubled, two side by side letterboxed,
+  // a 2x2 window as it is. (Nothing drawn, or widescreen changed: black.)
+  uint32 *c = g_rec_canvas;
+  memset(c, 0, (size_t)g_rec_w * g_rec_h * 4);
+  if (pw > 0 && ph > 0) {
+    float f = (float)g_rec_w / pw < (float)g_rec_h / ph ? (float)g_rec_w / pw : (float)g_rec_h / ph;
+    int dw = (int)(pw * f + 0.5f), dh = (int)(ph * f + 0.5f);
+    int x0 = (g_rec_w - dw) / 2, y0 = (g_rec_h - dh) / 2;
+    for (int y = 0; y < dh; y++) {
+      const uint32 *src = buf + (size_t)(y * ph / dh) * pw;
+      uint32 *dst = c + (size_t)(y0 + y) * g_rec_w + x0;
+      for (int x = 0; x < dw; x++)
+        dst[x] = src[x * pw / dw];
+    }
+  }
+  fwrite(c, 4, (size_t)g_rec_w * g_rec_h, g_rec_video);
+  int16 samples[kRecSamples * 2];
+  ZeldaRenderAudio(samples, kRecSamples, 2);
+  fwrite(samples, 4, kRecSamples, g_rec_audio);
+  g_rec_frames++;
+}
+
 static void HashBytes(void *ctx, void *data, size_t size) {
   uint32 *h = (uint32 *)ctx;
   const uint8 *d = (const uint8 *)data;
@@ -772,6 +892,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         uint16 in[kMpMaxPlayers];
         HeldInputs(held, in);
         Inst_RunFrame(in);
+        RecordFrame(pixels, width, height, render_flags, view);
       }
     } else if (!strcmp(cmd, "watch")) {
       // watch <0|1>: "Watch everyone" (as Ctrl+F11 or the Multiplayer menu)
@@ -795,6 +916,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           for (int v = 0; v < panes; v++)
             printf(" %s", Hd3d_PaneIs3D(v) ? "3D" : Hd3d_LastWhy2D(v));
           printf(")\n");
+        } else {
+          RecordFrame(pixels, width, height, render_flags, view);
         }
       }
     } else if (!strcmp(cmd, "drawrun")) {
@@ -823,6 +946,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           bad += buf[i] != 0xdeadbeef;
         free(buf);
         Inst_Switch(home);
+        RecordFrame(pixels, width, height, render_flags, view);
         if (bad) {
           printf("FAIL: drawing frame %d (module %d/%d, scale %d) wrote past the frame buffer\n", frame,
                  main_module_index, submodule_index, scale);
@@ -830,6 +954,17 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           break;
         }
       }
+    } else if (!strcmp(cmd, "record")) {
+      // record <dir> [game|view] / record off: see "Recording videos" above
+      if (!strcmp(arg1, "off")) {
+        RecordStop();
+      } else if (!RecordStart(arg1, !strcmp(arg2, "view"), width, height)) {
+        printf("FAIL: can't record to %s (does the directory exist?)\n", arg1);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "musicoff")) {
+      // musicoff <0|1>: silence the music, keep the sound effects
+      ZeldaSetMusicOff(atoi(arg1) != 0);
     } else if (!strcmp(cmd, "stalewidth")) {
       // stalewidth <p> <n>: player p's world's video chip still has n widescreen
       // columns per side (as from before the setting changed, or a snapshot)
@@ -1085,6 +1220,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
           pdown[p] = g_mp.p[p].downed;
         }
         Inst_RunFrame(held);
+        RecordFrame(pixels, width, height, render_flags, view);
         // A player in two worlds at once.
         for (int p = 0; p < kMpMaxPlayers && (checks || together); p++) {
           int r0 = Inst_Current(), worlds = 0;
@@ -1453,6 +1589,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ap_Tick();
         if (g_drawtick)
           DrawLikeGame(pixels, width, height, render_flags, &(int){ 0 }, &(int){ 0 });
+        RecordFrame(pixels, width, height, render_flags, view);
         TrackSprites(frame, view);
         SDL_Delay(16);
         SessionPlayer seats[kMpMaxPlayers];
@@ -1561,6 +1698,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Hd3d_RemapInputs(in);
         frame += Session_Tick(in, g_wanted_zelda_features);
         Ap_Tick();
+        RecordFrame(pixels, width, height, render_flags, view);
       }
     } else if (!strcmp(cmd, "apconnect")) {
       snprintf(g_ap_settings.server, sizeof(g_ap_settings.server), "%s", arg1);
@@ -1853,6 +1991,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         memcpy(in, held, sizeof(in));
         int ran = Session_Tick(in, g_wanted_zelda_features);
         frame += ran;
+        RecordFrame(pixels, width, height, render_flags, view);
         TrackSprites(frame, view);
         for (int p = 0; p < kMpMaxPlayers && ran > 0 && ran < 4; p++) {
           if (pw[p] < 0 || Inst_OfPlayer(p) != pw[p])
@@ -2407,6 +2546,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         HeldInputs(held, in);
         Inst_RunFrame(in);
         DrawView(view, pixels, width, render_flags);
+        RecordFrame(pixels, width, height, render_flags, view);
       }
       if (!there) {
         printf("FAIL: the viewed world didn't get to module %s/%s in %s frames (at frame %d)\n", arg1, arg2, arg3,
@@ -2730,6 +2870,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     }
   }
   fclose(f);
+  RecordStop();
+  ZeldaSetMusicOff(false);
   free(pixels);
   Inst_SnapshotFree(g_mark);
   g_mark = NULL;

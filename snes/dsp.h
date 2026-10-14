@@ -47,6 +47,10 @@ typedef struct DspChannel {
 } DspChannel;
 
 struct Dsp {
+  // Voices left out of the mix and the echo input (set by the SPC player to
+  // silence the music). Before ram, so not in save states (which hold
+  // everything from ram on, laid out as before).
+  uint8_t muteVoices;
   uint8_t *apu_ram;
   // mirror ram
   uint8_t ram[0x80];

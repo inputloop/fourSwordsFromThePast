@@ -580,6 +580,11 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 - `assets/` holds the extracted resources (overworld/dungeon YAML, images, text). Edit these, then rebuild them with `python3 assets/restool.py` (see BUILDING.md).
 - `zelda3.ini` holds the runtime options. The in-game menu saves its changes to `zelda3.coop.ini`.
 - `tests/run_coop_tests.sh` runs headless co-op and netplay regression tests.
+- Making videos: `tools/trailer.sh [out.mkv]` plays `tests/screens/trailer.txt` headless and makes a trailer
+  from your own ROM (needs ffmpeg). The script's `record <dir>` / `record off` commands capture what the
+  game window would show and the game's sound, and `musicoff 1` silences the music but keeps the sound
+  effects; the `#>` lines in it are the edit (see the top of `tools/trailer.sh`). Don't share or commit
+  what it makes as part of this project: it is made from the ROM.
 
 ---
 
