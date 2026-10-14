@@ -11,7 +11,10 @@
 //   pit, low or tall solid, empty or void.
 // - A dungeon room's shell (the walls around the floor) becomes hinged
 //   panels that stand up or lie flat (exactly as painted) depending on where
-//   the camera is.
+//   the camera is. In third person a wall that lies flat lies on a low body
+//   (a dollhouse cutaway: the walls between the camera and the room are cut
+//   down, their painted band on top), and a wall is one solid block: its
+//   ends and the steps between its columns are closed.
 // - Everything else is a relief: a surface point (x, y, z) shows the picture
 //   texel (x, y - z). Under the parallel oblique test camera (the screen
 //   shows (x, y - z)) the picture is then exactly the original whatever
@@ -54,6 +57,7 @@ enum {
   kMaxProps = 512,           // small props drawn as standing pictures, per scene
   kPropMaxCells = 4,         // a prop that fits in 4 x 4 cells (pots, statues, chests) is one
   kFpWallHeight = 64,        // in first person room walls are at least this tall (the eye is at 20)
+  kCutWallHeight = 16,       // third person: a wall between the camera and the room is cut down to this
   kBandStep = 0x80,          // (PanelCell.b) the band ends at another floor: a step, not a room wall
   kBandLip = 0x40,           // (PanelCell.b) the upper floor's painted edge over a lower floor: it lies flat
   kBandKinds = kBandStep | kBandLip,
@@ -2588,6 +2592,7 @@ typedef struct EmitCtx {
   bool dark_void;            // indoors in first person: the void is a dark flat color
   float k[4];                // the fold of each wall direction
   float cphi[4], sphi[4];    // cos and sin of its angle (90 degrees times k)
+  float plinth[4];           // px: the body a wall of that direction lies on as far as it lies flat
   int8 chunk_vis[2][kMaxN / kChunkCells * (kMaxN / kChunkCells)];  // panels: 0 unknown, 1 seen, -1 culled
 } EmitCtx;
 
@@ -3121,16 +3126,161 @@ static float PanelStretch(const Hd3dScene *s, int L, int dir, int b, float fp) {
   return fp > 0.0f && tall > tp ? tp + (tall - tp) * fp : tp;
 }
 
+static int LidCells(const Hd3dScene *s, const Layer *ly, const PanelCell *p);
+static bool IsColumnTop(const Hd3dScene *s, const Layer *ly, const PanelCell *p);
+
+// The fold of a panel cell's wall: its angle, how far a point of the band
+// moves (R(t) = t scale, see EmitPanelCell) and the body it lies on.
+typedef struct Fold { float k, cp, sp, scale, plinth; } Fold;
+
+static void FoldOf(const EmitCtx *x, int L, const PanelCell *p, Fold *f) {
+  const Hd3dScene *s = x->s;
+  int dir = s->lines[p->line].dir;
+  f->k = x->k[dir], f->cp = x->cphi[dir], f->sp = x->sphi[dir];
+  f->plinth = (p->b & kBandKinds) ? 0.0f : x->plinth[dir];  // (steps and lips: none)
+  if (p->b & kBandLip)
+    f->k = 0.0f, f->cp = 1.0f, f->sp = 0.0f;  // (the upper floor's edge lies as painted)
+  f->scale = 1.0f + (PanelStretch(s, L, dir, p->b, x->fp) - 1.0f) * f->k;
+}
+
+// A wall column's body, seen along the wall: from the hinge out to *outer
+// (the lid's edge), up to the top of its folded band at (*reach cos phi,
+// plinth + *reach sin phi) and the lid there. (Lintel and corner cells have
+// a column of their own; a column that is not drawn has no body.)
+static void ColumnBody(const EmitCtx *x, int L, const PanelCell *p, int lid, float *reach, float *outer) {
+  Fold f;
+  FoldOf(x, L, p, &f);
+  *reach = 8.0f * (float)p->d * f.scale;
+  float o = lid >= 0 ? 8.0f * (float)(p->d + lid) : 0.0f, in = *reach * f.cp;
+  *outer = o > in ? o : in;
+}
+
+// The cell of (line, along) furthest out that is drawn this frame (NULL: none).
+static const PanelCell *ColumnTop(const EmitCtx *x, int L, int line, int along) {
+  const Hd3dScene *s = x->s;
+  const Layer *ly = &s->layer[L];
+  const PanelLine *ln = &s->lines[line];
+  const PanelCell *top = NULL;
+  int n = s->n, h8 = ln->hinge / 8, dir = ln->dir;
+  if (along < 0 || along >= n)
+    return NULL;
+  for (int d = 1; d <= kHd3dBandMax; d++) {
+    int r = along, c = along;
+    if (dir == kDir_N)
+      r = h8 - d;
+    else if (dir == kDir_S)
+      r = h8 + d - 1;
+    else if (dir == kDir_W)
+      c = h8 - d;
+    else
+      c = h8 + d - 1;
+    if (r < 0 || r >= n || c < 0 || c >= n)
+      break;
+    for (int k = 0; k < 2; k++) {
+      int rec = ly->rec[k][r * n + c];
+      if (rec < 0)
+        continue;
+      const PanelCell *q = &s->pcells[rec];
+      if (q->line == line && (q->other == kDir_None || PanelWins(x, dir, q->other)))
+        top = q;
+    }
+  }
+  return top;
+}
+
+// A face of a wall's body: its corners in the wall's own frame (a along
+// the foot, t out from the hinge, z up from the layer base), facing (na
+// along, nt out, nz up). The void's color, or with band[] the painted band
+// of the wall at that distance from the hinge (the back of a standing wall).
+static void EmitBodyFace(EmitCtx *x, int L, const PanelLine *ln, const float *a, const float *t, const float *z,
+                         float na, float nt, float nz, uint8 shade, const float *band) {
+  Hd3dScene *s = x->s;
+  R3dQuad *q = NewQuad(x, L ? x->e->tex_bg1 : x->e->tex_bg2, shade, kR3dClass_World);
+  if (!q)
+    return;
+  int dir = ln->dir;
+  bool along_x = dir == kDir_N || dir == kDir_S;
+  float nx = (float)kDirX[dir], ny = (float)kDirY[dir], zb = (float)LayerBase(s, L);
+  float ox = (float)s->origin_x, oy = (float)s->origin_y, hinge = (float)ln->hinge;
+  if (!band)
+    q->flags = kR3dQuad_Flat, q->color = s->void_rgb;
+  for (int v = 0; v < 4; v++) {
+    float px = along_x ? ox + a[v] : ox + hinge + nx * t[v], py = along_x ? oy + hinge + ny * t[v] : oy + a[v];
+    float tb = band ? band[v] : t[v];
+    SetVertex(&q->v[v], px, py + zb, zb + z[v], along_x ? px : ox + hinge + nx * tb,
+              along_x ? oy + hinge + ny * tb : py);
+  }
+  Orient(q, along_x ? na : nx * nt, along_x ? ny * nt : na, nz);
+  Fade(x, q);
+}
+
+// The body of a wall column whose top cell is p: the face at its lid's
+// outer edge (the front of a cut-down wall; on a thin wall between two
+// floors, the step from the cut-down face's body up to the standing face's
+// lid), the face at the hinge under a cut-down wall's band, and the ends:
+// where the column beside it is shorter or missing, what that leaves open
+// (above the neighbour's band and lid, and beyond its lid).
+static void EmitColumnBody(EmitCtx *x, int L, const PanelCell *p, int lid) {
+  Hd3dScene *s = x->s;
+  const PanelLine *ln = &s->lines[p->line];
+  int dir = ln->dir, n = s->n;
+  bool along_x = dir == kDir_N || dir == kDir_S;
+  int along = along_x ? p->cell % n : p->cell / n;
+  float a0 = 8.0f * (float)along, a1 = a0 + 8.0f, reach, outer;
+  // (Darker than the lid, so the sides of a pale void's bodies read as sides.)
+  static const uint8 kFaceShade[4] = { 140, 176, 176, 208 };  // (facing N, W, E, S)
+  Fold f;
+  FoldOf(x, L, p, &f);
+  ColumnBody(x, L, p, lid, &reach, &outer);
+  float top = f.plinth + reach * f.sp, in = reach * f.cp;
+  float aa[4] = { a0, a1, a1, a0 }, tt[4], zz[4], bb[4];
+  if (outer > 0.01f && top > 0.01f) {
+    // (Standing, its back shows its own band again, the hinge's end at the
+    // foot: seen over the cut-down face of a thin wall between two floors.)
+    tt[0] = tt[1] = tt[2] = tt[3] = outer;
+    zz[0] = zz[1] = 0.0f, zz[2] = zz[3] = top;
+    bb[0] = bb[1] = 0.0f, bb[2] = bb[3] = 8.0f * (float)p->d;
+    EmitBodyFace(x, L, ln, aa, tt, zz, 0.0f, 1.0f, 0.0f, kFaceShade[dir], f.sp > 0.5f ? bb : NULL);
+  }
+  if (f.plinth > 0.01f && p->d == 1) {
+    tt[0] = tt[1] = tt[2] = tt[3] = 0.0f;
+    zz[0] = zz[1] = 0.0f, zz[2] = zz[3] = f.plinth;
+    EmitBodyFace(x, L, ln, aa, tt, zz, 0.0f, -1.0f, 0.0f, kFaceShade[dir ^ 3], NULL);
+  }
+  for (int side = -1; side <= 1; side += 2) {
+    const PanelCell *nb = ColumnTop(x, L, p->line, along + side);
+    float reach_n = 0.0f, outer_n = 0.0f, in_n = 0.0f, top_n = f.plinth;
+    if (nb) {
+      Fold fn;
+      FoldOf(x, L, nb, &fn);
+      ColumnBody(x, L, nb, IsColumnTop(s, &s->layer[L], nb) ? LidCells(s, &s->layer[L], nb) : -1, &reach_n, &outer_n);
+      in_n = reach_n * fn.cp, top_n = fn.plinth + reach_n * fn.sp;
+    }
+    float a = side < 0 ? a0 : a1, o = outer > outer_n ? outer : outer_n;
+    aa[0] = aa[1] = aa[2] = aa[3] = a;
+    if (top > top_n + 0.01f && o > in_n + 0.01f) {
+      // (From the neighbour's band top along this one's to the lid's edge.)
+      tt[0] = in_n, tt[1] = in, tt[2] = o, tt[3] = o;
+      zz[0] = top_n, zz[1] = top, zz[2] = top, zz[3] = top_n;
+      EmitBodyFace(x, L, ln, aa, tt, zz, (float)side, 0.0f, 0.0f, 176, NULL);
+    }
+    if (outer > outer_n + 0.01f && top_n > 0.01f) {
+      tt[0] = tt[3] = outer_n, tt[1] = tt[2] = outer;
+      zz[0] = zz[1] = 0.0f, zz[2] = zz[3] = top_n;
+      EmitBodyFace(x, L, ln, aa, tt, zz, (float)side, 0.0f, 0.0f, 176, NULL);
+    }
+  }
+}
+
 // One cell of a wall panel: a point at band distance t (px) along the foot
-// is at hinge + R(t) (cos phi n + sin phi z), R(t) = t lerp(1, PanelStretch, k).
-static void EmitPanelCell(EmitCtx *x, int L, const PanelCell *p, int lid) {
+// is at hinge + R(t) (cos phi n + sin phi z) over the plinth, R(t) = t lerp(1, PanelStretch, k).
+static void EmitPanelCell(EmitCtx *x, int L, const PanelCell *p, bool top, int lid) {
   Hd3dScene *s = x->s;
   const PanelLine *ln = &s->lines[p->line];
   int dir = ln->dir, n = s->n, base = LayerBase(s, L);
-  float k = x->k[dir], cp = x->cphi[dir], sp = x->sphi[dir];
-  if (p->b & kBandLip)
-    k = 0.0f, cp = 1.0f, sp = 0.0f;  // (the upper floor's edge lies as painted)
-  float scale = 1.0f + (PanelStretch(s, L, dir, p->b, x->fp) - 1.0f) * k;
+  Fold f;
+  FoldOf(x, L, p, &f);
+  float k = f.k, cp = f.cp, sp = f.sp, scale = f.scale, pl = f.plinth;
   float nx = (float)kDirX[dir], ny = (float)kDirY[dir];
   int pr = p->cell / n, pc = p->cell % n;
   bool along_x = dir == kDir_N || dir == kDir_S;
@@ -3149,11 +3299,13 @@ static void EmitPanelCell(EmitCtx *x, int L, const PanelCell *p, int lid) {
     float a = end ? a1 : a0, tt = t[v >> 1], rr = tt * scale, h = hinge + (end ? s1 : s0);
     // hinge point, the folded point, and its texel (where it is painted)
     float hx = along_x ? a : h, hy = along_x ? h : a;
-    SetVertex(&q->v[v], ox + hx + nx * rr * cp, oy + hy + ny * rr * cp + zb, zb + rr * sp,
+    SetVertex(&q->v[v], ox + hx + nx * rr * cp, oy + hy + ny * rr * cp + zb, zb + pl + rr * sp,
               ox + hx + nx * tt, oy + hy + ny * tt);
   }
   Orient(q, -nx * sp, -ny * sp, cp);
   Fade(x, q);
+  if (top && !x->e->test_camera)
+    EmitColumnBody(x, L, p, lid);
   // Where the slanted foot leaves the painted floor's edge (it moves into the
   // band), floor fills the corner, with the texels of the floor cell next to it.
   float into = along_x ? -ny : -nx, g0 = s0 * into < 0.0f ? s0 : 0.0f, g1 = s1 * into < 0.0f ? s1 : 0.0f;
@@ -3168,12 +3320,12 @@ static void EmitPanelCell(EmitCtx *x, int L, const PanelCell *p, int lid) {
       Orient(f, 0, 0, 1);
     }
   }
-  if (lid < 0 || k <= 0)
+  if (lid < 0 || (k <= 0 && pl <= 0))
     return;
   // A lid over the wall top, out over the void past the band (lid cells).
   // North walls show the picture there (at the default view exactly what
   // the original shows above them); the others the void's color.
-  float rt = t[1] * scale, inner = rt * cp, outer = 8.0f * (float)(p->d + lid), zt = zb + rt * sp;
+  float rt = t[1] * scale, inner = rt * cp, outer = 8.0f * (float)(p->d + lid), zt = zb + pl + rt * sp;
   if (inner >= outer - 0.01f)
     return;
   q = NewQuad(x, x->e->tex_bg2, 255, kR3dClass_World);
@@ -3236,7 +3388,8 @@ static void EmitPanels(EmitCtx *x, int L) {
       continue;
     if (!PanelChunkVisible(x, L, pr, pc))
       continue;
-    EmitPanelCell(x, L, p, IsColumnTop(s, ly, p) ? LidCells(s, ly, p) : -1);
+    bool top = IsColumnTop(s, ly, p);
+    EmitPanelCell(x, L, p, top, top ? LidCells(s, ly, p) : -1);
   }
 }
 
@@ -3419,6 +3572,12 @@ int Hd3dScene_Emit(Hd3dScene *s, const Hd3dEmit *e, R3dQuad *out, int max) {
     }
     x.k[dir] = k * x.rise;
     x.cphi[dir] = cosf(x.k[dir] * 1.5707963f), x.sphi[dir] = sinf(x.k[dir] * 1.5707963f);
+    // (Once the camera is turned, a wall that lies flat (toward the camera)
+    // lies on a low body: the room keeps its walls from every side, cut
+    // down where they would hide it. At the classic view, and under the
+    // test camera, it lies flat as painted: the picture is the original.)
+    float cut = e->test_camera ? 0.0f : e->cut < 0 ? 0.0f : e->cut > 1 ? 1.0f : e->cut;
+    x.plinth[dir] = (float)kCutWallHeight * (1.0f - k) * x.rise * cut;
   }
 
   int layers = GeometryLayers(s);

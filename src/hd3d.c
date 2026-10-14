@@ -956,6 +956,7 @@ static void FinishPane(Pane *p, int view) {
   float vx = -f->cam.fwd[0], vy = -f->cam.fwd[1], vl = sqrtf(vx * vx + vy * vy);
   e.view_dir[0] = vl > 1e-4f ? vx / vl : 0.0f, e.view_dir[1] = vl > 1e-4f ? vy / vl : 1.0f;
   e.fp_blend = b;
+  e.cut = wide;  // (the cutaway comes in as the camera turns, with the wider margin)
   e.test_camera = test;
   e.rise = p->rise;
   memcpy(e.rect, p->rect, sizeof(e.rect));

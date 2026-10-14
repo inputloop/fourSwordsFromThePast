@@ -89,6 +89,8 @@ typedef struct Hd3dEmit {
   int w, h;
   float view_dir[2];         // horizontal unit vector from the target toward the eye (third person)
   float fp_blend;            // 0 third person .. 1 first person (every wall stands)
+  float cut;                 // 0 at the classic view (walls lie flat as painted) .. 1 with the camera
+                             // turned: a wall lying flat lies on a low body (the dollhouse cutaway)
   bool test_camera;          // the oblique test camera: walls stand only where they face it
   float rise;
   int32 rect[4];             // world px whose geometry is emitted
