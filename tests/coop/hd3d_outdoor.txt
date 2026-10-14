@@ -11,7 +11,8 @@
 # the Link, so that spot is held to 0.2%), and at the top of the stairs of
 # its main door (where the ground and the face over the door climb as fast
 # as the rows go north, the Link stands on what lands on his feet, so he is
-# not cut in half: held to 0.2% too).
+# not cut in half: held to 0.2% too). On the Sanctuary's doorstep he stands
+# on the ground (a house's rows north of him are not ground).
 # At most 2% of the pixels may be off by more than 12 per color channel. On a
 # failure tests/out/exact3d_2d.ppm, _3d.ppm and _diff.ppm show where.
 view3d 1
@@ -51,6 +52,10 @@ drawrun 40
 hold 1 -
 drawrun 60
 expect_exact3d 2 12
+# (Out on the doorstep, under the doorway's wall: the Link stands on the
+# ground, not on the facade's rows north of him.)
+drawrun 20
+expect_standz 1 0
 load 2
 drawrun 30
 enter e3
@@ -98,3 +103,4 @@ hold 1 -
 drawrun 60
 expect_3d 1
 expect_exact3d 0.2 12
+expect_standz 1 64

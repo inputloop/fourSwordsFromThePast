@@ -480,17 +480,18 @@ static void ReadPose(Pane *p, int player, float dt, bool snap) {
   int e = ppu->extraLeftRight;
   int cam_x = (int)BG2HOFS_copy2 - e, cam_y = (int)BG2VOFS_copy2;
   bool lower = player_is_indoors && *Mp_PlayerRam(player, 0xEE) != 0;  // link_is_on_lower_level
-  // (Outdoors the ground has terraces: the height under the Link's feet.)
-  int g = Hd3dScene_StandZ(p->scene, lower, Mp_PlayerX(player) + 8, Mp_PlayerY(player) + 20);
+  // (The other Links are drawn moved by their netplay smoothing; the leader is not.)
+  int dx = player == g_mp.leader ? 0 : g_mp_draw_offset[player][0];
+  int dy = player == g_mp.leader ? 0 : g_mp_draw_offset[player][1];
+  // (Outdoors the ground has terraces: the height the Link's card stands at,
+  // taken at its ground point, so the eye and the card always agree.)
+  int g = Hd3dScene_StandZ(p->scene, lower, Mp_PlayerX(player) + 8 + dx, Mp_PlayerY(player) + 24 + dy);
   SmoothTo(&p->tz, (float)g, dt, 0.15f, snap);
   Cam3dPose *pose = &p->pose;
   pose->w = p->w, pose->h = p->h;
   float cx = (float)cam_x + 0.5f * (float)p->w, cy = (float)cam_y + 1.0f + 0.5f * (float)p->h;
   pose->target[0] = cx, pose->target[1] = cy + p->tz, pose->target[2] = p->tz;
   pose->shake[0] = (float)(int16)bg1_x_offset, pose->shake[1] = (float)(int16)bg1_y_offset;
-  // (The other Links are drawn moved by their netplay smoothing; the leader is not.)
-  int dx = player == g_mp.leader ? 0 : g_mp_draw_offset[player][0];
-  int dy = player == g_mp.leader ? 0 : g_mp_draw_offset[player][1];
   uint16 z = WORD(*Mp_PlayerRam(player, 0x24));  // link_z_coord (0xffff on the ground)
   int lz = (int16)z >= 0 || (z & 0xff) < 0xf0 ? z & 0xff : 0;
   float bx = (float)(Mp_PlayerX(player) + 8 + dx), by = (float)(Mp_PlayerY(player) + 16 + dy);
@@ -1101,6 +1102,11 @@ void Hd3d_GetStats(int view, int *quads, int *cards) {
   bool ok = p && p->is3d;
   *quads = ok ? p->quads : 0;
   *cards = ok ? p->cards : 0;
+}
+
+int Hd3d_StandZAt(int view, int x, int y) {
+  const Pane *p = PaneOf(view);
+  return p && p->is3d && p->scene ? Hd3dScene_StandZ(p->scene, 0, x, y) : -1;
 }
 
 void Hd3d_DumpScene(const char *ppm_path) {

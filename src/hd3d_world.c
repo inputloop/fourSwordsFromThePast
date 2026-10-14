@@ -2437,12 +2437,29 @@ int Hd3dScene_StandZ(const Hd3dScene *s, int layer, int x, int y) {
   // the foot along the test camera's line of sight: the picture stays the
   // same. (Only for a foot on walkable ground: in a doorway, the game draws
   // the wall over the Link.)
+  const Layer *ly = &s->layer[0];
   int n = s->n, c = (x - s->origin_x) >> 3, r0 = (y - s->origin_y) >> 3;
-  if (c < 0 || c >= n || r0 < 0 || r0 >= n || !OwWalk(&s->layer[0], r0 * n + c))
+  if (c < 0 || c >= n || r0 < 0 || r0 >= n || !OwWalk(ly, r0 * n + c))
     return z;
+  // In an opening (a doorway, a cave mouth): open ground under a slab with a
+  // Link's headroom. Nothing lands on the foot; the game draws what is above
+  // over the Link.
+  int wr = (y + z - s->origin_y) >> 3, j = wr * n + c;
+  if (wr >= 0 && wr < n && ly->wz[j] <= z && s->slab_hi[j] > s->slab_lo[j] && s->slab_lo[j] - z <= kOwHeadroom)
+    return z;
+  // Only where the walkable ground itself climbs just north (stairs): a
+  // solid cell's level is only its region's (a house or a tree is built up
+  // from its own foot), not a surface over the foot.
+  bool climbs = false;
+  for (int k = 1; k <= 4 && r0 - k >= 0; k++)
+    climbs |= OwWalk(ly, (r0 - k) * n + c) && s->ow_level[(r0 - k) * n + c] > z;
+  if (!climbs)
+    return z;
+  // (A step the stairs' own slope already covers stays: the ramp keeps going
+  // down smoothly instead of jumping up a few px before each step.)
   for (int k = 1; k <= 4; k++) {
     int yn = (y & ~7) - 8 * k, zn = Hd3dScene_GroundZ(s, layer, x, yn + 4);
-    if (zn > z && yn + zn <= y + z && y + z < yn + 8 + zn)
+    if (zn > z + 8 && yn + zn <= y + z && y + z < yn + 8 + zn)
       z = zn;
   }
   return z;

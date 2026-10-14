@@ -7,6 +7,9 @@
 # Straight stairs to another floor turn the view to where the Link comes
 # out facing. Where the picture is 2D the d-pad isn't turned, also through
 # the game's scrolls. A check (expect_exact3d) leaves the camera alone.
+# Walking into a house with the camera turned keeps following the camera,
+# and so does player 2 entering first person while walking in a pane he
+# shares with player 1.
 load 2
 run 30
 view3d 1
@@ -160,3 +163,55 @@ tick 20
 expect_moved 1 north
 hold 1 -
 view3dset turn 1
+# Third person turned east: left walks north, also on into Link's house
+# (through the 2D spotlight opening, where nothing was latched yet).
+cam3d 1 tp 0 45
+load 2
+drawrun 30
+clearsprites
+cam3d 1 tp 90 45
+drawrun 2
+expect_3d 1
+expect_remap 1 L U
+expect_remap 1 - -
+hold 1 L
+drawrun 10
+drawuntil 7 f 400
+drawuntil 7 0 400
+expect_cam3d 1 90 45
+markpos 1
+drawrun 30
+expect_moved 1 north
+hold 1 -
+drawrun 2
+# Player 2 shares player 1's pane (third person turned east) and walks east
+# with up, then enters first person while walking: still east.
+cam3d 1 tp 0 45
+load 2
+run 30
+localjoin 2
+tick 30
+view3d 1
+drawtick 1
+clearsprites
+pos 1 3860 1660
+pos 2 3860 1700
+tick 3
+cam3d 1 tp 90 45
+tick 3
+expect_panes 1
+hold 2 U
+tick 10
+markpos 2
+tick 10
+expect_moved 2 east
+viewbutton 2
+expect_fp 2 1
+markpos 2
+tick 20
+expect_panes 2
+expect_3d 1
+expect_cam3d 2 90 8 5
+expect_moved 2 east
+hold 2 -
+tick 2

@@ -323,6 +323,23 @@ static uint16 Unturned(Cam3dRemap *r, uint16 input) {
   return input;
 }
 
+// Whether the camera cl that local i walks by was seen in 3D. The panes are
+// last frame's: right after first person was entered or left (the View
+// button is handled before the panes are drawn again) cl has no pane yet,
+// and what the player saw was the pane that showed i's world.
+static bool CameraSees3D(int i, int cl) {
+  if (!g_hd3d.enabled)
+    return false;
+  int n = IntMin(Hd3dInput_PaneCount(), kHd3dMaxPanes), w = ViewOf(i);
+  for (int v = 0; v < n; v++)
+    if (Hd3dInput_PaneLocal(v) == cl)
+      return Hd3d_PaneIs3D(v);
+  for (int v = 0; v < n && w >= 0; v++)
+    if (ViewOf(Hd3dInput_PaneLocal(v)) == w)
+      return Hd3d_PaneIs3D(v);
+  return false;
+}
+
 uint16 Hd3d_RemapLocal(int local, int player, uint16 input) {
   if (!ValidLocal(local))
     return input;
@@ -346,9 +363,17 @@ uint16 Hd3d_RemapLocal(int local, int player, uint16 input) {
   // own scrolls and transitions a walk keeps its way, also where they are
   // 2D: they ignore the d-pad until their last frame, whose word the game
   // then plays on the first frame of plain play.)
-  bool sees = Hd3d_LocalSees3D(cl);
-  if ((s == 0 ? !sees : !sees && !r->latched) || !(c->first_person || g_hd3d.turn_controls))
+  bool sees = CameraSees3D(local, cl);
+  if ((s == 0 && !sees) || !(c->first_person || g_hd3d.turn_controls))
     return Unturned(r, input);
+  // A 2D transition with no walk latched yet (it went through a module that
+  // let go of it, entering a house say, or a direction pressed again during
+  // a scroll): unturned, but not latched, so the walk is latched against
+  // the real picture once plain play shows it.
+  if (s != 0 && !sees && !r->latched) {
+    Cam3d_RemapReset(r);
+    return input;
+  }
   // The left stick's own direction when it moves Link (a single rounding to
   // 8 directions); keys and the d-pad as they are.
   float mx = 0.0f, my = 0.0f;

@@ -87,6 +87,7 @@ void Hd3d_PressViewButton(int local, int hold_ms);       // a tap (or a hold) of
 void Hd3d_SetTestCamera(bool on);                        // parallel oblique camera, no fog or extras
 const char *Hd3d_LastWhy2D(int view);                    // "none" if pane view was drawn in 3D
 void Hd3d_GetStats(int view, int *quads, int *cards);
+int Hd3d_StandZAt(int view, int x, int y);               // what stands at picture point (x, y) of pane view stands on (-1: not 3D)
 void Hd3d_DumpScene(const char *ppm_path);               // (Debug) the bound world's heights
 void Hd3d_ResetForTests(void);                           // 3D off, defaults, cameras reset, no toasts
 

@@ -132,6 +132,7 @@
 //   expect_luma <x0> <y0> <x1> <y1> <min> <max>  draw view 0: average luma (0-255) of pixels x0..x1-1, y0..y1-1
 //   expect_mouse_captured <0|1>  Hd3d_WantsRelativeMouse
 //   expect_3dstats <min quads> <min cards> [max cards]  draw view 0: at least that many quads and cards were drawn
+//   expect_standz <p> <z>  draw view 0: player p's Link stands at height z (at his card's ground point)
 // Session (netplay) commands. "hold" then refers to local players.
 //   host <port> | connect <addr> | disconnect
 //   tick <n>            run n session ticks in real time (16ms apart), as the game's loop: the overlay, then the
@@ -2540,6 +2541,18 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // expect_mouse_captured <0|1>: the game would capture the mouse (mouse look, right drag)
       if (Hd3d_WantsRelativeMouse() != (atoi(arg1) != 0)) {
         printf("FAIL: the mouse is %scaptured at frame %d\n", Hd3d_WantsRelativeMouse() ? "" : "not ", frame);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "expect_standz")) {
+      // expect_standz <p> <z>: draws the viewed player's view; the height
+      // player p's Link stands at there (Hd3dScene_StandZ at his card's
+      // ground point, as the card, the camera and the overlays take it)
+      DrawView(view, pixels, width, render_flags);
+      uint16 px = 0, py = 0;
+      int p = PlayerArg(arg1), z = Inst_PlayerPos(p, &px, &py) >= 0 ? Hd3d_StandZAt(0, px + 8, py + 24) : -1;
+      printf("expect_standz: P%d at %d,%d stands at %d\n", p + 1, px, py, z);
+      if (z != atoi(arg2)) {
+        printf("FAIL: P%d stands at %d, expected %s at frame %d\n", p + 1, z, arg2, frame);
         g_failures++;
       }
     } else if (!strcmp(cmd, "expect_3dstats")) {
