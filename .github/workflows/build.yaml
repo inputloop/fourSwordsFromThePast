@@ -73,7 +73,7 @@ jobs:
     - name: Package
       run: |
         mkdir -p dist/other
-        cp zelda3 zelda3.ini README.md MULTIPLAYER.md AI_DISCLOSURE.txt requirements.txt dist/
+        cp zelda3 zelda3.ini README.md MULTIPLAYER.md AI_DISCLOSURE.txt requirements.txt extract_assets.command dist/
         cp "archipelago/Four Swords of the Past.yaml" dist/
         python3 archipelago/build_apworld.py dist/fsotp.apworld
         cp other/3x5_font.png dist/other/

@@ -5,6 +5,16 @@ import os
 
 os.chdir(os.path.dirname(__file__))
 
+# The two libraries the extraction needs, with the way to get them.
+try:
+  import yaml
+  import PIL
+except ImportError as e:
+  sys.exit("restool: the Python module '%s' is missing. Install the two it needs with\n"
+           "  python3 -m pip install --user pillow pyyaml\n"
+           "(or run extract_assets.command on macOS and Linux, extract_assets.bat on Windows: they do it for you)."
+           % e.name)
+
 
 parser = argparse.ArgumentParser(description='Resource tool used to build zelda3_assets.dat', allow_abbrev=False)
 parser.add_argument('-r', '--rom', nargs='?', metavar='ROM')

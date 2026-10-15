@@ -1230,10 +1230,20 @@ static void LoadLinkGraphics() {
 const uint8 *g_asset_ptrs[kNumberOfAssets];
 uint32 g_asset_sizes[kNumberOfAssets];
 
+// Offers to run extract_assets.bat (Windows) or extract_assets.command
+// (macOS, Linux) when the assets are missing: it finds the ROM, gets the
+// two Python libraries and builds zelda3_assets.dat.
 #if defined(_WIN32)
-// Offers to run extract_assets.bat when the assets are missing but a ROM is present.
+#define kExtractScript "extract_assets.bat"
+#define kExtractCommand "cmd /c extract_assets.bat"
+#define kExtractNeeds "This needs Python 3 (python.org)."
+#else
+#define kExtractScript "extract_assets.command"
+#define kExtractCommand "/bin/sh ./extract_assets.command"
+#define kExtractNeeds "This needs Python 3 (macOS offers to install it; see the terminal)."
+#endif
 static bool OfferAssetExtraction() {
-  FILE *f = fopen("extract_assets.bat", "rb");
+  FILE *f = fopen(kExtractScript, "rb");
   if (!f)
     return false;
   fclose(f);
@@ -1246,24 +1256,22 @@ static bool OfferAssetExtraction() {
     "zelda3_assets.dat is missing.\n\n"
     "The game builds it once from your own ROM of A Link to the Past (USA).\n"
     "Put the ROM (.sfc or .smc) in this folder, then choose Extract now.\n"
-    "This needs Python 3 (python.org).",
+    kExtractNeeds,
     2, kButtons, NULL
   };
   int button = 0;
   if (SDL_ShowMessageBox(&box, &button) != 0 || button != 1)
     return false;
-  system("cmd /c extract_assets.bat");
+  int err = system(kExtractCommand);
+  (void)err;
   return true;
 }
-#endif
 
 static void LoadAssets() {
   size_t length = 0;
   uint8 *data = ReadWholeFile("zelda3_assets.dat", &length);
-#if defined(_WIN32)
   if (!data && OfferAssetExtraction())
     data = ReadWholeFile("zelda3_assets.dat", &length);
-#endif
   if (!data) {
     size_t bps_length, bps_src_length;
     uint8 *bps, *bps_src;
@@ -1271,7 +1279,7 @@ static void LoadAssets() {
     if (!bps)
       Die("Missing zelda3_assets.dat.\n\n"
           "Put your ROM of A Link to the Past (USA) (.sfc or .smc) next to the game and run "
-          "extract_assets.bat (Windows) or 'python3 assets/restool.py --extract-from-rom -r <rom>'. "
+          "extract_assets.bat (Windows) or extract_assets.command (macOS, Linux). "
           "This needs Python 3. See README.md.");
     bps_src = ReadWholeFile("zelda3.sfc", &bps_src_length);
     if (!bps_src)

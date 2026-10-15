@@ -561,27 +561,31 @@ on Intel and Apple Silicon Macs, with nothing to install: SDL2 is built in.
 
 1. Download it and unzip it. Inside is `zelda3-macos.tar.gz`: double-click
    it, and it unpacks into a folder (`zelda3-macos`).
-2. Copy your ROM into that folder, named `zelda3.sfc`.
-3. Open Terminal (Applications > Utilities), type `cd ` (with the space),
-   drag the folder onto the Terminal window, and press Return. Then extract
-   the game's assets once and start the game:
+2. Copy your ROM (any name) into that folder.
+3. Double-click `extract_assets.command`. It opens a Terminal window, finds
+   the ROM, gets the two Python libraries the extraction needs (Pillow and
+   PyYAML) and writes `zelda3_assets.dat`. On a fresh Mac, `python3` first
+   offers to install Apple's command line tools: say yes, wait, then run it
+   again. (Starting `zelda3` without the assets offers the same: *Extract
+   now*.)
+4. Double-click `zelda3` (or run `./zelda3` in Terminal, in that folder).
 
-   ```sh
-   python3 -m pip install --user -r requirements.txt   # Pillow and PyYAML, once
-   python3 assets/restool.py --extract-from-rom          # writes zelda3_assets.dat
-   ./zelda3
-   ```
+The same by hand, in Terminal, in that folder (`cd `, then drag the folder
+onto the window):
 
-   The first `python3` on a fresh Mac offers to install Apple's command line
-   tools, which bring it; say yes and run the line again. (If `pip` refuses
-   with "externally managed environment", add `--break-system-packages`.)
-   After that, `./zelda3` in that folder is all it takes, or double-click
-   `zelda3` in the Finder.
+```sh
+python3 -m pip install --user -r requirements.txt   # Pillow and PyYAML, once
+python3 assets/restool.py --extract-from-rom -r "your rom.sfc"
+./zelda3
+```
 
-If macOS says `zelda3` "cannot be opened because the developer cannot be
-verified", that is the download quarantine (the build is not notarized by
-Apple): right-click `zelda3`, choose *Open*, and confirm; or run
-`xattr -d com.apple.quarantine zelda3` in the folder once. If an older
+(If `pip` refuses with "externally managed environment", add
+`--break-system-packages`.)
+
+If macOS says `zelda3` or `extract_assets.command` "cannot be opened because
+the developer cannot be verified", that is the download quarantine (the build
+is not notarized by Apple): right-click the file, choose *Open*, and confirm;
+or run `xattr -dr com.apple.quarantine .` in the folder once. If an older
 download aborts with `Library not loaded: ...libSDL2-2.0.0.dylib`, it was
 built against Homebrew's SDL2: take a build newer than October 15, 2026,
 which has SDL2 built in.
@@ -598,7 +602,7 @@ most distributions) and Python 3 with Pillow and PyYAML for the extraction:
 ```sh
 sudo apt-get install libsdl2-2.0-0 python3-pil python3-yaml   # or: pip install -r requirements.txt
 cp /path/to/your/Legend_of_Zelda_USA.sfc zelda3.sfc
-python3 assets/restool.py --extract-from-rom
+sh extract_assets.command      # or: python3 assets/restool.py --extract-from-rom
 ./zelda3
 ```
 
