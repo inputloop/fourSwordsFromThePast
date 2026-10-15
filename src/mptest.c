@@ -118,7 +118,7 @@
 //   runcheckobjowner <n> <hextype> <p>  run up to n frames: the first new object of that type in p's world belongs to p
 // 3D view (beta). Here <p> of a camera, button or stick is a local player 1..4 (offline: local p plays player p),
 // <c> a controller 0..3.
-//   view3d <0|1>        the 3D view (like hd2d)
+//   view3d <0|1> [p]    the 3D view for every local player, or local p-1's alone (the menu)
 //   view3dset <returns|turn|mouselook|fade|stick|mouse|invert|fov|perspective> <value>
 //   cam3d <p> <tp|fp> [yaw] [pitch] [zoom%]  local p-1's camera right away (degrees; pitch below the horizon;
 //                       defaults tp 0 45 100, fp: the Link's facing, 8)
@@ -2505,8 +2505,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         g_failures++;
       }
     } else if (!strcmp(cmd, "view3d")) {
-      // view3d <0|1>: the 3D view (as the menu and F11 turn it on and off)
-      Hd3d_SetEnabled(atoi(arg1) != 0);
+      // view3d <0|1> [p]: the 3D view for every local player (as zelda3.ini
+      // turns it on), or for local p-1 alone (as that player's menu does)
+      if (arg2[0])
+        Hd3d_SetLocalEnabled(PlayerArg(arg2), atoi(arg1) != 0);
+      else
+        Hd3d_SetEnabled(atoi(arg1) != 0);
     } else if (!strcmp(cmd, "view3dset")) {
       // view3dset <setting> <value>: a 3D view setting, clamped as the settings file is
       int v = atoi(arg2);
@@ -2763,13 +2767,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // expect_exact3d <max %> <tolerance>: at most that many percent of the
       // pixels differ by more than the tolerance (any channel) between the 2D
       // picture and the 3D one seen through the parallel oblique test camera
-      bool hd2d_on = g_hd2d.enabled, hd3d_on = g_hd3d.enabled;
+      bool hd2d_on = g_hd2d.enabled, hd3d_on[kSessionMaxLocal];
+      for (int i = 0; i < kSessionMaxLocal; i++)
+        hd3d_on[i] = Hd3d_LocalEnabled(i);
       size_t npx = (size_t)width * height;
       uint32 *a = calloc(npx * 16, 4), *b = calloc(npx * 16, 4);
       // (The flags alone: Hd3d_SetEnabled would also leave first person, as
       // F11 does, and a check must not change the cameras.)
       g_hd2d.enabled = false;
-      g_hd3d.enabled = false;
+      for (int i = 0; i < kSessionMaxLocal; i++)
+        Hd3d_SetLocalEnabledQuiet(i, false);
       // (The 2D picture as the PPU draws it.)
       int home = Inst_Current();
       if (Inst_ViewOfPlayer(view) >= 0)
@@ -2780,13 +2787,15 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       g_mp_local_mask = 1 << view;
       Hd2d_Draw2D((uint8 *)a, (size_t)width * scale * 4, render_flags, 0);
       Inst_Switch(home);
-      g_hd3d.enabled = true;
+      for (int i = 0; i < kSessionMaxLocal; i++)
+        Hd3d_SetLocalEnabledQuiet(i, true);
       Hd3d_SetTestCamera(true);
       DrawView(view, b, width, render_flags);
       bool is3d = Hd3d_PaneIs3D(0);
       const char *why = Hd3d_LastWhy2D(0);
       Hd3d_SetTestCamera(false);
-      g_hd3d.enabled = hd3d_on;
+      for (int i = 0; i < kSessionMaxLocal; i++)
+        Hd3d_SetLocalEnabledQuiet(i, hd3d_on[i]);
       g_hd2d.enabled = hd2d_on;
       int diff = 0, tol = atoi(arg2);
       for (size_t k = 0; k < npx && scale == 1; k++) {
@@ -2924,7 +2933,8 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         if (pane_local[v] == kHd3dPaneFlat)
           printf(" world %d (P%d, flat)", views[v], players[v] + 1);
         else
-          printf(" world %d (local P%d)", views[v], pane_local[v] + 1);
+          printf(" world %d (local P%d%s)", views[v], pane_local[v] + 1,
+                 pane_local[v] >= 0 && !Hd3d_LocalEnabled(pane_local[v]) ? ", 2D" : "");
       }
       printf("\n");
       if (n != atoi(arg1)) {

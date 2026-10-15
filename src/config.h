@@ -78,7 +78,8 @@ typedef struct Config {
   bool hd2d;                   // the 2D-HD look (hd2d.c)
   uint8 hd2d_depth_of_field, hd2d_bloom, hd2d_vignette, hd2d_grade, hd2d_lighting;
   bool hd2d_see_through;
-  bool hd3d;                   // the 3D view (hd3d.c)
+  bool hd3d;                   // the 3D view (hd3d.c), for player 1
+  int8 hd3d_couch[3];          // ... for couch players 2-4: 0, 1, or -1 (as hd3d)
   bool hd3d_camera_returns, hd3d_turn_controls, hd3d_mouse_look, hd3d_fade_scenery, hd3d_invert_y;
   uint8 hd3d_stick_speed, hd3d_mouse_speed, hd3d_fov, hd3d_perspective;
   bool display_perf_title;

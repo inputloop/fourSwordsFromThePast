@@ -34,6 +34,10 @@ typedef struct ViewButton {
 } ViewButton;
 
 static struct {
+  // Each local player's choice of the 3D view (the menu, F11 for player 1,
+  // zelda3.ini). g_hd3d.enabled: any of them. Online, every computer has its
+  // own choice: nothing of the 3D view is sent.
+  bool want3d[kHd3dMaxLocal];
   // The player's choice of first person. A downed player watching a teammate
   // sees that teammate in third person: the choice waits for the revive.
   bool fp_wanted[kHd3dMaxLocal];
@@ -102,7 +106,13 @@ static bool WatchingOther(int i) {
 
 // (Whether the 3D view is on or not: the camera is ready when it is.)
 static bool SeesFirstPerson(int i) {
-  return g_in.fp_wanted[i] && !WatchingOther(i);
+  return g_in.want3d[i] && g_in.fp_wanted[i] && !WatchingOther(i);
+}
+
+// Whether local players i and j could share a pane: both seeing it in 3D,
+// or both in 2D.
+static bool SameView(int i, int j) {
+  return g_in.want3d[i] == g_in.want3d[j];
 }
 
 // Which way player p's Link faces (RAM 0x2F: 0 up, 2 down, 4 left, 6 right).
@@ -142,7 +152,7 @@ static int CameraLocal(int i) {
     return i;
   int w = ViewOf(i);
   for (int j = 0; j < i && w >= 0; j++)
-    if (ViewOf(j) == w && !SeesFirstPerson(j))
+    if (ViewOf(j) == w && !SeesFirstPerson(j) && SameView(i, j))
       return j;
   return i;
 }
@@ -206,6 +216,7 @@ void Hd3dInput_ResetAll(void) {
 
 int Hd3d_ComputeViews(int *views, int8 *pane_local, int max) {
   // With 3D off nobody sees first person: one pane per world, as always.
+  // A player seeing a world in 2D and one seeing it in 3D get a pane each.
   int n = 0;
   bool tp[kHd3dMaxPanes] = { 0 };
   for (int i = 0; i < kHd3dMaxLocal && n < max && n < kHd3dMaxPanes; i++) {
@@ -217,7 +228,7 @@ int Hd3d_ComputeViews(int *views, int8 *pane_local, int max) {
     bool fp = g_hd3d.enabled && SeesFirstPerson(i);
     bool shared = false;
     for (int v = 0; v < n && !fp && !shared; v++)
-      shared = tp[v] && views[v] == w;
+      shared = tp[v] && views[v] == w && SameView(i, pane_local[v]);
     if (shared)
       continue;
     views[n] = w, pane_local[n] = (int8)i, tp[n] = !fp;
@@ -254,8 +265,8 @@ void Hd3d_Update(float dt) {
   memset(in, 0, sizeof(in));
   for (int i = 0; i < kHd3dMaxLocal && on; i++) {
     SyncFirstPerson(i);
-    // The menu's owner is busy with the menu.
-    if (LocalSlot(i) < 0 || i == owner)
+    // The menu's owner is busy with the menu; a player seeing 2D has no camera.
+    if (LocalSlot(i) < 0 || i == owner || !g_in.want3d[i])
       continue;
     Cam3dInput *t = &in[CameraLocal(i)];
     float x = g_in.stick[i][0], y = g_in.stick[i][1];
@@ -295,7 +306,7 @@ static void ToggleFp(int i, bool toast) {
 // Who may use the View button: a player in the game with the 3D view on,
 // and not busy with the menu.
 static bool CanUseView(int i) {
-  return g_hd3d.enabled && LocalSlot(i) >= 0 && i != Ui_MenuOwner();
+  return g_in.want3d[i] && LocalSlot(i) >= 0 && i != Ui_MenuOwner();
 }
 
 void Hd3d_HandleViewButtons(void) {
@@ -334,7 +345,7 @@ static uint16 Unturned(Cam3dRemap *r, uint16 input) {
 // button is handled before the panes are drawn again) cl has no pane yet,
 // and what the player saw was the pane that showed i's world.
 static bool CameraSees3D(int i, int cl) {
-  if (!g_hd3d.enabled)
+  if (!g_in.want3d[i])
     return false;
   int n = IntMin(Hd3dInput_PaneCount(), kHd3dMaxPanes), w = ViewOf(i);
   for (int v = 0; v < n; v++)
@@ -350,8 +361,8 @@ uint16 Hd3d_RemapLocal(int local, int player, uint16 input) {
   if (!ValidLocal(local))
     return input;
   Cam3dRemap *r = &g_in.remap[local];
-  // A ghost watching a teammate is never turned.
-  if (!g_hd3d.enabled || player < 0 || Ui_WatchedPlayer(local) != player)
+  // A player seeing 2D or a ghost watching a teammate is never turned.
+  if (!g_in.want3d[local] || player < 0 || Ui_WatchedPlayer(local) != player)
     return Unturned(r, input);
   SyncFirstPerson(local);
   int cl = CameraLocal(local);
@@ -402,7 +413,7 @@ void Hd3d_OnMouseButton(int button, bool pressed, int clicks, uint32 mods, bool 
   }
   // A click that only brings the window to the front, a Shift+double-click
   // (borderless), a click for the menu or in a 2D picture does nothing.
-  if (!pressed || !g_hd3d.enabled || Ui_IsOpen() || LocalSlot(0) < 0 ||
+  if (!pressed || !g_in.want3d[0] || Ui_IsOpen() || LocalSlot(0) < 0 ||
       (mods & (KMOD_SHIFT | KMOD_CTRL | KMOD_ALT)) || (g_in.focus_seen && Now() - g_in.focus_time <= kFocusClickMs))
     return;
   if (button == SDL_BUTTON_LEFT && clicks == 1 && Hd3d_LocalSees3D(0))  // (local 0's pane is its own)
@@ -437,9 +448,9 @@ void Hd3d_OnWindowFocus(bool gained) {
 void Hd3d_OnKeyCommand(int command, bool pressed) {
   switch (command) {
   case kKeys_View3d:
-    // A quick comparison: not saved.
+    // A quick comparison for player 1 (the keyboard's): not saved.
     if (pressed)
-      Hd3d_SetEnabled(!g_hd3d.enabled);
+      Hd3d_SetLocalEnabled(0, !g_in.want3d[0]);
     break;
   case kKeys_View3dTurnLeft:
   case kKeys_View3dTurnRight:
@@ -455,7 +466,7 @@ void Hd3d_OnKeyCommand(int command, bool pressed) {
 }
 
 bool Hd3d_WantsRelativeMouse(void) {
-  return g_hd3d.enabled && !g_in.unfocused && !Ui_IsOpen() && LocalSlot(0) >= 0 && Hd3d_LocalSees3D(0) &&
+  return g_in.want3d[0] && !g_in.unfocused && !Ui_IsOpen() && LocalSlot(0) >= 0 && Hd3d_LocalSees3D(0) &&
          ((SeesFirstPerson(0) && g_hd3d.mouse_look) || g_in.right_held);
 }
 
@@ -482,13 +493,33 @@ void Hd3d_ResetCamera(int local) {
   Toast("Camera reset");
 }
 
-void Hd3d_SetEnabled(bool on) {
-  g_hd3d.enabled = on;
-  g_hd3d_tagging = on;
+// The flag of local player i, and g_hd3d.enabled from all of them.
+static void SetWant3D(int i, bool on) {
+  g_in.want3d[i] = on;
+  bool any = false;
+  for (int j = 0; j < kHd3dMaxLocal; j++)
+    any |= g_in.want3d[j];
+  g_hd3d.enabled = any;
+  g_hd3d_tagging = any;
+}
+
+void Hd3d_SetLocalEnabled(int local, bool on) {
+  if (!ValidLocal(local))
+    return;
+  SetWant3D(local, on);
   // (First person is entered again when 3D comes back, facing where Link
   // faces then: fp_wanted is kept.)
-  for (int i = 0; i < kHd3dMaxLocal && !on; i++)
-    Cam3d_SetFirstPerson(&g_hd3d_cam[i], false, 0);
+  if (!on)
+    Cam3d_SetFirstPerson(&g_hd3d_cam[local], false, 0);
+}
+
+void Hd3d_SetEnabled(bool on) {
+  for (int i = 0; i < kHd3dMaxLocal; i++)
+    Hd3d_SetLocalEnabled(i, on);
+}
+
+bool Hd3d_LocalEnabled(int local) {
+  return ValidLocal(local) && g_in.want3d[local];
 }
 
 // --- (Tests) ---
@@ -539,6 +570,11 @@ void Hd3d_PressViewButton(int local, int hold_ms) {
     Hd3d_ResetCamera(local);
   else if (hold_ms < kViewTapMs)
     ToggleFp(local, false);
+}
+
+void Hd3d_SetLocalEnabledQuiet(int local, bool on) {
+  if (ValidLocal(local))
+    SetWant3D(local, on);
 }
 
 void Hd3d_ResetForTests(void) {

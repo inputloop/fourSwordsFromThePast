@@ -1,0 +1,80 @@
+# 3D view: each player on one computer chooses it for themselves (the menu;
+# F11 is player 1's). Two players in one world: both in 3D or both in 2D
+# share a pane; one in 2D and one in 3D get a pane each, and only the 3D
+# player's pane is drawn in 3D. A 2D player's d-pad is never turned, their
+# View button and stick do nothing, and their choice of first person waits
+# until they are back in 3D. Turning the view off for everybody leaves one
+# pane per world, as always.
+load 2
+run 30
+localjoin 2
+tick 30
+expect_players 2
+pos 1 3860 1660
+pos 2 3860 1700
+tick 3
+# Both 3D: one pane, drawn in 3D.
+view3d 1
+expect_panes 1
+expect_3d 1
+# Player 2 picks 2D: two panes; player 1's is 3D, player 2's is 2D.
+view3d 0 2
+expect_panes 2
+view 1
+expect_3d 1
+view 2
+expect_3d 0 off
+view 1
+splitshot tests/out/hd3d_perplayer_split.ppm 1 2
+# Player 1's camera turned east turns only player 1's d-pad: player 2's up
+# still walks north.
+cam3d 1 tp 90 45
+drawrun 2
+expect_remap 1 L U
+expect_remap 2 U U
+expect_remap 2 L L
+hold 2 U
+markpos 2
+drawrun 20
+expect_moved 2 north
+hold 2 -
+drawrun 2
+# Player 2's View button and stick do nothing in 2D.
+viewbutton 2
+expect_fp 2 0
+expect_panes 2
+stick3d 2 100 0
+cam3dstep 300
+stick3d 2 0 0
+expect_cam3d 1 90 45 1
+expect_cam3d 2 0 45 0
+# The other way round: player 1 in 2D, player 2 in 3D and in first person.
+cam3d 1 tp 0 45
+view3d 0 1
+view3d 1 2
+expect_panes 2
+view 1
+expect_3d 0 off
+view 2
+expect_3d 1
+view 1
+viewbutton 2
+expect_fp 2 1
+expect_panes 2
+expect_remap 1 U U
+# Player 1's F11 is player 1's alone: 3D on again, two panes (player 2 in
+# first person); player 2 back in third person: one shared pane.
+key3d toggle
+expect_panes 2
+expect_3d 1
+viewbutton 2
+expect_fp 2 0
+expect_panes 1
+# Both 2D: one pane per world, as always.
+view3d 0
+expect_panes 1
+expect_3d 0 off
+# Nothing of it changes the game.
+view3d 1
+view3d 0 2
+expect_drawpure 3

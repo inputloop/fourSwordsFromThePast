@@ -454,8 +454,14 @@ it at Link's eye height.
 
 **Turning it on.** *Pause menu > Video and HD options > 3D view (beta)*, or
 `Hd3d = 1` in the `[Graphics]` section of `zelda3.ini`. It is off by
-default. **F11** turns it on or off for a while, to compare (not saved).
-*Video > 3D view settings* has everything else. The 3D view and the 2D-HD
+default. **F11** turns player 1's on or off for a while, to compare (not
+saved). *Video > 3D view settings* has everything else. **Every player
+chooses for themselves**, online or on the couch: the menu sets it for the
+player who opened it (open the pause menu with your own controller), and
+the choice is saved (`Hd3dCouch` in `zelda3.ini` for couch players 2-4).
+Online, each computer has its own view. On the couch, two players in one
+world share a pane while both see it the same way; a player in 2D and a
+player in 3D get a pane each. The 3D view and the 2D-HD
 look are separate options. Together they give the full HD-2D diorama: depth
 of field from the real depth, bloom, color grade and the 2D-HD lighting.
 
@@ -550,6 +556,35 @@ make -j                                                     # builds ./zelda3 an
 
 To build it yourself: `run_with_tcc.bat` (downloads its own compiler), Visual
 Studio (`Zelda3.sln`), or `tools/build_windows_mingw.sh` from Linux.
+
+## macOS
+
+The `zelda3-macos-<commit>` artifact from the latest
+[Build run](../../actions/workflows/build.yaml) runs on macOS 11 and later,
+Intel and Apple Silicon, with nothing to install: SDL2 is built into it.
+
+1. Download it, unzip it, and open the `zelda3-macos.tar.gz` inside (a
+   double-click unpacks it into a folder).
+2. Copy your own ROM of *A Link to the Past (USA)* (`.sfc`/`.smc`) into that
+   folder.
+3. In Terminal, in that folder (drag the folder onto the Terminal window after
+   typing `cd `), extract the game's assets once and start the game:
+
+   ```sh
+   python3 -m pip install -r requirements.txt     # Pillow and PyYAML, once
+   python3 assets/restool.py --extract-from-rom -r "your rom.sfc"
+   ./zelda3
+   ```
+
+   macOS offers to install its command line tools (which bring `python3`)
+   the first time, if they are missing.
+
+If macOS says the app "cannot be opened because the developer cannot be
+verified", it is the download quarantine: run
+`xattr -d com.apple.quarantine zelda3` in that folder once, or right-click
+`zelda3` and choose *Open*. If an older download complains that
+`libSDL2-2.0.0.dylib` is not loaded, get a build newer than this note (it
+needed Homebrew's SDL2; the current one doesn't).
 
 The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 

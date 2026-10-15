@@ -673,6 +673,13 @@ camera (or in first person) `Hd3d_RemapInputs` turns a local player's d-pad
 before the inputs are sent. Everything else, the cameras included, lives
 outside `g_ram`, `g_mp`, the snapshots and the joypad word. Keep it so.
 
+The view is chosen per local player (`Hd3d_SetLocalEnabled`,
+`Hd3d_LocalEnabled` in `hd3d_input.c`); `g_hd3d.enabled` only says whether
+anyone has it on. A pane is drawn in 3D when the player whose camera it
+uses has it on (`Hd3d_DrawFrame`), and `Hd3d_ComputeViews` gives a 2D
+player and a 3D player in one world a pane each. Online nothing of this is
+sent: each computer draws its own choice.
+
 **Where heights and shapes come from.** The scene is rebuilt from the game's
 own tiles (`src/hd3d_world.c`, see its header comment):
 

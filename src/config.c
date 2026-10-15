@@ -409,6 +409,24 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       return true;
     } else if (StringEqualsNoCase(key, "Hd3d")) {
       return ParseBool(value, &g_config.hd3d);
+    } else if (StringEqualsNoCase(key, "Hd3dCouch")) {
+      // Up to three of 0, 1 or "same" (as Hd3d), for couch players 2, 3 and 4.
+      const char *s = value;
+      for (int i = 0; i < 3 && *s; i++) {
+        while (*s == ' ' || *s == '\t')
+          s++;
+        if (*s == '0' || *s == '1')
+          g_config.hd3d_couch[i] = (int8)(*s - '0');
+        else if (*s == 's' || *s == 'S' || *s == '-')
+          g_config.hd3d_couch[i] = -1;
+        else
+          return false;
+        while (*s && *s != ',')
+          s++;
+        if (*s == ',')
+          s++;
+      }
+      return true;
     } else if (StringEqualsNoCase(key, "Hd3dCameraReturns")) {
       return ParseBool(value, &g_config.hd3d_camera_returns);
     } else if (StringEqualsNoCase(key, "Hd3dTurnControls")) {
@@ -678,6 +696,7 @@ void ParseConfigFile(const char *filename) {
   g_config.hd2d_vignette = 45;
   g_config.hd2d_grade = 50;
   g_config.hd2d_lighting = 70;
+  g_config.hd3d_couch[0] = g_config.hd3d_couch[1] = g_config.hd3d_couch[2] = -1;
   g_config.hd3d_camera_returns = false;
   g_config.hd3d_turn_controls = true;
   g_config.hd3d_mouse_look = true;

@@ -384,7 +384,7 @@ To keep Link, the enemies and the hearts and item box crisp, the drawing code (`
 - draws all of it with a small software renderer (`src/r3d.c`) on the processor, split over up to four cores, and then puts the HUD and text boxes on top exactly as the game drew them,
 - falls back to the flat picture whenever the game does something only the flat picture can show: menus, maps, the title, the world map, special screen effects (the spotlight when entering a house, the mirror's wave, mosaic fades), area changes, stairs between floors and falls, with a short crossfade.
 
-The game only runs what is on its own screen and a little around it (enemies further away don't exist), so the 3D view fades into mist there. Dark rooms stay dark as in the original. In first person, pressing Up walks where you look: that is the one thing the 3D view changes in the game, and it does it on your own computer, by turning the direction buttons before they are sent, so online play stays in sync. Each player chooses their own view, and in split screen a player in first person gets a pane of their own. It costs about 1-1.5 milliseconds a frame. The code is in `src/hd3d*.c`, `src/r3d.c` and `src/cam3d.c`.
+The game only runs what is on its own screen and a little around it (enemies further away don't exist), so the 3D view fades into mist there. Dark rooms stay dark as in the original. In first person, pressing Up walks where you look: that is the one thing the 3D view changes in the game, and it does it on your own computer, by turning the direction buttons before they are sent, so online play stays in sync. Each player chooses their own view, 2D or 3D, online on their own computer and on the couch in the pause menu opened with their own controller (the choice is saved for each). In split screen a player in first person gets a pane of their own, and so does a player seeing a world in 2D while another sees it in 3D. It costs about 1-1.5 milliseconds a frame. The code is in `src/hd3d*.c`, `src/r3d.c` and `src/cam3d.c`.
 
 **Screenshot keys.** F12 saves a PNG of exactly what is on the screen (2D, 2D-HD, 3D, split screen, menus and all) into a `screenshots` folder next to the game, named after the date and time; Ctrl+F12 saves the same frame without what the mod draws on top (menus, name tags, arrows, the corner health), so the game's own HUD stays. Both keys can be changed in `zelda3.ini`. The finished frame is copied right before and right after the overlay is drawn on it (`src/screenshot.c`), and the PNG is compressed on a separate thread, so even a big picture doesn't make the game stutter. Taking a picture only reads what was drawn, so it works online too.
 
@@ -392,7 +392,7 @@ The game only runs what is on its own screen and a little around it (enemies fur
 
 ## How it is tested and built
 
-The mod has 178 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 179 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

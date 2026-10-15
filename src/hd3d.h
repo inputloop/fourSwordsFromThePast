@@ -59,7 +59,12 @@ void Hd3d_OnKeyCommand(int command, bool pressed);   // the kKeys_View3d* hotkey
 bool Hd3d_WantsRelativeMouse(void);
 void Hd3d_ToggleFirstPerson(int local);
 void Hd3d_ResetCamera(int local);
-void Hd3d_SetEnabled(bool on);                       // the menu and F11
+// Each local player chooses the 3D view or the flat picture for their own
+// pane (the menu for the player using it, F11 for player 1). A 2D player
+// and a 3D player in one world get a pane each. g_hd3d.enabled: any of them.
+void Hd3d_SetLocalEnabled(int local, bool on);
+bool Hd3d_LocalEnabled(int local);
+void Hd3d_SetEnabled(bool on);                       // every local player (zelda3.ini's Hd3d, the tests)
 
 // --- Overlay (ui.c) ---
 // Where the point `above` px over the ground at world (x, y) is in pane
@@ -92,6 +97,7 @@ const char *Hd3d_LastWhy2D(int view);                    // "none" if pane view 
 void Hd3d_GetStats(int view, int *quads, int *cards);
 int Hd3d_StandZAt(int view, int x, int y);               // what stands at picture point (x, y) of pane view stands on (-1: not 3D)
 void Hd3d_DumpScene(const char *ppm_path);               // (Debug) the bound world's heights
+void Hd3d_SetLocalEnabledQuiet(int local, bool on);      // the flag alone, cameras untouched (a check)
 void Hd3d_ResetForTests(void);                           // 3D off, defaults, cameras reset, no toasts
 
 #endif  // ZELDA3_HD3D_H_

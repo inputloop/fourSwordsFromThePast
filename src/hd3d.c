@@ -1112,6 +1112,9 @@ bool Hd3d_DrawFrame(uint8 *pixel_buffer, size_t pitch, uint32 render_flags, int 
   Ppu *ppu = g_zenv.ppu;
   int w = 256 + 2 * ppu->extraLeftRight, h = render_flags & kPpuRenderFlags_Height240 ? 240 : 224;
   int why = Why2D(ppu, render_flags, w, h, pixel_buffer, pitch);
+  // The player whose camera this pane uses chose the flat picture.
+  if (why == kHd3dWhy_None && !Hd3d_LocalEnabled(Hd3dInput_PaneLocal(view)))
+    why = kHd3dWhy_Off;
   if (why == kHd3dWhy_None && !(AllocShared() && AllocPane(p, OverlayMode(ppu) != 0)))
     why = kHd3dWhy_Memory;
   Hd3dScene *scene = NULL;

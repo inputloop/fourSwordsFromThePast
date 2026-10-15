@@ -491,8 +491,12 @@ int main(int argc, char** argv) {
   g_hd2d.grade = g_config.hd2d_grade;
   g_hd2d.lighting = g_config.hd2d_lighting;
   g_hd2d.see_through = g_config.hd2d_see_through;
-  // The 3D view as configured.
+  // The 3D view as configured: for player 1, and for couch players 2-4 their
+  // own choice where one is saved.
   Hd3d_SetEnabled(g_config.hd3d);
+  for (int i = 1; i < kSessionMaxLocal; i++)
+    if (g_config.hd3d_couch[i - 1] >= 0)
+      Hd3d_SetLocalEnabled(i, g_config.hd3d_couch[i - 1] != 0);
   g_hd3d.camera_returns = g_config.hd3d_camera_returns;
   g_hd3d.turn_controls = g_config.hd3d_turn_controls;
   g_hd3d.mouse_look = g_config.hd3d_mouse_look;

@@ -879,13 +879,33 @@ static void ScreenLan() {
     Goto(kScreen_Multiplayer);
 }
 
-// The 3D view on or off. (It shows what is on now: F11 changes that for a
-// while without changing the setting.)
+// The local player using the menu (0-3).
+static int MenuLocal() {
+  return g_ui.owner >= 0 && g_ui.owner < kSessionMaxLocal ? g_ui.owner : 0;
+}
+
+// The 3D view on or off for the player using the menu. (It shows what is
+// on now: F11 changes player 1's for a while without changing the setting.)
 static void Hd3dOnOff(const char *label) {
-  Item(label, OnOff(g_hd3d.enabled));
+  int me = MenuLocal();
+  const SessionStatus *st = Session_GetStatus();
+  int locals = 0;
+  for (int i = 0; i < kSessionMaxLocal; i++)
+    locals += st->local_slot[i] >= 0;
+  char text[40];
+  if (locals > 1) {
+    int p = st->local_slot[me];
+    snprintf(text, sizeof(text), "%s (P%d)", label, (p >= 0 ? p : me) + 1);
+    label = text;
+  }
+  bool on = Hd3d_LocalEnabled(me);
+  Item(label, OnOff(on));
   if (Act() != kAct_None) {
-    g_config.hd3d = !g_hd3d.enabled;
-    Hd3d_SetEnabled(g_config.hd3d);
+    Hd3d_SetLocalEnabled(me, !on);
+    if (me == 0)
+      g_config.hd3d = !on;
+    else
+      g_config.hd3d_couch[me - 1] = !on;
     g_ui.dirty_settings = true;
   }
 }
@@ -1022,7 +1042,7 @@ static void ScreenHd3d() {
   snprintf(g_ui.title, sizeof(g_ui.title), "3D VIEW (BETA)");
   Hd3dOnOff("3D view");
   // First person for the player using the menu.
-  int me = g_ui.owner >= 0 && g_ui.owner < kSessionMaxLocal ? g_ui.owner : 0;
+  int me = MenuLocal();
   int p = Session_GetStatus()->local_slot[me];
   Hd3dCamState cam;
   Hd3d_GetCamera(me, &cam);
@@ -2669,8 +2689,14 @@ void Ui_SaveSettings() {
           g_config.hd2d_vignette);
   fprintf(f, "Hd2dSeeThrough = %d\n", g_config.hd2d_see_through);
   // (The setting, not a change made with F11 for a while.)
-  fprintf(f, "Hd3d = %d\nHd3dCameraReturns = %d\nHd3dTurnControls = %d\nHd3dMouseLook = %d\nHd3dFadeScenery = %d\n",
-          g_config.hd3d, g_config.hd3d_camera_returns, g_config.hd3d_turn_controls, g_config.hd3d_mouse_look,
+  fprintf(f, "Hd3d = %d\n", g_config.hd3d);
+  fprintf(f, "Hd3dCouch = ");
+  for (int i = 0; i < 3; i++) {
+    int8 c = g_config.hd3d_couch[i];
+    fprintf(f, c < 0 ? "same%s" : c ? "1%s" : "0%s", i < 2 ? ", " : "\n");
+  }
+  fprintf(f, "Hd3dCameraReturns = %d\nHd3dTurnControls = %d\nHd3dMouseLook = %d\nHd3dFadeScenery = %d\n",
+          g_config.hd3d_camera_returns, g_config.hd3d_turn_controls, g_config.hd3d_mouse_look,
           g_config.hd3d_fade_scenery);
   fprintf(f, "Hd3dStickSpeed = %d\nHd3dMouseSpeed = %d\nHd3dInvertY = %d\nHd3dFov = %d\nHd3dPerspective = %d\n",
           g_config.hd3d_stick_speed, g_config.hd3d_mouse_speed, g_config.hd3d_invert_y, g_config.hd3d_fov,
