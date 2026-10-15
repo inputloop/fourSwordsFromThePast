@@ -1,0 +1,86 @@
+# Netplay ledge hops over a laggy link (run together with net_ledge_client.txt):
+# P1 walks out of Link's house and then down to the ledge of the yard and
+# back, over and over, touching the ledge for a frame at a time: never long
+# enough to hop (19 frames of pushing). The client guesses that P1 keeps
+# walking down, into the ledge; a guess that hopped would show P1 hopping
+# down and then snapping back up over the ledge, so the guesses never hop
+# (session.c ShapeGuess): P1 is never seen below the ledge on the client. A
+# real hop (pushing on) still happens, and lands in the same place for both.
+netsim 150 40 2
+inputdelay 2
+load 2
+run 30
+enter 104
+run 200
+hold 1 D
+run 150
+hold 1 -
+run 60
+clearsprites
+status
+dumpevery 1
+host 47484
+tick 300
+expect_players 2
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 D
+tick 24
+hold 1 U
+tick 24
+hold 1 -
+tick 30
+status
+expect_near 1 2232 2845
+tick 700
+hold 1 D
+tick 60
+hold 1 -
+tick 500
+status
+expect_near 1 2232 2936
+netstats
+expect_resyncs 0
+expect_own_corrections 0

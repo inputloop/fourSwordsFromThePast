@@ -212,7 +212,7 @@ The host sends each frame to every client, and every computer runs it. The host 
 
 **Trick 1: buttons are sent ahead of time.** Every button press a client sends is stamped with the number of the frame it is meant for, like writing a date on a letter. The client aims to have each stamp arrive 1 to 3 frames *before* the host needs it. The host tells each client how early its buttons are arriving, and the client runs a tiny bit faster or slower until the timing is right. So the host almost always has the real buttons and never has to guess. Each button state is sent 8 times, in case some messages get lost on the way.
 
-**Trick 2: the client predicts, and rolls back when it guessed wrong.** A client does not wait for the host. It shows its own Link moving right away. For the other players it makes a guess: *they are still holding the same buttons as last time*. That guess is usually right, because people hold a direction for many frames in a row.
+**Trick 2: the client predicts, and rolls back when it guessed wrong.** A client does not wait for the host. It shows its own Link moving right away. For the other players it makes a guess: *they are still holding the same buttons as last time*. That guess is usually right, because people hold a direction for many frames in a row. One exception is built in: a guess never hops down a ledge. Pushing into a ledge for a third of a second hops down it, and a guess that kept pushing would hop where the player had let go in time, so their Link would be seen hopping down and then snapping back up over the ledge. When a guessed push is about to hop, the guess lets go of that direction for a frame and pushes on, so the Link stands at the ledge until the real buttons arrive; a real hop is then played at its true time.
 
 - While guessing, the client saves a copy of the whole game after every frame, in memory.
 - When the host's real frame arrives, the client compares it with its guess.
@@ -393,7 +393,7 @@ The game only runs what is on its own screen and a little around it (enemies fur
 
 ## How it is tested and built
 
-The mod has 180 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 182 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

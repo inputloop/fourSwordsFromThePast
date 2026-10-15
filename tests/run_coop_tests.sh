@@ -33,8 +33,9 @@ unset ZELDA3_NETSIM
 # camera looks and both stay in sync (net_hd3d). "Watch everyone" online:
 # both computers draw every player's world and stay in sync (net_multiview).
 # Sound online: each computer hears its own player's world, and the host its
-# couch player's sound effects too, in sync (net_sound).
-for pair in net_combat net_combat_slow net_reconnect net_ap net_ap_worlds net_hd3d net_multiview net_sound; do
+# couch player's sound effects too, in sync (net_sound). A guess about the
+# other player's buttons never hops down a ledge (net_ledge).
+for pair in net_combat net_combat_slow net_reconnect net_ap net_ap_worlds net_hd3d net_multiview net_sound net_ledge; do
   ./zelda3 --mptest tests/coop/${pair}_host.txt > tests/out/${pair}_host.log 2>&1 &
   host=$!
   sleep 1

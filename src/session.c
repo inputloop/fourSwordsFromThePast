@@ -343,6 +343,39 @@ static HostClient *FindClientById(uint8 id) {
   return NULL;
 }
 
+// ZELDA3_PLAIN_GUESS set: the guesses as they were, to compare.
+static bool PlainGuess() {
+  static int v = -1;
+  if (v < 0)
+    v = getenv("ZELDA3_PLAIN_GUESS") != NULL;
+  return v != 0;
+}
+
+// A guess never hops down a ledge. Pushing into a ledge for 19 frames hops
+// down it, so a guess that keeps pushing hops where the player let go in
+// time, and the Link is seen hopping down and, on the correction, snapping
+// back up over the ledge. So when a guessed push is about to hop (the Link's
+// hop count, per Link at 0x375, is down to 1: the game reads the buttons at
+// the end of a frame, so a guess acts on the frame after; letting go or
+// turning resets the count to 19), the direction it pushes in
+// (link_direction_last) is left out of the guess: the Link lets go for a
+// frame and pushes on, never hopping. When the real buttons arrive the hop
+// is simulated at its true time. (Only the guesses change: the simulation
+// stays the same on every computer.)
+static uint16 ShapeGuess(int p, uint16 guess) {
+  enum { kDirUp = 0x10, kDirDown = 0x20, kDirLeft = 0x40, kDirRight = 0x80 };
+  int i = Inst_OfPlayer(p), r = Inst_Current();
+  if (i < 0 || !(guess & 0xf0) || PlainGuess())
+    return guess;
+  Inst_Switch(i);
+  if (g_mp.p[p].joined && !g_mp.p[p].downed && *Mp_PlayerRam(p, 0x5D) == 0 && *Mp_PlayerRam(p, 0x375) <= 1) {
+    uint8 dir = *Mp_PlayerRam(p, 0x26);  // (8 up, 4 down, 2 left, 1 right)
+    guess &= ~((dir & 8 ? kDirUp : 0) | (dir & 4 ? kDirDown : 0) | (dir & 2 ? kDirLeft : 0) | (dir & 1 ? kDirRight : 0));
+  }
+  Inst_Switch(r);
+  return guess;
+}
+
 // Builds the next frame on the host (or offline). *known gets the slots whose
 // buttons are real; a client's buttons that haven't arrived yet are guessed.
 static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 features, uint8 *known) {
@@ -390,7 +423,7 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
         fi->inputs[p] = hc->sched[f % kSchedSize][local];
         *known |= 1 << p;
       } else {
-        fi->inputs[p] = g_s.pend[(f - 1) % kRbSize].inputs[p];
+        fi->inputs[p] = ShapeGuess(p, g_s.pend[(f - 1) % kRbSize].inputs[p]);
       }
     }
   }
@@ -1100,14 +1133,21 @@ static bool SameFrameInput(const MpFrameInput *a, const MpFrameInput *b) {
 }
 
 // Our guess at frame f: the other players keep holding what they held in the
-// newest confirmed frame, and ours are the buttons we pressed for frame f.
+// newest confirmed frame (but for a ledge, ShapeGuess), and ours are the
+// buttons we pressed for frame f.
 static void PredictFrame(uint32 f, MpFrameInput *fi) {
   *fi = g_s.ring[g_s.conf & (kRingSize - 1)];
   fi->flags &= ~0x80;
   fi->nevents = 0;
+  uint8 mine = 0;
   for (int i = 0; i < kSessionMaxLocal; i++)
-    if (g_s.st.local_slot[i] >= 0)
+    if (g_s.st.local_slot[i] >= 0) {
       fi->inputs[g_s.st.local_slot[i]] = g_s.my_in[f % kRbSize][i];
+      mine |= 1 << g_s.st.local_slot[i];
+    }
+  for (int p = 0; p < kMpMaxPlayers; p++)
+    if (!(mine >> p & 1))
+      fi->inputs[p] = ShapeGuess(p, fi->inputs[p]);
 }
 
 static bool HostFrameAvailable(uint32 f) {
@@ -1320,10 +1360,11 @@ static int HostTick(const uint16 *local_inputs, uint32 features) {
       g_s.st.max_rollback = end - g_s.frame;
     while ((int32)(g_s.frame - end) < 0) {
       uint32 f = g_s.frame + 1, i = f % kRbSize;
-      // Buttons still unknown: the guess follows the frame before.
+      // Buttons still unknown: the guess follows the frame before (but for
+      // a ledge, ShapeGuess).
       for (int p = 0; p < kMpMaxPlayers; p++)
         if (!(g_s.pend_known[i] >> p & 1))
-          g_s.pend[i].inputs[p] = g_s.pend[(f - 1) % kRbSize].inputs[p];
+          g_s.pend[i].inputs[p] = ShapeGuess(p, g_s.pend[(f - 1) % kRbSize].inputs[p]);
       // (Statistics: was the guess for a client's buttons wrong?)
       if (memcmp(&g_s.pend[i].inputs, &g_s.rb_in[i].inputs, sizeof(g_s.pend[i].inputs)) != 0) {
         g_s.st.mispredicted++;

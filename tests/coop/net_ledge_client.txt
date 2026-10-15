@@ -1,0 +1,21 @@
+# See net_ledge_host.txt.
+netsim 150 40 2
+inputdelay 2
+dumpevery 1
+connect 127.0.0.1:47484
+waitplay
+expect_players 2
+tick 180
+resetcounters
+view 2
+status
+# P1 (the host's, guessed here) is never seen below the ledge (y 2896-2976,
+# low byte 50-a0: a hop lands at 2912) while the host only touches it. (A
+# guessed hop happens and lands within one tick's replay, so the hop states
+# themselves can't be caught at the ticks.)
+tickguard 700 1 20 50 a0
+tick 900
+status
+expect_near 1 2232 2936
+netstats
+expect_resyncs 0

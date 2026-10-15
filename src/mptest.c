@@ -181,7 +181,9 @@
 //   removefile <path>
 //   bindline <key> <value>  a controls line of the settings file (value without spaces)
 //   expect_keys <p> <button 0-13> <text>  the keys of a button as the Controls screen shows them (12 Ping, 13 View)
-//   tickwander <n> <seed>  tick n times with local players walking around randomly
+//   tickguard <n> <p> <hexaddr> <hexmin> <hexmax>  tick n times; player p's own byte must never be in min..max
+//   tickwander <n> <seed> [check]  tick n times with local players walking around randomly (check: also
+//                       the world checks every tick: duplicates, stuck transitions, lost cameras, out of room, invisible)
 //   inputdelay <frames> online input delay
 //   netsim <delay ms> <jitter ms> <loss %>  simulate a bad link (before host/connect), like ZELDA3_NETSIM
 //   atframe <f> spawn <hextype> <p> [dx] / atframe <f> clearsprites  done inside the simulation at session frame f (the same on every machine)
@@ -549,6 +551,89 @@ static int PlayerOfLocal(int i) {
 
 // The next pictures show player p's view as one pane, with the camera of
 // the local player playing p (as the game draws a single view).
+// Checks on every world after a netplay tick (as wander's): a player in two
+// worlds, a world stuck in a transition, a camera that lost its leader, a
+// Link outside the room or area its world has loaded, a Link that isn't
+// drawn although it stands in view. Returns how many were found.
+static int NetWanderChecks(int frame) {
+  static int in_trans[kInstMax], lost[kInstMax], outside[kMpMaxPlayers], unseen[kMpMaxPlayers];
+  int found = 0, r0 = Inst_Current();
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    int worlds = 0;
+    for (int i = 0; i < kInstMax; i++) {
+      if (!Inst_IsActive(i))
+        continue;
+      Inst_Switch(i);
+      worlds += g_mp.p[p].joined;
+    }
+    if (worlds > 1) {
+      printf("[frame %d] DUPLICATE P%d in %d worlds\n", frame, p + 1, worlds);
+      found++;
+    }
+  }
+  for (int i = 0; i < kInstMax; i++) {
+    if (!Inst_IsActive(i)) {
+      in_trans[i] = lost[i] = 0;
+      continue;
+    }
+    Inst_Switch(i);
+    bool trans = (main_module_index == 7 || main_module_index == 9) && submodule_index != 0;
+    in_trans[i] = trans ? in_trans[i] + 1 : 0;
+    if (in_trans[i] == 600) {
+      printf("[frame %d] STUCK TRANSITION world %d module %d/%d\n", frame, i, main_module_index, submodule_index);
+      found++;
+    }
+    int sx = (int16)(Mp_PlayerX(g_mp.leader) - BG2HOFS_copy2), sy = (int16)(Mp_PlayerY(g_mp.leader) - BG2VOFS_copy2);
+    bool st = (main_module_index == 7 || main_module_index == 9) && submodule_index == 0;
+    st = st && *Mp_PlayerRam(g_mp.leader, 0x5D) == 0 && !g_mp.p[g_mp.leader].downed;
+    lost[i] = st && (sx < -16 || sx > 272 || sy < -16 || sy > 240) ? lost[i] + 1 : 0;
+    if (lost[i] == 30) {
+      printf("[frame %d] CAMERA LOST world %d leader P%d at (%d,%d) screen (%d,%d)\n", frame, i, g_mp.leader + 1,
+             Mp_PlayerX(g_mp.leader), Mp_PlayerY(g_mp.leader), sx, sy);
+      found++;
+    }
+  }
+  for (int p = 0; p < kMpMaxPlayers; p++) {
+    if (Inst_OfPlayer(p) < 0) {
+      outside[p] = unseen[p] = 0;
+      continue;
+    }
+    SwitchToPlayer(p);
+    bool out = false;
+    if (main_module_index == 9 && submodule_index == 0 && !g_mp.p[p].downed) {
+      int a = BYTE(overworld_area_index) & 0x3f, size = kOverworldMapIsSmall[a] ? 512 : 1024;
+      int dx = Mp_PlayerX(p) - kOverworld_OffsetBaseX[a], dy = Mp_PlayerY(p) - kOverworld_OffsetBaseY[a];
+      out = dx < -8 || dx > size + 8 || dy < -16 || dy > size + 8;
+    } else if (main_module_index == 7 && submodule_index == 0 && !g_mp.p[p].downed) {
+      int rx = (dungeon_room_index & 0xf) * 512, ry = (dungeon_room_index >> 4 & 0x1f) * 512;
+      int dx = (Mp_PlayerX(p) & 0x1fff) - rx, dy = (Mp_PlayerY(p) & 0x3fff) - ry;
+      out = dx < -16 || dx > 512 + 16 || dy < -16 || dy > 512 + 16;
+    }
+    // (A few frames of it happen as a predicted transition is rolled back.)
+    outside[p] = out ? outside[p] + 1 : 0;
+    if (outside[p] == 20) {
+      printf("[frame %d] OUT OF %s P%d at (%d,%d) %s %x world %d leader P%d\n", frame, player_is_indoors ? "ROOM" : "AREA",
+             p + 1, Mp_PlayerX(p), Mp_PlayerY(p), player_is_indoors ? "room" : "area",
+             player_is_indoors ? dungeon_room_index : BYTE(overworld_area_index), Inst_Current(), g_mp.leader + 1);
+      found++;
+    }
+    bool hidden = false;
+    if (p != g_mp.leader && !g_mp.p[p].downed && Mp_InStableGameplay() && Mp_NumJoined() > 1 &&
+        g_mp_render.p[p].count == 0) {
+      int sx = (int16)(Mp_PlayerX(p) - BG2HOFS_copy2), sy = (int16)(Mp_PlayerY(p) - BG2VOFS_copy2);
+      hidden = sx > 0 && sx < 240 && sy > 0 && sy < 200;
+    }
+    unseen[p] = hidden ? unseen[p] + 1 : 0;
+    if (unseen[p] == 20) {
+      printf("[frame %d] INVISIBLE P%d world %d leader=%d visible=%d\n", frame, p + 1, Inst_Current(), g_mp.leader,
+             g_mp_render.p[p].visible);
+      found++;
+    }
+  }
+  Inst_Switch(r0);
+  return found;
+}
+
 static void UsePane(int p) {
   int8 local = (int8)LocalOfPlayer(p);
   Hd3d_SetPanes(&local, 1);
@@ -2100,11 +2185,34 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
     } else if (!strcmp(cmd, "netsim")) {
       // netsim <delay ms> <jitter ms> <loss %>: simulate a bad link (before host/connect)
       Net_SetSim(atoi(arg1), atoi(arg2), atoi(arg3));
+    } else if (!strcmp(cmd, "tickguard")) {
+      // tickguard <n> <p> <hexaddr> <hexmin> <hexmax>: tick n times; player p's
+      // own byte must never be in min..max (the first time it is fails)
+      int p = PlayerArg(arg2), addr = strtol(arg3, NULL, 16), lo = strtol(arg4, NULL, 16), hi = strtol(arg5, NULL, 16);
+      bool failed = false;
+      for (int i = 0, n = atoi(arg1); i < n; i++) {
+        uint16 in[kMpMaxPlayers];
+        memcpy(in, held, sizeof(in));
+        frame += Session_Tick(in, g_wanted_zelda_features);
+        RecordFrame(pixels, width, height, render_flags, view);
+        if (!failed && Inst_OfPlayer(p) >= 0) {
+          SwitchToPlayer(p);
+          int v = *Mp_PlayerRam(p, addr);
+          if (v >= lo && v <= hi) {
+            printf("FAIL: P%d's %x is %02x (in %s..%s) at frame %d, tick %d [pred=%d rb=%d]\n", p + 1, addr, v, arg4, arg5,
+                   frame, i, Session_GetStatus()->predicted, Session_GetStatus()->rollbacks);
+            g_failures++;
+            failed = true;
+          }
+        }
+        SDL_Delay(16);
+      }
     } else if (!strcmp(cmd, "tickwander")) {
       // tickwander <n> <seed>: like tick, but local players walk around randomly.
       // Reports Links that jump (move further than they can walk).
       uint32 seed = atoi(arg2) * 2654435761u + 1;
-      int jumps = 0, remote_jumps = 0;
+      int jumps = 0, remote_jumps = 0, bad = 0;
+      bool checks = !strcmp(arg3, "check");  // also the world checks (NetWanderChecks)
       for (int i = 0, n = atoi(arg1); i < n; i++) {
         if (i % 24 == 0) {
           for (int p = 0; p < kMpMaxPlayers; p++) {
@@ -2147,13 +2255,16 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
               remote_jumps++;
           }
         }
+        if (checks)
+          bad += NetWanderChecks(frame);
         SDL_Delay(16);
       }
       memset(held, 0, sizeof(held));
-      printf("tickwander: %d jumps of local players, %d of other players, %d rollbacks, %d own corrections\n", jumps, remote_jumps,
-             Session_GetStatus()->rollbacks, Session_GetStatus()->own_corrections);
-      if (jumps) {
-        printf("FAIL: %d jumps\n", jumps);
+      printf("tickwander: %d jumps of local players, %d of other players, %d rollbacks, %d own corrections%s\n", jumps,
+             remote_jumps, Session_GetStatus()->rollbacks, Session_GetStatus()->own_corrections,
+             checks ? bad ? ", world checks failed" : ", world checks ok" : "");
+      if (jumps || bad) {
+        printf("FAIL: %d jumps, %d world checks\n", jumps, bad);
         g_failures++;
       }
     } else if (!strcmp(cmd, "lan")) {
