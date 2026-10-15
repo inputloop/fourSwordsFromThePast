@@ -64,6 +64,8 @@ Dsp* dsp_init(uint8_t *apu_ram) {
   Dsp* dsp = (Dsp*)malloc(sizeof(Dsp));
   dsp->apu_ram = apu_ram;
   dsp->muteVoices = 0;
+  dsp->sfxVoices = 0;
+  dsp->sfxGain = dsp->musicGain = 256;
   return dsp;
 }
 
@@ -130,6 +132,11 @@ void dsp_saveload(Dsp *dsp, SaveLoadFunc *func, void *ctx) {
   func(ctx, &dsp->ram, sizeof(Dsp) - offsetof(Dsp, ram));
 }
 
+// The volume setting for voice i: the sound effects' or the music's (0-256).
+static inline int dsp_voiceGain(const Dsp *dsp, int i) {
+  return dsp->sfxVoices & (1 << i) ? dsp->sfxGain : dsp->musicGain;
+}
+
 void dsp_cycle(Dsp* dsp) {
   int totalL = 0;
   int totalR = 0;
@@ -137,8 +144,9 @@ void dsp_cycle(Dsp* dsp) {
     dsp_cycleChannel(dsp, i);
     if (dsp->muteVoices & (1 << i))
       continue;
-    totalL += (dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6;
-    totalR += (dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6;
+    int gain = dsp_voiceGain(dsp, i);
+    totalL += (((dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6) * gain) >> 8;
+    totalR += (((dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6) * gain) >> 8;
     totalL = totalL < -0x8000 ? -0x8000 : (totalL > 0x7fff ? 0x7fff : totalL); // clamp 16-bit
     totalR = totalR < -0x8000 ? -0x8000 : (totalR > 0x7fff ? 0x7fff : totalR); // clamp 16-bit
   }
@@ -194,8 +202,9 @@ static void dsp_handleEcho(Dsp* dsp, int* outputL, int* outputR) {
   int inL = 0, inR = 0;
   for(int i = 0; i < 8; i++) {
     if(dsp->channel[i].echoEnable && !(dsp->muteVoices & (1 << i))) {
-      inL += (dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6;
-      inR += (dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6;
+      int gain = dsp_voiceGain(dsp, i);
+      inL += (((dsp->channel[i].sampleOut * dsp->channel[i].volumeL) >> 6) * gain) >> 8;
+      inR += (((dsp->channel[i].sampleOut * dsp->channel[i].volumeR) >> 6) * gain) >> 8;
       inL = inL < -0x8000 ? -0x8000 : (inL > 0x7fff ? 0x7fff : inL); // clamp 16-bit
       inR = inR < -0x8000 ? -0x8000 : (inR > 0x7fff ? 0x7fff : inR); // clamp 16-bit
     }

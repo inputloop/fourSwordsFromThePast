@@ -51,6 +51,11 @@ struct Dsp {
   // silence the music). Before ram, so not in save states (which hold
   // everything from ram on, laid out as before).
   uint8_t muteVoices;
+  // The voices playing sound effects (the SPC player keeps it up to date),
+  // and the gains of the sound effects and of the music, 0-256 (the volume
+  // settings). Before ram too: not in save states.
+  uint8_t sfxVoices;
+  uint16_t sfxGain, musicGain;
   uint8_t *apu_ram;
   // mirror ram
   uint8_t ram[0x80];

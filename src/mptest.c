@@ -101,6 +101,7 @@
 //                       twice the game's size) and its sound into <dir>/audio.raw (s16le stereo, 32040 Hz at 60 fps);
 //                       <dir>/info.txt says the sizes. The directory must exist. tools/trailer.sh makes videos of it
 //   musicoff <0|1>      silence the music, keep the sound effects (the music still runs, unheard)
+//   soundvol <which> <pct>  a volume setting: master, music or sfx (the Sound menu)
 // Sound (the main driver plays the first local player's world; with "Everyone's sound effects" on, the
 // other local players' worlds get a sound effect driver each, music off; offline every joined player is local):
 //   coopsfx <0|1>       the "Everyone's sound effects" option (on to begin with)
@@ -1012,6 +1013,20 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         RecordStop();
       } else if (!RecordStart(arg1, !strcmp(arg2, "view"), width, height)) {
         printf("FAIL: can't record to %s (does the directory exist?)\n", arg1);
+        g_failures++;
+      }
+    } else if (!strcmp(cmd, "soundvol")) {
+      // soundvol <master|music|sfx> <percent>: a volume setting (the Sound
+      // menu; master is the SDL mixer's, so it doesn't change what is rendered)
+      int v = IntMin(IntMax(atoi(arg2), 0), 100);
+      if (!strcmp(arg1, "master"))
+        g_sound.master = (uint8)v;
+      else if (!strcmp(arg1, "music"))
+        g_sound.music = (uint8)v;
+      else if (!strcmp(arg1, "sfx"))
+        g_sound.sfx = (uint8)v;
+      else {
+        printf("FAIL: soundvol: unknown volume %s\n", arg1);
         g_failures++;
       }
     } else if (!strcmp(cmd, "musicoff")) {

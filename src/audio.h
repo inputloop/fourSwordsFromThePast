@@ -12,6 +12,11 @@ bool ZeldaIsMusicPlaying();
 void ZeldaEnableMsu(uint8 enable);
 
 void ZeldaRenderAudio(int16 *audio_buffer, int samples, int channels);
+// The volume settings (the Sound menu, zelda3.ini), in percent: everything
+// (the SDL mixer, main.c), the music (the music voices and the MSU track)
+// and the sound effects (their voices, of every local player's world).
+typedef struct SoundVolumes { uint8 master, music, sfx; } SoundVolumes;
+extern SoundVolumes g_sound;
 void ZeldaSetMusicOff(bool off);
 void ZeldaSetAudioCapture(bool on);
 void ZeldaDiscardUnusedAudioFrames();

@@ -85,7 +85,10 @@ static int g_ppu_render_flags = 0;
 static int g_snes_width, g_snes_height;
 // Size of the whole picture: bigger than one game screen in split screen.
 static int g_disp_width, g_disp_height;
-static int g_sdl_audio_mixer_volume = SDL_MIX_MAXVOLUME;
+// The master volume setting as the SDL mixer's (0-128).
+static int SdlMixerVolume() {
+  return IntMin(IntMax((int)g_sound.master, 0), 100) * SDL_MIX_MAXVOLUME / 100;
+}
 static struct RendererFuncs g_renderer_funcs;
 
 void NORETURN Die(const char *error) {
@@ -304,12 +307,12 @@ static void SDLCALL AudioCallback(void *userdata, Uint8 *stream, int len) {
       g_audiobuffer_cur = g_audiobuffer;
       g_audiobuffer_end = g_audiobuffer + g_frames_per_block * g_audio_channels * sizeof(int16);
     }
-    int n = IntMin(len, g_audiobuffer_end - g_audiobuffer_cur);
-    if (g_sdl_audio_mixer_volume == SDL_MIX_MAXVOLUME) {
+    int n = IntMin(len, g_audiobuffer_end - g_audiobuffer_cur), volume = SdlMixerVolume();
+    if (volume == SDL_MIX_MAXVOLUME) {
       memcpy(stream, g_audiobuffer_cur, n);
     } else {
       SDL_memset(stream, 0, n);
-      SDL_MixAudioFormat(stream, g_audiobuffer_cur, AUDIO_S16, n, g_sdl_audio_mixer_volume);
+      SDL_MixAudioFormat(stream, g_audiobuffer_cur, AUDIO_S16, n, volume);
     }
     g_audiobuffer_cur += n;
     stream += n;
@@ -491,6 +494,10 @@ int main(int argc, char** argv) {
   g_hd2d.grade = g_config.hd2d_grade;
   g_hd2d.lighting = g_config.hd2d_lighting;
   g_hd2d.see_through = g_config.hd2d_see_through;
+  // The volumes as configured.
+  g_sound.master = g_config.master_volume;
+  g_sound.music = g_config.music_volume;
+  g_sound.sfx = g_config.sfx_volume;
   // The 3D view as configured: for player 1, and for couch players 2-4 their
   // own choice where one is saved.
   Hd3d_SetEnabled(g_config.hd3d);
@@ -1162,8 +1169,10 @@ static void HandleVolumeAdjustment(int volume_adjustment) {
   SetApplicationVolume(new_volume);
   printf("[System Volume]=%i\n", new_volume);
 #else
-  g_sdl_audio_mixer_volume = IntMin(IntMax(0, g_sdl_audio_mixer_volume + volume_adjustment * (SDL_MIX_MAXVOLUME >> 4)), SDL_MIX_MAXVOLUME);
-  printf("[SDL mixer volume]=%i\n", g_sdl_audio_mixer_volume);
+  // (The master volume setting, by 10%; the Sound menu shows it. Not saved
+  // until the settings are.)
+  g_config.master_volume = g_sound.master = (uint8)IntMin(IntMax(0, g_sound.master + volume_adjustment * 10), 100);
+  printf("[Master volume]=%i%%\n", g_sound.master);
 #endif
 }
 

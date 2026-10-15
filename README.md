@@ -624,7 +624,8 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 - Keyboard: arrows, X = A, Z = B, S = X, A = Y, Enter = Start, Right Shift = Select.
 - `Esc` (or the controller's Guide button, or Back+Start) opens the menu:
   Multiplayer, Video and HD options (widescreen 16:9/16:10/18:9, HD world map,
-  smooth scaling, no sprite flicker, 2D-HD look, ...) and Gameplay options.
+  smooth scaling, no sprite flicker, 2D-HD look, ...), Sound (the volumes)
+  and Gameplay options.
 - Extra controllers press START to drop in as P2-P4.
 - **Ctrl+F11** ("Watch everyone", also *Multiplayer > Watch everyone*) shows every
   joined player's world at once, online players too: side by side for two
@@ -638,6 +639,11 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
   hears its own player's world with its music, plus the sound effects of its
   other local players. *Multiplayer > Everyone's sound effects* (or
   `CoopSoundEffects` in `zelda3.ini`) turns the extra effects off.
+  *Pause menu > Sound* has three volumes, each 0 to 100%: master, music
+  (the game's and an MSU track) and sound effects. They take effect as you
+  change them and are saved with the settings (`MasterVolume`,
+  `MusicVolume`, `SfxVolume` in `zelda3.ini`). Shift+= and Shift+- change
+  the master volume while playing.
 - 3D view (when it is on): the right stick (or a right mouse drag) turns
   the camera, and a left click or L3 switches first person. See
   [3D view and first person](#3d-view-and-first-person-beta).

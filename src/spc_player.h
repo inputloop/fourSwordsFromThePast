@@ -65,7 +65,7 @@ typedef struct SpcPlayer {
   // effect; every other voice plays music and is muted. (Before
   // new_value_from_snes, so a reset keeps them.)
   uint8 sfx_voices;
-  bool music_off;
+  bool music_off;  // (SpcPlayer_SetMusicOff)
   uint8 new_value_from_snes[4];
   uint8 port_to_snes[4];
   uint8 last_value_from_snes[4];
@@ -149,3 +149,4 @@ void SpcPlayer_Upload(SpcPlayer *p, const uint8_t *data);
 void SpcPlayer_CopyVariablesFromRam(SpcPlayer *p);
 void SpcPlayer_CopyVariablesToRam(SpcPlayer *p);
 void SpcPlayer_SetMusicOff(SpcPlayer *p, bool off);
+void SpcPlayer_SetVolumes(SpcPlayer *p, int music_pct, int sfx_pct);  // the volume settings, percent

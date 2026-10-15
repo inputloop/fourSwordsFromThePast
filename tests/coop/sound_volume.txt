@@ -1,0 +1,54 @@
+# Sound volumes (Pause menu > Sound): the music and sound effect volumes
+# scale what is heard and nothing else. Music at 0 silences the music while
+# sword swings are still heard; sound effects at 0 too: silence. At half
+# volume the music is quieter. Back at 100 the main driver renders exactly
+# as before, and the game is the same throughout (the volumes live outside
+# its state).
+load 2
+run 30
+clearsprites
+audioreset
+audiorun 60
+expect_audio main 500 32767
+audiomark full
+hashmark full
+# Half the music volume: quieter.
+load 2
+run 30
+clearsprites
+soundvol music 50
+audioreset
+audiorun 60
+expect_audio main 200 1400
+expect_hashmark full
+# No music: silence (nothing else sounds here)...
+soundvol music 0
+audioreset
+audiorun 60
+expect_audio main 0 0
+# ... until the sword swings.
+hold 1 B
+audiorun 4
+hold 1 -
+audiorun 30
+expect_audio main 20 32767
+# No sound effects either: silence, swings and all.
+soundvol sfx 0
+audioreset
+hold 1 B
+audiorun 4
+hold 1 -
+audiorun 30
+expect_audio main 0 0
+# Everything back at 100: the first minute renders exactly as before. (The
+# master volume is the mixer's: it changes nothing of what is rendered.)
+soundvol music 100
+soundvol sfx 100
+soundvol master 30
+load 2
+run 30
+clearsprites
+audioreset
+audiorun 60
+expect_audiomark full
+expect_hashmark full

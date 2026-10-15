@@ -461,6 +461,13 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
   } else if (section == 2) {
     if (StringEqualsNoCase(key, "EnableAudio")) {
       return ParseBool(value, &g_config.enable_audio);
+    } else if (StringEqualsNoCase(key, "MasterVolume") || StringEqualsNoCase(key, "MusicVolume") ||
+               StringEqualsNoCase(key, "SfxVolume")) {
+      int v = atoi(value);
+      v = v < 0 ? 0 : v > 100 ? 100 : v;
+      *(key[1] == 'a' || key[1] == 'A' ? &g_config.master_volume :
+        key[1] == 'u' || key[1] == 'U' ? &g_config.music_volume : &g_config.sfx_volume) = (uint8)v;
+      return true;
     } else if (StringEqualsNoCase(key, "AudioFreq")) {
       g_config.audio_freq = (uint16)strtol(value, (char**)NULL, 10);
       return true;
@@ -682,6 +689,7 @@ static bool ParseOneConfigFile(const char *filename, int depth) {
 
 void ParseConfigFile(const char *filename) {
   g_config.msuvolume = 100;  // default msu volume, 100%
+  g_config.master_volume = g_config.music_volume = g_config.sfx_volume = 100;
   Bindings_SetDefaults();
   g_config.mp_use_upnp = true;
   g_config.mp_port = 47474;

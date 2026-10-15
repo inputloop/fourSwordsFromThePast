@@ -12,6 +12,7 @@
 #include "randomizer.h"
 #include "hd2d.h"
 #include "hd3d.h"
+#include "audio.h"
 #include "session.h"
 #include "zelda_rtl.h"
 #include "variables.h"
@@ -202,6 +203,7 @@ enum {
   kScreen_Seed,
   kScreen_Lan,
   kScreen_Video,
+  kScreen_Sound,
   kScreen_Hd2d,
   kScreen_Hd3d,
   kScreen_Gameplay,
@@ -373,6 +375,9 @@ static void ScreenMain() {
   Item("Video and HD options", ">");
   if (Act() == kAct_Select)
     Goto(kScreen_Video);
+  Item("Sound", ">");
+  if (Act() == kAct_Select)
+    Goto(kScreen_Sound);
   Item("Gameplay options", ">");
   if (Act() == kAct_Select)
     Goto(kScreen_Gameplay);
@@ -991,6 +996,27 @@ static void Strength(const char *label, uint8 *config, uint8 *live) {
   }
 }
 
+// The volumes: everything, the music, the sound effects (heard at once).
+static void ScreenSound() {
+  snprintf(g_ui.title, sizeof(g_ui.title), "SOUND");
+  Strength("Master volume", &g_config.master_volume, &g_sound.master);
+  Strength("Music volume", &g_config.music_volume, &g_sound.music);
+  Strength("Sound effects volume", &g_config.sfx_volume, &g_sound.sfx);
+  // (The same option as Multiplayer's: the sound of the other couch players'
+  // worlds.)
+  Item("Everyone's sound effects", OnOff(g_config.mp_coop_sound_effects));
+  if (Act() != kAct_None) {
+    g_config.mp_coop_sound_effects ^= 1;
+    g_ui.dirty_settings = true;
+  }
+  // (The menu is 36 letters wide.)
+  Label("Left/right: 10% steps. A: 0 or back.");
+  Label("Shift+= / Shift+-: master, in game.");
+  Item("Back", NULL);
+  if (Act() == kAct_Select)
+    Goto(kScreen_Main);
+}
+
 static void ScreenHd2d() {
   snprintf(g_ui.title, sizeof(g_ui.title), "2D-HD LOOK (BETA)");
   Item("2D-HD look", OnOff(g_config.hd2d));
@@ -1311,6 +1337,7 @@ static void BuildScreen() {
   case kScreen_Video: ScreenVideo(); break;
   case kScreen_Hd2d: ScreenHd2d(); break;
   case kScreen_Hd3d: ScreenHd3d(); break;
+  case kScreen_Sound: ScreenSound(); break;
   case kScreen_Gameplay: ScreenGameplay(); break;
   case kScreen_Controls: ScreenControls(); break;
   case kScreen_Bindings: ScreenBindings(); break;
@@ -2705,6 +2732,9 @@ void Ui_SaveSettings() {
   fprintf(f, "OutputMethod = %s\n", g_config.output_method == kOutputMethod_OpenGL ? "OpenGL" :
           g_config.output_method == kOutputMethod_OpenGL_ES ? "OpenGL ES" :
           g_config.output_method == kOutputMethod_SDLSoftware ? "SDL-Software" : "SDL");
+  fprintf(f, "[Sound]\n");
+  fprintf(f, "MasterVolume = %d\nMusicVolume = %d\nSfxVolume = %d\n", g_config.master_volume, g_config.music_volume,
+          g_config.sfx_volume);
   fprintf(f, "[Features]\n");
   static const struct { const char *key; uint32 bit; } kKeys[] = {
     {"ItemSwitchLR", kFeatures0_SwitchLR}, {"TurnWhileDashing", kFeatures0_TurnWhileDashing},

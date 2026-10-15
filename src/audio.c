@@ -10,6 +10,8 @@
 #include "instance.h"
 #include <math.h>
 
+SoundVolumes g_sound = { 100, 100, 100 };
+
 // This needs to hold a lot more things than with just PCM
 typedef struct MsuPlayerResumeInfo {
   uint32 tag;
@@ -240,6 +242,7 @@ static void MsuPlayer_Open(MsuPlayer *mp, int orig_track, bool resume_from_snaps
 }
 
 static void MixToBufferWithVolume(int16 *dst, const int16 *src, size_t n, float volume) {
+  volume *= g_sound.music * (1.0f / 100);  // (the music volume setting)
   if (volume == 1.0f) {
     for (size_t i = 0; i < n; i++) {
       dst[i * 2 + 0] += src[i * 2 + 0];
@@ -257,8 +260,9 @@ static void MixToBufferWithVolume(int16 *dst, const int16 *src, size_t n, float 
 static void MixToBufferWithVolumeRamp(int16 *dst, const int16 *src, size_t n, float volume, float volume_step, float ideal_target) {
   int64 vol = volume * 281474976710656.0f;
   int64 step = volume_step * 281474976710656.0f;
+  uint32 gain = g_sound.music * 256 / 100;  // (the music volume setting)
   for (size_t i = 0; i < n; i++) {
-    uint32 v = (vol >> 32);
+    uint32 v = (uint32)(vol >> 32) * gain >> 8;
     dst[i * 2 + 0] += src[i * 2 + 0] * v >> 16;
     dst[i * 2 + 1] += src[i * 2 + 1] * v >> 16;
     vol += step;
@@ -564,6 +568,7 @@ static void MixSfxSources(int16 *audio_buffer, int samples, int channels) {
       g_sfx_buffer_size = n;
     }
     ApuQueue_Pop(&s->queue, s->player);
+    SpcPlayer_SetVolumes(s->player, g_sound.music, g_sound.sfx);
     SpcPlayer_GenerateSamples(s->player);
     dsp_getSamples(s->player->dsp, g_sfx_buffer, samples, channels);
     for (int i = 0; i < n; i++) {
@@ -628,6 +633,7 @@ uint8_t zelda_apu_read(uint32_t adr) {
 void ZeldaRenderAudio(int16 *audio_buffer, int samples, int channels) {
   ZeldaApuLock();
   ApuQueue_Pop(&g_apu_queue, g_zenv.player);
+  SpcPlayer_SetVolumes(g_zenv.player, g_sound.music, g_sound.sfx);
   SpcPlayer_GenerateSamples(g_zenv.player);
   dsp_getSamples(g_zenv.player->dsp, audio_buffer, samples, channels);
   AudioStats_Add(&g_audio_stats_main, audio_buffer, (size_t)samples * channels);

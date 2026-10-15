@@ -160,8 +160,10 @@ static void Dsp_Write(SpcPlayer *p, uint8_t reg, uint8 value) {
     // A voice keyed on while a sound effect owns its channel plays the sound
     // effect (until it is keyed on again), any other plays music.
     p->sfx_voices = (p->sfx_voices & ~value) | (value & p->is_chan_on);
-    if (p->dsp)
+    if (p->dsp) {
       p->dsp->muteVoices = p->music_off ? (uint8)~p->sfx_voices : 0;
+      p->dsp->sfxVoices = p->sfx_voices;
+    }
   }
   if (p->dsp)
     dsp_write(p->dsp, reg, value);
@@ -1460,4 +1462,12 @@ void RunAudioPlayer() {
 void SpcPlayer_SetMusicOff(SpcPlayer *p, bool off) {
   p->music_off = off;
   p->dsp->muteVoices = off ? (uint8)~p->sfx_voices : 0;
+  p->dsp->sfxVoices = p->sfx_voices;
+}
+
+// The volume settings, in percent: the music voices and the sound effect
+// voices are scaled as they are mixed (the driver itself runs unchanged).
+void SpcPlayer_SetVolumes(SpcPlayer *p, int music_pct, int sfx_pct) {
+  p->dsp->musicGain = (uint16)(music_pct * 256 / 100);
+  p->dsp->sfxGain = (uint16)(sfx_pct * 256 / 100);
 }
