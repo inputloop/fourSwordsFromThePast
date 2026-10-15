@@ -3,8 +3,9 @@
 # shows the picture point it stands for, so walls, roofs, pots and Links land
 # exactly where the 2D picture has them. At most 2% of the pixels may be off
 # by more than 12 per color channel. Outdoors at Link's house, in the
-# Sanctuary, in a room with two floors and inside Link's house. On a
-# failure tests/out/exact3d_2d.ppm, _3d.ppm and _diff.ppm show where.
+# Sanctuary, in a room with two floors, inside Link's house and in the chest
+# game's room full of chests (boxes with their rim on top). On a failure
+# tests/out/exact3d_2d.ppm, _3d.ppm and _diff.ppm show where.
 view3d 1
 load 2
 drawrun 30
@@ -27,6 +28,12 @@ expect_exact3d 2 12
 load 2
 drawrun 30
 enter 104
+drawrun 200
+expect_module 7
+expect_exact3d 2 12
+load 2
+drawrun 30
+enter 106
 drawrun 200
 expect_module 7
 expect_exact3d 2 12

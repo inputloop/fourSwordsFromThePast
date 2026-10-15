@@ -78,7 +78,8 @@ enum {
   kCf_Shell = 0x100,         // part of a room's shell (its walls)
   kCf_Panel = 0x200,         // drawn as part of a wall panel
   kCf_Overhead = 0x400,      // outdoors: walkable, but drawn over Links (canopies, eaves)
-  kCf_Prop = 0x800,          // indoors: part of a small prop drawn as a standing picture (PropCard)
+  kCf_Prop = 0x800,          // indoors: part of a chest drawn as a box (PropCard)
+  kCf_Chest = 0x1000,        // indoors: a chest tile (attributes 58-5D, 63)
 };
 
 // What a picture cell becomes in the relief (Layer.pk).
@@ -112,11 +113,11 @@ typedef struct PanelCell {
   int8 s0, s1;               // the hinge's offset (px) at its two ends along the foot (diagonal walls)
 } PanelCell;
 
-// A small prop indoors as a standing picture (g_hd3d_prop_pictures, off): its whole
-// picture stands up on its front line and turns to face the camera. At the
-// default view it stands where its painted face is, so it shows exactly the
-// picture (the relief rule); from the side it is the same picture, not a
-// box with smeared sides.
+// A chest indoors (2 x 2 cells of chest tiles, see BuildProps) as a box
+// (EmitProps): its picture is nearly all front (a rim on top, then the lid
+// and the base), so the box is kChestDepth px deep with the rim as its top
+// and 16 - kChestDepth px tall with the rest on its front. By the relief
+// rule, so the default view stays exact. The floor under it is inpainted.
 typedef struct PropCard {
   uint8 layer;
   uint8 c0, r0, w, h;        // picture cells (rows r0 .. r0 + h - 1)
@@ -817,7 +818,9 @@ static void Classify(Hd3dScene *s, int L) {
   if (s->indoors)
     memcpy(ly->attr, s->src_attr[L], 4096);
   for (int i = 0; i < cells; i++) {
-    uint16 f = ly->cf[i] & ~(kCf_Thin | kCf_Shell | kCf_Panel | kCf_Overhead | kCf_Prop);
+    uint16 f = ly->cf[i] & ~(kCf_Thin | kCf_Shell | kCf_Panel | kCf_Overhead | kCf_Prop | kCf_Chest);
+    if (s->indoors && ((ly->attr[i] >= 0x58 && ly->attr[i] <= 0x5d) || ly->attr[i] == 0x63))
+      f |= kCf_Chest;
     if (!(f & kCf_Decoded) && !(f & kCf_Empty)) {
       f &= ~(kCf_Blank | kCf_Holes);
       f |= CharCoverage(vram, ly->word[i]);
@@ -1199,7 +1202,6 @@ static int MedianBand(const int *hist) {
 
 // ---- Geometry: small props indoors ----
 
-bool g_hd3d_prop_pictures;  // (off: props are blocks)
 
 static bool PropSolid(const Layer *ly, int i) {
   return IsSolid(ly->cls[i]) && !(ly->cf[i] & (kCf_Shell | kCf_Panel | kCf_Prop));
@@ -1237,10 +1239,13 @@ static void BuildProps(Hd3dScene *s, int L) {
     // (The marks stay: a piece too big is a relief, and is not tried again.)
     if (big || r1 + 1 >= n)
       continue;
-    // Everything that stands on the floor is a block with its painted top
-    // and front (a chest, a statue, a torch stand, a pot): nothing turns to
-    // face the camera. (The standing pictures are kept for a setting.)
-    if (!g_hd3d_prop_pictures)
+    // Only a chest (2 x 2 cells of chest tiles) is a prop: a box, see
+    // EmitProps. Everything else that stands on the floor (a statue, a torch
+    // stand, a pot) is a block of the relief with its painted top and front.
+    bool chest = c1 - c0 == 1 && r1 - r0 == 1 && tail == 4;
+    for (int k = 0; k < tail && chest; k++)
+      chest = (ly->cf[g_list[k]] & kCf_Chest) != 0;
+    if (!chest)
       continue;
     // The box may hold only this piece, floor and pits.
     for (int k = 0; k < tail; k++)
@@ -1268,19 +1273,6 @@ static void BuildProps(Hd3dScene *s, int L) {
     }
     if (!ok || !foot)
       continue;
-    // Its top often overlaps the floor north of it, painted over Links
-    // (walkable cells with the priority bit, like a canopy over a trunk).
-    for (int k = 0; k < 2 && r0 > 0 && r1 - r0 + 1 < kPropMaxCells; k++) {
-      bool over = false, walk = true;
-      for (int c = c0; c <= c1; c++) {
-        int i = (r0 - 1) * n + c;
-        walk &= ly->cls[i] == kCls_Ground && !(ly->cf[i] & (kCf_Shell | kCf_Panel | kCf_Prop));
-        over |= (ly->cf[i] & kCf_Prio) != 0;
-      }
-      if (!walk || !over)
-        break;
-      r0--;
-    }
     for (int r = r0; r <= r1; r++)
       for (int c = c0; c <= c1; c++)
         ly->cf[r * n + c] |= kCf_Prop;
@@ -3512,36 +3504,56 @@ static void EmitPanels(EmitCtx *x, int L) {
 // camera about a point a little behind its front (so it turns like something
 // round). Facing the default camera it stands on its front line, where the
 // relief rule puts a face: the picture is exact there.
+enum { kChestDepth = 4 };  // the rim: the picture rows of a chest that lie on top of it
+
+// One face of a chest box, from the four corners a..d (counterclockwise seen
+// from outside), each with its texel (u, v); n its outward normal.
+static void ChestFace(EmitCtx *x, int L, int base, const float *pt, const float *uv, float nx, float ny, float nz,
+                      uint8 shade) {
+  R3dQuad *q = NewQuad(x, L ? x->e->tex_bg1 : x->e->tex_bg2, shade, kR3dClass_World);
+  if (!q)
+    return;
+  for (int i = 0; i < 4; i++)
+    SetVertex(&q->v[i], pt[i * 3], pt[i * 3 + 1], pt[i * 3 + 2], uv[i * 2], uv[i * 2 + 1]);
+  Orient(q, nx, ny, nz);
+  ApplyRise(x, q, base);
+  Fade(x, q);
+}
+
 static void EmitProps(EmitCtx *x, int L) {
   Hd3dScene *s = x->s;
-  const Hd3dEmit *e = x->e;
   int base = LayerBase(s, L), off = base / 8;
-  float vx = e->view_dir[0], vy = e->view_dir[1], zb = (float)base;
-  float rx = vy, ry = -vx;  // the viewer's right
+  float zb = (float)base, d = (float)kChestDepth, h = 16.0f - d;
   for (int i = 0; i < s->num_props && x->num < x->max; i++) {
     const PropCard *p = &s->props[i];
     if (p->layer != L || p->r0 + off + p->h <= x->r0 || p->r0 + off >= x->r1 || p->c0 + p->w <= x->c0 ||
         p->c0 >= x->c1)
       continue;
-    float w = 8.0f * (float)p->w, h = 8.0f * (float)p->h;
-    float u0 = (float)(s->origin_x + 8 * p->c0), vb = (float)(s->origin_y + 8 * (p->r0 + p->h));
-    float rad = w < 16.0f ? w * 0.5f : 8.0f;
-    float cx = u0 + w * 0.5f, cy = vb + zb - rad;  // (the front line is at picture row vb, lowered with the base)
-    float reach = w * 0.5f + rad;
-    if (!BoxVisible(x, cx - reach, cy - reach, zb, cx + reach, cy + reach, zb + h))
+    // The picture's columns and rows, and the box: its front line is at the
+    // picture's last row (lowered with the base), its top kChestDepth px
+    // north of it, h px up. Texels by the relief rule: (x, y - z).
+    float x0 = (float)(s->origin_x + 8 * p->c0), x1 = x0 + 8.0f * (float)p->w;
+    float p1 = (float)(s->origin_y + 8 * (p->r0 + p->h)), yf = p1 + zb, yn = yf - d, zt = zb + h;
+    if (!BoxVisible(x, x0, yn, zb, x1, yf, zt))
       continue;
-    R3dQuad *q = NewQuad(x, L ? e->tex_bg1 : e->tex_bg2, 255, kR3dClass_World);
-    if (!q)
-      return;
-    float fx = cx + vx * rad, fy = cy + vy * rad, hw = w * 0.5f;
-    SetVertex(&q->v[0], fx - rx * hw, fy - ry * hw, zb + h, u0, vb - h);
-    SetVertex(&q->v[1], fx + rx * hw, fy + ry * hw, zb + h, u0 + w, vb - h);
-    SetVertex(&q->v[2], fx + rx * hw, fy + ry * hw, zb, u0 + w, vb);
-    SetVertex(&q->v[3], fx - rx * hw, fy - ry * hw, zb, u0, vb);
-    Orient(q, vx, vy, 0);
-    q->flags |= kR3dQuad_TwoSided;
-    ApplyRise(x, q, base);
-    Fade(x, q);
+    float top[12] = { x0, yn, zt, x1, yn, zt, x1, yf, zt, x0, yf, zt };
+    float top_uv[8] = { x0, yn - zt, x1, yn - zt, x1, yf - zt, x0, yf - zt };
+    ChestFace(x, L, base, top, top_uv, 0, 0, 1, 255);
+    float front[12] = { x0, yf, zt, x1, yf, zt, x1, yf, zb, x0, yf, zb };
+    float front_uv[8] = { x0, yf - zt, x1, yf - zt, x1, yf - zb, x0, yf - zb };
+    ChestFace(x, L, base, front, front_uv, 0, 1, 0, 255);
+    // The sides show a column just inside the edge (the edge is the art's
+    // outline), the back the front mirrored.
+    float ue = x0 + 3.5f, uw = x1 - 3.5f;
+    float west[12] = { x0, yn, zt, x0, yf, zt, x0, yf, zb, x0, yn, zb };
+    float west_uv[8] = { ue, yf - zt, ue, yf - zt, ue, yf - zb, ue, yf - zb };
+    ChestFace(x, L, base, west, west_uv, -1, 0, 0, 216);
+    float east[12] = { x1, yf, zt, x1, yn, zt, x1, yn, zb, x1, yf, zb };
+    float east_uv[8] = { uw, yf - zt, uw, yf - zt, uw, yf - zb, uw, yf - zb };
+    ChestFace(x, L, base, east, east_uv, 1, 0, 0, 216);
+    float back[12] = { x1, yn, zt, x0, yn, zt, x0, yn, zb, x1, yn, zb };
+    float back_uv[8] = { x0, yf - zt, x1, yf - zt, x1, yf - zb, x0, yf - zb };
+    ChestFace(x, L, base, back, back_uv, 0, -1, 0, 176);
   }
 }
 

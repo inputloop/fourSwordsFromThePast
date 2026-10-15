@@ -688,9 +688,10 @@ own tiles (`src/hd3d_world.c`, see its header comment):
   `kCls_Void`. The table is built in `InitTables()` (`g_class[indoors][attr]`),
   with special cases outdoors (thick grass, ledges, deep water), and
   adjusted per cell in `Classify()`.
-- Dungeon room walls become hinged panels (`BuildShell`). Small things like
-  pots and statues become standing pictures (`BuildProps`). The rest is a
-  relief (`BuildRelief`). Outdoors, ledges you can jump down make terraces
+- Dungeon room walls become hinged panels (`BuildShell`). Chests become
+  boxes (`BuildProps`, `EmitProps`: `kChestDepth` px deep with their rim on
+  top, the rest of their picture on the front). The rest is a relief
+  (`BuildRelief`): pots, statues and torch stands are its blocks. Outdoors, ledges you can jump down make terraces
   (`ComputeTerraces`).
 - Sizes and limits are constants: `kFpWallHeight` (room walls in first
   person) in `hd3d_world.c`, and `kHd3dPitDepth`, `kHd3dFogMargin`,
