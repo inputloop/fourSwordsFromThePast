@@ -228,7 +228,7 @@ static bool Inst_NeighbourCamera(uint16 *cx, uint16 *cy) {
     uint32 k = indoors << 16 | (indoors ? *(uint16 *)&r[0xA0] : *(uint16 *)&r[0x40A]);  // dungeon_room_index / overworld_area_index
     // (A world of ghosts waiting in plain gameplay counts too: the player
     // coming to revive them closes in on it the same way.)
-    if (k != key || !((r[0x10] == 7 || r[0x10] == 9) && r[0x11] == 0) || m->area_key == 0xffffffff ||
+    if (k != key || !(Mp_IsPlayModule(r[0x10]) && r[0x11] == 0) || m->area_key == 0xffffffff ||
         r[0x2E4])  // flag_is_link_immobilized
       continue;
     int cam_x = *(uint16 *)&r[0xE2], cam_y = *(uint16 *)&r[0xE8];  // BG2HOFS_copy2, BG2VOFS_copy2
@@ -1355,7 +1355,7 @@ bool Inst_PlayerPlace(int p, InstPlace *out) {
   Inst_Switch(i);
   uint8 m = main_module_index;
   // (A Link on stairs keeps its name tag and arrow.)
-  bool ok = (m == 7 || m == 9 || m == 14) && (submodule_index == 0 || m == 14 || OnStairs(g_ram));
+  bool ok = (Mp_IsPlayModule(m) || m == 14) && (submodule_index == 0 || m == 14 || OnStairs(g_ram));
   if (ok) {
     out->world = i;
     out->x = Mp_PlayerX(p) + 8, out->y = Mp_PlayerY(p) + 12;  // the middle of the Link
@@ -1373,7 +1373,7 @@ bool Inst_PlayerPlace(int p, InstPlace *out) {
 static bool WorldView(int i, uint32 *key, uint16 *cam_x, uint16 *cam_y) {
   const uint8 *ram = g_inst[i].ram;
   uint8 m = ram[0x10], s = ram[0x11];  // main_module_index, submodule_index
-  if (!((m == 7 || m == 9) && s == 0) && !OnStairs(ram))
+  if (!(Mp_IsPlayModule(m) && s == 0) && !OnStairs(ram))
     return false;
   // player_is_indoors, the room, overworld_area_index
   *key = ram[0x1B] << 16 | (ram[0x1B] ? ShownRoom(ram) : WORD(ram[0x40A]));

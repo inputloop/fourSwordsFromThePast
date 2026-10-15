@@ -2860,6 +2860,24 @@ void Overworld_CheckSpecialSwitchArea() {  // 8ede49
   }
 }
 
+// Is Link (the resident one) on a tile that takes him into a special
+// overworld area, or out of one? (The game only asks this of the leader.)
+bool Overworld_OnSpecialSwitchTile() {
+  if (player_is_indoors)
+    return false;
+  int a = Overworld_GetMap16OfLink_Mult8()[0] & 0x1ff;
+  if (main_module_index == 11) {
+    for (int i = 0; i < 3; i++)
+      if (kSpecialSwitchAreaB_Map8[i] == a && kSpecialSwitchAreaB_Screen[i] == overworld_screen_index)
+        return true;
+    return false;
+  }
+  for (int i = 0; i < 4; i++)
+    if (kSpecialSwitchArea_Map8[i] == a && kSpecialSwitchArea_Screen[i] == overworld_screen_index)
+      return true;
+  return false;
+}
+
 const uint16 *Overworld_GetMap16OfLink_Mult8() {  // 8ede9a
   const uint16 *map8 = GetMap16toMap8Table();
   uint16 xc = (link_x_coord + 8) >> 3, yc = link_y_coord + 12;

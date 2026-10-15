@@ -123,6 +123,7 @@ uint16 *BufferAndBuildMap16Stripes_X(uint16 *dst);
 uint16 *BufferAndBuildMap16Stripes_Y(uint16 *dst);
 void Overworld_DecompressAndDrawAllQuadrants();
 void Overworld_DecompressAndDrawOneQuadrant(uint16 *dst, int screen);
+bool Overworld_OnSpecialSwitchTile();
 void Overworld_ParseMap32Definition(uint16 *dst, uint16 input);
 void OverworldLoad_LoadSubOverlayMap32();
 void LoadOverworldOverlay();

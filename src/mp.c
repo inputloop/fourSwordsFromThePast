@@ -8,6 +8,7 @@
 #include "misc.h"
 #include "hud.h"
 #include "dungeon.h"
+#include "overworld.h"
 #include "instance.h"
 #include "features.h"
 #include "assets.h"
@@ -616,7 +617,7 @@ static void Mp_PlaceCarried();
 // scrolling, falling through a hole, the mirror) and text boxes and menus.
 static bool Mp_CarryGoesAlong() {
   uint8 m = main_module_index;
-  return m == 6 || m == 7 || m == 8 || m == 9 || m == 14 || m == 15 || m == 16 || m == 17 || m == 21;
+  return m == 6 || m == 7 || m == 8 || m == 9 || m == 11 || m == 14 || m == 15 || m == 16 || m == 17 || m == 21;
 }
 
 static void Mp_HandleCarry() {
@@ -775,7 +776,7 @@ static void Mp_RestoreMenuLeader();
 // same on every computer; everybody in the same area or room sees it.
 void Mp_HandlePings() {
   enum { kHelpHold = 20, kCooldown = 30 };
-  bool playing = main_module_index == 7 || main_module_index == 9;
+  bool playing = Mp_IsPlayModule(main_module_index);
   for (int p = 0; p < kMpMaxPlayers; p++) {
     MpPing *pg = &g_mp.ping[p];
     if (pg->ttl)
@@ -829,11 +830,11 @@ void Mp_EndFrame() {
     // count as settled and could never meet up with anyone again.)
     bool in_bed = link_player_handler_state == kPlayerState_AsleepInBed ||
                   (g_mp.area_key == 0xffffffff && link_auxiliary_state);
-    if (!in_bed && (main_module_index == 7 || main_module_index == 9) && submodule_index == 0)
+    if (!in_bed && Mp_IsPlayModule(main_module_index) && submodule_index == 0)
       g_mp.area_key = Mp_AreaKey();
     // (A Link alone in its world in a co-op game picks items in a menu world
     // of its own; the box here still shows the old one.)
-    if (g_mp_coop && (main_module_index == 7 || main_module_index == 9))
+    if (g_mp_coop && Mp_IsPlayModule(main_module_index))
       Hud_SyncItemBox();
     return;
   }
@@ -841,7 +842,7 @@ void Mp_EndFrame() {
   // Players who joined on the title or file select screen got hearts, magic
   // and a Y item before there was a save file; start them like the leader
   // instead.
-  if (g_mp.at_title && (main_module_index == 7 || main_module_index == 9)) {
+  if (g_mp.at_title && Mp_IsPlayModule(main_module_index)) {
     g_mp.at_title = 0;
     for (int p = 0; p < kMpMaxPlayers; p++) {
       if (g_mp.p[p].joined && p != g_mp.leader) {
@@ -863,8 +864,8 @@ void Mp_EndFrame() {
   // the leader stands, and with someone else's position the camera would
   // scroll on forever. A text box can't wait, though: a ghost can't close it.)
   uint8 m = main_module_index;
-  bool in_transition = ((m == 7 || m == 9) && submodule_index != 0) ||
-                       m == 6 || m == 8 || m == 10 || m == 11 || m == 15 || m == 16 || m == 17;
+  bool in_transition = (Mp_IsPlayModule(m) && submodule_index != 0) ||
+                       m == 6 || m == 8 || m == 10 || m == 15 || m == 16 || m == 17;
   if (g_mp.p[g_mp.leader].downed && !in_transition) {
     int nl = Mp_FindNewLeader(g_mp.leader);
     if (nl >= 0 && Mp_IsAlive(nl)) {
@@ -875,7 +876,7 @@ void Mp_EndFrame() {
   // The HUD's item box shows the leader's item: the other Links' control code
   // may have drawn theirs there this frame, or the leader may have changed
   // (also into a text box or a map; only the item menu owns the box itself).
-  if (m == 7 || m == 9 || (m == 14 && submodule_index != 1))
+  if (Mp_IsPlayModule(m) || (m == 14 && submodule_index != 1))
     Hud_SyncItemBox();
 }
 
@@ -1463,12 +1464,15 @@ static void Mp_LimitLeaderMovement() {
 // walking (or being thrown) past it ended up outside the area, where the
 // camera can't follow and from where it never moved on either.
 static bool Mp_KeepInOverworldArea() {
-  if (main_module_index != 9 || submodule_index != 0 || player_is_indoors)
+  if (!Mp_IsOverworldModule(main_module_index) || submodule_index != 0 || player_is_indoors)
     return false;
   // (The area loaded, by its top left corner; the game's per-frame "area of
-  // the player" can be stale right after coming out of a building.)
+  // the player" can be stale right after coming out of a building. A special
+  // area has no entry in the tables: it is where the game put it.)
   int area = BYTE(overworld_area_index) & 0x3f;
   int bx = kOverworld_OffsetBaseX[area], by = kOverworld_OffsetBaseY[area];
+  if (main_module_index == 11)
+    bx = overworld_offset_base_x << 3, by = overworld_offset_base_y;
   int rb = overworld_right_bottom_bound_for_scroll;
   int tx = (int16)(link_x_coord - bx), ty = (int16)(link_y_coord - by);
   int cx = tx < 6 ? 6 : tx > rb + 3 ? rb + 3 : tx;
@@ -1483,7 +1487,7 @@ static bool Mp_KeepInOverworldArea() {
 
 // Called by the gameplay modules after the leader's player control ran.
 void Mp_RunOtherPlayers(void (*control)(void)) {
-  if (!Mp_Active() || submodule_index != 0 || (main_module_index != 7 && main_module_index != 9))
+  if (!Mp_Active() || submodule_index != 0 || !Mp_IsPlayModule(main_module_index))
     return;
   assert(g_mp.resident == g_mp.leader);
 
@@ -1546,6 +1550,14 @@ void Mp_RunOtherPlayers(void (*control)(void)) {
       // leading it, so its next step there takes it on to the next area.
       if (g_mp.independent && Mp_KeepInOverworldArea() && g_mp.split_request < 0 &&
           Mp_MovesOnAtEdge(*Mp_PlayerRam(p, 0x5D))) {
+        g_mp.split_request = p;
+        g_mp.split_travel = 0;
+      }
+      // So does one on the tile that leads into a special area (Zora's
+      // domain, say) or out of it: the game only looks at the leader for
+      // that, so a teammate walked right over it, on into the cliffs.
+      if (g_mp.independent && g_mp.split_request < 0 && Mp_IsOverworldModule(main_module_index) &&
+          Mp_MovesOnAtEdge(*Mp_PlayerRam(p, 0x5D)) && Overworld_OnSpecialSwitchTile()) {
         g_mp.split_request = p;
         g_mp.split_travel = 0;
       }
@@ -1865,7 +1877,7 @@ bool Mp_ItemIconTiles(int p, uint16 out[4]) {
 
 static void Mp_ShowViewersItem() {
   g_mp_hud_swapped = false;
-  if (!Mp_Active() || (main_module_index != 7 && main_module_index != 9))
+  if (!Mp_Active() || !Mp_IsPlayModule(main_module_index))
     return;
   int v = -1;
   for (int p = 0; p < kMpMaxPlayers && v < 0; p++)
@@ -1990,7 +2002,7 @@ static bool Mp_LeavesRoom(uint8 m0, uint8 m1, uint8 s1) {
     return m1 != 14 || s1 == 10;  // (module 14: menus and maps, but the flute's map flies off)
   if (m1 == 7)
     return !(s1 == 3 || s1 == 4 || s1 == 5 || (s1 >= 9 && s1 <= 0x0d) || s1 == 0x16 || s1 == 0x17);
-  if (m1 == 9)
+  if (Mp_IsOverworldModule(m1))
     return !((s1 >= 9 && s1 <= 0x0c) || s1 == 0x2a);
   return true;
 }
@@ -2005,7 +2017,7 @@ static bool Mp_IsTravel(uint8 m0, uint8 m1, uint8 s1) {
     return s1 == 1 || s1 == 2 || s1 == 6 || s1 == 7 || s1 == 8 || s1 == 0x0e ||
            (s1 >= 0x10 && s1 <= 0x13) || s1 == 0x15;
   }
-  if (m1 == 9) {
+  if (Mp_IsOverworldModule(m1)) {
     // anything but opening doors, mirror warps, drowning, weathervane
     return s1 != 0 && !(s1 >= 0x09 && s1 <= 0x0c) && s1 != 0x23 && s1 != 0x2a && s1 != 0x2c && s1 != 0x2d;
   }
@@ -2026,7 +2038,7 @@ void Mp_RunRouting(void (*routing)(void)) {
   if (g_mp.exit_blocked_timer)
     g_mp.exit_blocked_timer--;
   // (Alone in this world in a co-op game too: the menu then still doesn't stop the world.)
-  if (g_mp.independent && (Mp_Active() || g_mp_coop) && (m0 == 7 || m0 == 9) && s0 == 0) {
+  if (g_mp.independent && (Mp_Active() || g_mp_coop) && Mp_IsPlayModule(m0) && s0 == 0) {
     routing();
     // Someone went through an exit: they continue in a world of their own.
     // So does a leader starting anything else that might take the world
@@ -2050,7 +2062,7 @@ void Mp_RunRouting(void (*routing)(void)) {
     }
     return;
   }
-  if (!g_mp.group_exits || !Mp_Active() || !((m0 == 7 || m0 == 9) && s0 == 0)) {
+  if (!g_mp.group_exits || !Mp_Active() || !(Mp_IsPlayModule(m0) && s0 == 0)) {
     routing();
     return;
   }
@@ -2153,6 +2165,6 @@ uint32 Mp_AreaKeyPublic() {
 }
 
 bool Mp_InStableGameplay() {
-  return (main_module_index == 7 || main_module_index == 9) && submodule_index == 0 &&
+  return Mp_IsPlayModule(main_module_index) && submodule_index == 0 &&
          g_mp.area_key != 0xffffffff;
 }

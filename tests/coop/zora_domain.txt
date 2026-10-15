@@ -1,0 +1,67 @@
+# Zora's domain is a "special" overworld area: the game plays it with its
+# overworld code under another module number (11). The co-op code took that
+# for a transition, so the other Links were not run there at all, a teammate
+# walked over the tile that leads in (the game only looks at the leader for
+# it) and worlds never merged back there.
+# The two Links start where Zora's domain lets out, at the top of its river.
+load 1
+run 30
+arrive ffff
+run 300
+poke a0 00
+poke a1 01
+join 2
+run 30
+hold 1 D
+hold 2 D
+run 90
+hold 1 -
+hold 2 -
+run 10
+expect_module 9
+expect_same 1 2
+# 1. The leader walks in with the teammate right behind: both arrive, in one
+# world, inside the area, and the teammate is run (it walks on).
+hold 1 U
+run 20
+hold 2 U
+run 220
+expect_module 11
+expect_same 1 2
+check_area
+hold 1 -
+run 120
+hold 2 -
+check_area
+expect_same 1 2
+# (the teammate walked on while the leader stood: its y is below 768, the leader's above)
+expect_pram 1 21 03
+expect_pram 2 21 02
+# 2. Both walk out again, back to the river: one world, inside the area.
+hold 1 D
+hold 2 D
+run 300
+hold 1 -
+hold 2 -
+run 30
+expect_module 9
+expect_same 1 2
+check_area
+# 3. The teammate goes in first while the leader stands still: it gets a
+# world of its own and enters alone; the leader follows and the worlds merge.
+hold 2 U
+run 240
+hold 2 -
+expect_apart 1 2
+view 2
+expect_module 11
+view 1
+expect_module 9
+check_area
+hold 1 U
+run 240
+hold 1 -
+run 60
+expect_module 11
+expect_same 1 2
+check_area

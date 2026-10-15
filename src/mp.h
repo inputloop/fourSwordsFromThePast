@@ -149,6 +149,14 @@ void Mp_SetInputs(const uint16 *inputs);
 void Mp_OnStateLoaded();
 void Mp_SaveLoad(SaveLoadFunc *func, void *ctx);
 
+// The modules the game plays in: a dungeon room (7), the overworld (9) and
+// a special overworld area (11: Zora's domain, the master sword's grove,
+// under the bridge and the lumberjacks' tree). A special area runs the
+// overworld's own code with the same submodules, so it is the overworld to
+// the co-op code.
+static inline bool Mp_IsPlayModule(uint8 m) { return m == 7 || m == 9 || m == 11; }
+static inline bool Mp_IsOverworldModule(uint8 m) { return m == 9 || m == 11; }
+
 // Context access
 void Mp_SwapTo(int p);
 void Mp_SwapToLeader();

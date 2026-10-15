@@ -1971,7 +1971,7 @@ static void DrawPings() {
     if (view->player < 0 || !Inst_PlayerPlace(view->player, &me))
       continue;
     uint8 m = Inst_PlayerViewModule(view->player);
-    if (m != 7 && m != 9)
+    if (!Mp_IsPlayModule(m))
       continue;
     bool is3d = Hd3d_PaneIs3D(v);
     for (int q = 0; q < kMpMaxPlayers; q++) {
@@ -2252,7 +2252,7 @@ static void DrawNameTags() {
       continue;
     // (This pane's world, not the one the sound comes from.)
     uint8 m = Inst_PlayerViewModule(view->player);
-    if (m != 7 && m != 9)
+    if (!Mp_IsPlayModule(m))
       continue;
     int fp = PaneFirstPersonPlayer(v);
     for (int q = 0; q < kMpMaxPlayers; q++) {

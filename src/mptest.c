@@ -18,8 +18,11 @@
 //   pram <p> <hexaddr> <hexval>  change a byte of player p's own Link state
 //   poke <hexaddr> <hexval>  change a RAM byte (shared progress spreads to every world)
 //   peek <hexaddr> [n]  print RAM bytes
+//   poke <hexaddr> <hexval>  change a byte of the viewed world's RAM
 //   receive <hexitem>   the viewed player gets an item, as from a chest
 //   enter <hexroom>     go into a room through the game's first entrance to it
+//   special <hexroom>   into a special overworld area (182: Zora's domain) as from its screen
+//   arrive <hexroom>    out onto the overworld through that room's exit (ffff: Zora's domain's)
 //   message <hexid>     open a text box
 //   spawn <type> <p> [dx]  spawn sprite type (hex) dx (default 24) pixels right of player p
 //   clearsprites        remove all enemies
@@ -1711,11 +1714,17 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         if (Inst_OfPlayer(p) < 0)
           continue;
         SwitchToPlayer(p);
-        if (main_module_index != 9 || submodule_index != 0 || g_mp.p[p].downed)
+        if (!Mp_IsOverworldModule(main_module_index) || submodule_index != 0 || g_mp.p[p].downed)
           continue;
         int a = BYTE(overworld_area_index) & 0x3f, size = kOverworldMapIsSmall[a] ? 512 : 1024;
         int dx = Mp_PlayerX(p) - kOverworld_OffsetBaseX[a], dy = Mp_PlayerY(p) - kOverworld_OffsetBaseY[a];
-        if (dx < -8 || dx > size + 8 || dy < -16 || dy > size + 8) {
+        int size_y = size;
+        if (main_module_index == 11) {  // a special area: the part the camera may show
+          dx = Mp_PlayerX(p) - ow_scroll_vars0.xstart, dy = Mp_PlayerY(p) - ow_scroll_vars0.ystart;
+          size = ow_scroll_vars0.xend - ow_scroll_vars0.xstart + 256;
+          size_y = ow_scroll_vars0.yend - ow_scroll_vars0.ystart + 224;
+        }
+        if (dx < -8 || dx > size + 8 || dy < -16 || dy > size_y + 8) {
           printf("FAIL: P%d at (%d,%d) is outside area %02x at frame %d\n", p + 1, Mp_PlayerX(p), Mp_PlayerY(p), a, frame);
           g_failures++;
         }
@@ -2310,6 +2319,24 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ui_HandleKey(key, true);
     } else if (!strcmp(cmd, "type")) {
       Ui_HandleText(arg1);
+    } else if (!strcmp(cmd, "poke")) {
+      // poke <hexaddr> <hexval>: change a byte of the viewed world's RAM
+      g_ram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
+    } else if (!strcmp(cmd, "arrive")) {
+      // arrive <hexroom>: out onto the overworld through that room's exit
+      // (ffff: where Zora's domain lets out, at the top of its river)
+      dungeon_room_index = strtol(arg1, NULL, 16);
+      main_module_index = 8;
+      submodule_index = 0;
+    } else if (!strcmp(cmd, "special")) {
+      // special <hexroom>: into a special overworld area as from the screen it
+      // belongs to (180 master sword grove, 181 under the bridge, 182 Zora's
+      // domain, 189 the lumberjacks' / Lost woods' part)
+      dungeon_room_index = strtol(arg1, NULL, 16);
+      BYTE(overworld_screen_trans_dir_bits) = BYTE(overworld_screen_trans_dir_bits2) = link_direction = 8;
+      WORD(byte_7E069C) = WORD(overworld_screen_transition) = 0;  // up
+      submodule_index = 23;
+      main_module_index = 11;
     } else if (!strcmp(cmd, "expect_thrown")) {
       // expect_thrown <n>: n thrown or carried pieces of scenery (sprite EC)
       // exist in the viewed world, every one of a kind that is drawn (0-8,

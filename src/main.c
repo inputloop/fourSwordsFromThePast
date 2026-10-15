@@ -1102,7 +1102,7 @@ static void RumbleForEvents() {
       uint8 m = Inst_PlayerModule(p);
       if (fired) {
         prev[i].beat = now;
-      } else if (!downed && hp > 0 && hp < limit && hp < link_health_capacity && (m == 7 || m == 9) &&
+      } else if (!downed && hp > 0 && hp < limit && hp < link_health_capacity && Mp_IsPlayModule(m) &&
                  now - prev[i].beat > 1400) {
         Rumble(i, 0x2400, 0, 70);
         prev[i].beat = now;
