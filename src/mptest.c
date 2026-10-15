@@ -169,6 +169,7 @@
 //   waitoffline / waitclientstate <n>  tick until offline / the client state is n (4 = reconnecting) (max 25s)
 //   name <name>         this computer's player name online
 //   expect_name <name>  it is that (also as set in the menu: Multiplayer > Player name)
+//   expect_thrown <n>   n carried or thrown pieces of scenery exist, all of a drawable kind
 //   keypress <backspace|enter|escape> [times]  a keyboard key in the menu
 //   netblackout <0|1>   pull the network cable out / put it back (nothing sent or received)
 //   kick <p>            the host removes the remote player in seat p
@@ -2309,6 +2310,22 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ui_HandleKey(key, true);
     } else if (!strcmp(cmd, "type")) {
       Ui_HandleText(arg1);
+    } else if (!strcmp(cmd, "expect_thrown")) {
+      // expect_thrown <n>: n thrown or carried pieces of scenery (sprite EC)
+      // exist in the viewed world, every one of a kind that is drawn (0-8,
+      // but 3: that one draws Link's head)
+      int n = 0, bad = 0;
+      for (int k = 0; k < 16; k++) {
+        if (sprite_state[k] && sprite_type[k] == 0xEC) {
+          n++;
+          if (sprite_C[k] == 3 || sprite_C[k] > 8)
+            bad++, printf("thrown item %d is of kind %d\n", k, sprite_C[k]);
+        }
+      }
+      if (n != atoi(arg1) || bad) {
+        printf("FAIL: %d thrown items (%d of no drawable kind), expected %s at frame %d\n", n, bad, arg1, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "expect_name")) {
       // expect_name <name>: this computer's player name online (the menu's)
       if (strcmp(Session_GetName(), arg1)) {

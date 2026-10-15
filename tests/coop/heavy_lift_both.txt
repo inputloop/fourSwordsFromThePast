@@ -1,0 +1,77 @@
+# Two Links lift the same big rock at once, each the other's helper (both
+# have the power glove; the rock needs the titan's mitt, or two gloves). One
+# of them gets the rock, the other stops short with empty hands: the take
+# comes six frames into the lifting animation, and the second Link's take
+# found the ground instead and carried a garbage piece, drawn as Link's head.
+load 1
+run 30
+hold 1 D
+run 420
+hold 1 -
+join 2
+run 30
+clearsprites
+receive 1b
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_pram 1 5d 00
+pos 1 1768 1192
+pos 2 1768 1192
+pram 1 2f 00
+pram 2 2f 00
+run 30
+expect_instances 1
+expect_thrown 0
+hold 1 A
+hold 2 A
+run 2
+hold 1 -
+hold 2 -
+run 90
+expect_thrown 1
+expect_pram 1 308 80
+expect_pram 2 308 00
+expect_pram 2 5d 00
+run 60
+expect_thrown 1
+# The same the other way round: P2 is processed after P1 each frame, so a
+# press a frame earlier makes P2 the one that takes it.
+load 1
+run 30
+hold 1 D
+run 420
+hold 1 -
+join 2
+run 30
+clearsprites
+receive 1b
+run 200
+hold 1 A
+run 4
+hold 1 -
+run 60
+hold 1 A
+run 4
+hold 1 -
+run 60
+expect_pram 1 5d 00
+pos 1 1768 1192
+pos 2 1768 1192
+pram 1 2f 00
+pram 2 2f 00
+run 30
+hold 2 A
+run 1
+hold 1 A
+run 2
+hold 1 -
+hold 2 -
+run 90
+expect_thrown 1

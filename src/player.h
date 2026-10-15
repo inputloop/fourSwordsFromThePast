@@ -199,6 +199,7 @@ void TileDetect_MainHandler(uint8 item);
 bool Link_PermissionForSloshSounds();
 bool PushBlock_AttemptToPushTheBlock(uint8 what, uint16 x, uint16 y);
 uint8 Link_HandleLiftables();
+bool Link_LiftableStillHere();
 void HandleNudging(int8 arg_r0);
 void TileBehavior_HandleItemAndExecute(uint16 x, uint16 y);
 uint8 PushBlock_GetTargetTileFlag(uint16 x, uint16 y);

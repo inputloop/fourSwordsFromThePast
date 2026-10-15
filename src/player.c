@@ -3572,6 +3572,20 @@ void Link_APress_LiftCarryThrow() {  // 87b1ca
         some_animation_timer = kLiftTab0[player_handler_timer];
         some_animation_timer_steps = kLiftTab1[player_handler_timer];
         if (player_handler_timer == 6) {
+          // Co-op: a teammate lifting the same thing (both started at once,
+          // each helping the other) may have taken it meanwhile. Then there
+          // is nothing here to lift, and this Link stops short. (The game
+          // would carry whatever tile is there now, drawn as a garbage
+          // piece: Link's head, say.)
+          if (g_mp_coop && !Link_LiftableStillHere()) {
+            link_picking_throw_state = 0;
+            link_state_bits = 0;
+            link_speed_setting = 0;
+            link_cant_change_direction &= ~1;
+            player_handler_timer = 0;
+            some_animation_timer_steps = 0;
+            return;
+          }
           BYTE(dung_secrets_unk1) = 0;
           Point16U pt;
           uint8 what = (player_is_indoors) ? Dungeon_LiftAndReplaceLiftable(&pt) : Overworld_HandleLiftableTiles(&pt);
@@ -5542,6 +5556,26 @@ getout:
   if (tiledetect_chest & 1)
     action = 5;
   return action;
+}
+
+// Is the kind of liftable thing Link started lifting still in front of him?
+// (Co-op: a teammate may have lifted it meanwhile.) The strength rule is not
+// applied again: a helper had to be there when the lift started, not now.
+bool Link_LiftableStillHere() {
+  static const uint8 kGetBestActionToPerformOnTile_b[7] = { 2, 3, 1, 4, 0, 5, 6 };
+  tiledetect_pit_tile = 0;
+  TileDetect_ResetState();
+  uint16 y0 = (link_y_coord + kGetBestActionToPerformOnTile_y[link_direction_facing >> 1]) & tilemap_location_calc_mask;
+  uint16 y1 = (link_y_coord + 20) & tilemap_location_calc_mask;
+  uint16 x0 = ((link_x_coord + kGetBestActionToPerformOnTile_x[link_direction_facing >> 1]) & tilemap_location_calc_mask) >> 3;
+  uint16 x1 = ((link_x_coord + 8) & tilemap_location_calc_mask) >> 3;
+  TileDetection_Execute(x0, y0, 1);
+  TileDetection_Execute(x1, y1, 2);
+  if (player_is_indoors) {
+    uint8 a = Dungeon_CheckForAndIDLiftableTile();
+    return a != 0xff && kGetBestActionToPerformOnTile_b[a & 0xf] == interacting_with_liftable_tile_x1;
+  }
+  return (tiledetect_read_something & 1) && (interacting_with_liftable_tile_x2 >> 1) == interacting_with_liftable_tile_x1;
 }
 
 void HandleNudging(int8 arg_r0) {  // 87d485
