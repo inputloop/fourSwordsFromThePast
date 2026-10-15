@@ -192,7 +192,7 @@ to the same room with your slot name.
 
 **What you need**
 
-- This game, set up as described under [Quick start](#quick-start-linux--macos)
+- This game, set up as described under [Getting the game](#getting-the-game)
   or [Windows](#windows).
 - On the computer that makes the multiworld: [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases)
   0.6.4 or newer (the Launcher), and `fsotp.apworld`, the Archipelago world
@@ -534,22 +534,19 @@ The code is in `src/hd3d*.c` (scene, sprites, camera input, drawing),
 camera-relative movement). `tools/readme_shots.sh` makes the screenshots
 above from your own ROM.
 
-## Quick start (Linux / macOS)
+## Getting the game
 
-```sh
-sudo apt-get install libsdl2-dev python3-pil python3-yaml   # or: pip install -r requirements.txt
-cp /path/to/your/Legend_of_Zelda_USA.sfc zelda3.sfc        # SHA1 6d4f10a8b10e10dbe624cb23cf03b88bb8252973
-make -j                                                     # builds ./zelda3 and extracts zelda3_assets.dat
-./zelda3
-```
+Every push builds the game for Windows, macOS and Linux: the artifacts of
+the latest [Build run](../../actions/workflows/build.yaml) (log in to GitHub
+to download them). You need your own ROM of *A Link to the Past (USA)*
+(`.sfc`/`.smc`; SHA1 `6d4f10a8b10e10dbe624cb23cf03b88bb8252973`): the game's
+graphics, music and text are extracted from it once, into `zelda3_assets.dat`.
 
-## Windows
+### Windows
 
-1. Download the `zelda3-windows-<commit>` artifact from the latest
-   [Build run](../../actions/workflows/build.yaml) and **unzip it** (running the
-   exe from inside the zip won't work).
-2. Copy your own ROM of *A Link to the Past (USA)* (`.sfc`/`.smc`, any name)
-   into the folder.
+1. Download the `zelda3-windows-<commit>` artifact and **unzip it** (running
+   the exe from inside the zip won't work).
+2. Copy your ROM (any name) into the folder.
 3. Start `zelda3.exe` and choose **Extract now** (or run `extract_assets.bat`).
    This needs [Python 3](https://www.python.org/downloads/) once; tick
    "Add python.exe to PATH" when installing it.
@@ -557,34 +554,62 @@ make -j                                                     # builds ./zelda3 an
 To build it yourself: `run_with_tcc.bat` (downloads its own compiler), Visual
 Studio (`Zelda3.sln`), or `tools/build_windows_mingw.sh` from Linux.
 
-## macOS
+### macOS
 
-The `zelda3-macos-<commit>` artifact from the latest
-[Build run](../../actions/workflows/build.yaml) runs on macOS 11 and later,
-Intel and Apple Silicon, with nothing to install: SDL2 is built into it.
+The `zelda3-macos-<commit>` artifact runs on macOS 11 (Big Sur) and later,
+on Intel and Apple Silicon Macs, with nothing to install: SDL2 is built in.
 
-1. Download it, unzip it, and open the `zelda3-macos.tar.gz` inside (a
-   double-click unpacks it into a folder).
-2. Copy your own ROM of *A Link to the Past (USA)* (`.sfc`/`.smc`) into that
-   folder.
-3. In Terminal, in that folder (drag the folder onto the Terminal window after
-   typing `cd `), extract the game's assets once and start the game:
+1. Download it and unzip it. Inside is `zelda3-macos.tar.gz`: double-click
+   it, and it unpacks into a folder (`zelda3-macos`).
+2. Copy your ROM into that folder, named `zelda3.sfc`.
+3. Open Terminal (Applications > Utilities), type `cd ` (with the space),
+   drag the folder onto the Terminal window, and press Return. Then extract
+   the game's assets once and start the game:
 
    ```sh
-   python3 -m pip install -r requirements.txt     # Pillow and PyYAML, once
-   python3 assets/restool.py --extract-from-rom -r "your rom.sfc"
+   python3 -m pip install --user -r requirements.txt   # Pillow and PyYAML, once
+   python3 assets/restool.py --extract-from-rom          # writes zelda3_assets.dat
    ./zelda3
    ```
 
-   macOS offers to install its command line tools (which bring `python3`)
-   the first time, if they are missing.
+   The first `python3` on a fresh Mac offers to install Apple's command line
+   tools, which bring it; say yes and run the line again. (If `pip` refuses
+   with "externally managed environment", add `--break-system-packages`.)
+   After that, `./zelda3` in that folder is all it takes, or double-click
+   `zelda3` in the Finder.
 
-If macOS says the app "cannot be opened because the developer cannot be
-verified", it is the download quarantine: run
-`xattr -d com.apple.quarantine zelda3` in that folder once, or right-click
-`zelda3` and choose *Open*. If an older download complains that
-`libSDL2-2.0.0.dylib` is not loaded, get a build newer than this note (it
-needed Homebrew's SDL2; the current one doesn't).
+If macOS says `zelda3` "cannot be opened because the developer cannot be
+verified", that is the download quarantine (the build is not notarized by
+Apple): right-click `zelda3`, choose *Open*, and confirm; or run
+`xattr -d com.apple.quarantine zelda3` in the folder once. If an older
+download aborts with `Library not loaded: ...libSDL2-2.0.0.dylib`, it was
+built against Homebrew's SDL2: take a build newer than October 15, 2026,
+which has SDL2 built in.
+
+To build it yourself: install Xcode's command line tools
+(`xcode-select --install`), then `brew install sdl2` (or MacPorts' `libsdl2`),
+and follow the Linux steps below with `brew` in place of `apt-get`.
+
+### Linux
+
+The `zelda3-linux-<commit>` artifact needs SDL2 (`libsdl2-2.0-0`, installed on
+most distributions) and Python 3 with Pillow and PyYAML for the extraction:
+
+```sh
+sudo apt-get install libsdl2-2.0-0 python3-pil python3-yaml   # or: pip install -r requirements.txt
+cp /path/to/your/Legend_of_Zelda_USA.sfc zelda3.sfc
+python3 assets/restool.py --extract-from-rom
+./zelda3
+```
+
+Or build it from the sources:
+
+```sh
+sudo apt-get install libsdl2-dev python3-pil python3-yaml
+cp /path/to/your/Legend_of_Zelda_USA.sfc zelda3.sfc
+make -j                                      # builds ./zelda3 and extracts zelda3_assets.dat
+./zelda3
+```
 
 The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 
