@@ -46,8 +46,8 @@ Players can drop in and drop out at any time.
   Link stands still and their seat is kept for two minutes. Their game says
   "reconnecting" and keeps knocking; once through, it downloads the game again
   and they carry on as the same player. Restarting the game and joining again
-  with the same name works too (give everybody their own `PlayerName` in
-  `zelda3.ini`). After two minutes the seat is given up.
+  with the same name works too (give everybody their own name: *Multiplayer >
+  Player name*, or `PlayerName` in `zelda3.ini`). After two minutes the seat is given up.
 - **Keep a copy of the host's game**: when you play in someone else's game
   (also after leaving it), *Multiplayer > Keep a copy in* saves its progress
   into one of your own three files (left/right picks the file; a file in use

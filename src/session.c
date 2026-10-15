@@ -1883,6 +1883,10 @@ void Session_SetName(const char *player_name) {
   snprintf(g_s.name, sizeof(g_s.name), "%s", player_name && player_name[0] ? player_name : "Link");
 }
 
+const char *Session_GetName(void) {
+  return g_s.name;
+}
+
 static void SeatName(SessionPlayer *sp, const char *name) {
   if (sp->local == 0)
     snprintf(sp->name, sizeof(sp->name), "%s", name);

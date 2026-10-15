@@ -625,7 +625,8 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 
 - Keyboard: arrows, X = A, Z = B, S = X, A = Y, Enter = Start, Right Shift = Select.
 - `Esc` (or the controller's Guide button, or Back+Start) opens the menu:
-  Multiplayer, Video and HD options (widescreen 16:9/16:10/18:9, HD world map,
+  Multiplayer (your player name, hosting and joining, the players),
+  Video and HD options (widescreen 16:9/16:10/18:9, HD world map,
   smooth scaling, no sprite flicker, 2D-HD look, ...), Sound (the volumes)
   and Gameplay options.
 - Extra controllers press START to drop in as P2-P4.

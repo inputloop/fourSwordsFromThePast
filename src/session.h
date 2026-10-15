@@ -122,6 +122,7 @@ bool Session_Host(uint16 port, bool use_upnp);
 // address: a room code, "host", "host:port" or "a.b.c.d:port".
 bool Session_Join(const char *address);
 void Session_SetName(const char *player_name);
+const char *Session_GetName(void);
 // The four seats: who is in them, how far away and whether they are back.
 void Session_GetPlayers(SessionPlayer out[kMpMaxPlayers]);
 // Host: removes the remote player in this seat (and that computer's other

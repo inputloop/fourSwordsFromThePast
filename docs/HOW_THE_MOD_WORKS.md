@@ -352,7 +352,7 @@ Everything can be changed from an in-game menu that is drawn on top of the game.
 
 | Menu screen | What it does |
 | --- | --- |
-| Multiplayer | Host a game, join by address, find LAN games, add or remove local players, friendly fire, name tags, color-blind friendly colors |
+| Multiplayer | Your player name, host a game, join by address, find LAN games, add or remove local players, friendly fire, name tags, color-blind friendly colors |
 | Video and HD | Widescreen (16:9, 16:10, 18:9), HD world map, smooth scaling, window size, fullscreen, the 2D-HD look and its settings, the 3D view and its settings |
 | Sound | The master, music and sound effect volumes, and everyone's sound effects on the couch |
 | Gameplay | Randomizer, starting with all items, the Four Swords story and title, plus the original project's extras (switch items with L/R, bug fixes and more) |
@@ -393,7 +393,7 @@ The game only runs what is on its own screen and a little around it (enemies fur
 
 ## How it is tested and built
 
-The mod has 182 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
+The mod has 183 automatic tests that play the game with no window, by following written scripts. They run with `tests/run_coop_tests.sh`.
 
 **The test runner.** Running `zelda3 --mptest <script>` plays the game from a text file of commands such as "load save 2", "Player 2 holds Up", "run 300 frames" and "expect Player 2 to be downed". It can also take screenshots. The commands are listed at the top of `src/mptest.c`.
 

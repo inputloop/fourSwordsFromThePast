@@ -199,6 +199,7 @@ enum {
   kScreen_None,
   kScreen_Main,
   kScreen_Multiplayer,
+  kScreen_Name,
   kScreen_JoinAddress,
   kScreen_Seed,
   kScreen_Lan,
@@ -221,6 +222,8 @@ enum {
   kAct_Right,
 };
 
+enum { kNameMax = 10 };  // letters of a player name (the picker has an item per letter)
+
 typedef struct MenuLine {
   char label[48];
   char value[48];
@@ -239,6 +242,8 @@ static struct {
   uint16 prev_inputs[4];
   int repeat_ctr;
   char join_addr[64];
+  char name[24];                // this computer's player name (g_config.mp_player_name points here)
+  char name_edit[kNameMax + 1];  // the one being typed or picked
   uint32 seed_edit;     // the seed being typed in
   char seed_note[64];   // the result of writing a spoiler log
   bool use_upnp;
@@ -320,7 +325,7 @@ static void Goto(int screen) {
   g_ui.copy_confirm = false;
   g_ui.own_files_read = false;
   g_ui.kick_confirm = 0;
-  if (screen == kScreen_JoinAddress || screen == kScreen_Seed || screen == kScreen_ApEdit)
+  if (screen == kScreen_JoinAddress || screen == kScreen_Seed || screen == kScreen_ApEdit || screen == kScreen_Name)
     SDL_StartTextInput();
   else
     SDL_StopTextInput();
@@ -505,6 +510,11 @@ static void ScreenMultiplayer() {
     else
       snprintf(buf, sizeof(buf), "Ping %d ms, buffer %d", st->ping_ms, st->frames_buffered);
     Label(buf);
+  }
+  Item("Player name", g_ui.name);
+  if (Act() == kAct_Select) {
+    snprintf(g_ui.name_edit, sizeof(g_ui.name_edit), "%.*s", kNameMax, g_ui.name);  // (a longer one from the file is cut)
+    Goto(kScreen_Name);
   }
   snprintf(buf, sizeof(buf), "%d of %d", Inst_NumJoined(), kMpMaxPlayers);
   Item("Players", buf);
@@ -726,6 +736,59 @@ static void ScreenSeed() {
   if (Act() == kAct_Select)
     Goto(kScreen_Gameplay);
   snprintf(g_ui.footer, sizeof(g_ui.footer), g_ui.seed_edit <= kRando_RandomSeed ? "Seeds start at 00000002" : "Same seed = same item places");
+}
+
+// The player name: typed (or pasted), or picked a letter at a time with
+// Left/Right on a controller. Done keeps it: it is sent when you next host
+// or join (the host's own shows up right away).
+static const char kNameLetters[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.";
+
+static void NameDone() {
+  char *n = g_ui.name_edit;
+  size_t len = strlen(n);
+  while (len && n[len - 1] == ' ')
+    n[--len] = 0;
+  snprintf(g_ui.name, sizeof(g_ui.name), "%s", len ? n : "Link");
+  g_config.mp_player_name = g_ui.name;
+  Session_SetName(g_ui.name);
+  g_ui.dirty_settings = true;
+  Goto(kScreen_Multiplayer);
+}
+
+static void ScreenName() {
+  snprintf(g_ui.title, sizeof(g_ui.title), "PLAYER NAME");
+  Label("Type it, or pick each letter with");
+  Label("  Left/Right. Up to 10 letters.");
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%s%s", g_ui.name_edit, (SDL_GetTicks() / 400) & 1 ? "_" : " ");
+  Label(buf);
+  size_t len = strlen(g_ui.name_edit);
+  for (int i = 0; i < kNameMax; i++) {
+    char c = (size_t)i < len ? g_ui.name_edit[i] : ' ';
+    const char *at = strchr(kNameLetters, c);
+    int k = at ? (int)(at - kNameLetters) : 0, nk = (int)strlen(kNameLetters);
+    char label[16], value[8];
+    snprintf(label, sizeof(label), "Letter %d", i + 1);
+    snprintf(value, sizeof(value), "< %c >", c == ' ' ? '_' : c);
+    Item(label, value);
+    int a = Act();
+    if (a == kAct_Left || a == kAct_Right) {
+      k = (k + (a == kAct_Right ? 1 : nk - 1)) % nk;
+      // (Letters before this one that were empty become spaces.)
+      for (size_t j = len; j < (size_t)i; j++)
+        g_ui.name_edit[j] = ' ';
+      g_ui.name_edit[i] = kNameLetters[k];
+      if ((size_t)i >= len)
+        g_ui.name_edit[i + 1] = 0;
+    }
+  }
+  Item("Done", NULL);
+  if (Act() == kAct_Select) {
+    NameDone();
+    return;
+  }
+  if (Session_GetStatus()->mode == kSessionClient)
+    snprintf(g_ui.footer, sizeof(g_ui.footer), "Shown to the others when you next join");
 }
 
 static void ScreenJoinAddress() {
@@ -1332,6 +1395,7 @@ static void BuildScreen() {
   case kScreen_Main: ScreenMain(); break;
   case kScreen_Multiplayer: ScreenMultiplayer(); break;
   case kScreen_JoinAddress: ScreenJoinAddress(); break;
+  case kScreen_Name: ScreenName(); break;
   case kScreen_Seed: ScreenSeed(); break;
   case kScreen_Lan: ScreenLan(); break;
   case kScreen_Video: ScreenVideo(); break;
@@ -1359,6 +1423,9 @@ void Ui_Init(const UiHostFuncs *host) {
   g_ui.capture_button = -1;
   if (g_config.mp_last_join)
     snprintf(g_ui.join_addr, sizeof(g_ui.join_addr), "%s", g_config.mp_last_join);
+  snprintf(g_ui.name, sizeof(g_ui.name), "%s", g_config.mp_player_name && g_config.mp_player_name[0] ?
+           g_config.mp_player_name : "Link");
+  g_config.mp_player_name = g_ui.name;
   BuildFont();
 }
 
@@ -1580,7 +1647,7 @@ void Ui_Update(uint16 *local_inputs, uint16 fallback) {
     if (g_ui.screen == kScreen_Main)
       Goto(kScreen_None);
     else
-      Goto(g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Lan ||
+      Goto(g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Lan || g_ui.screen == kScreen_Name ||
            g_ui.screen == kScreen_Archipelago ? kScreen_Multiplayer :
            g_ui.screen == kScreen_ApEdit ? kScreen_Archipelago :
            g_ui.screen == kScreen_Hd2d || g_ui.screen == kScreen_Hd3d ? kScreen_Video : kScreen_Main);
@@ -1613,7 +1680,7 @@ bool Ui_HandleKey(int key, bool pressed) {
   if (key == SDLK_ESCAPE) {
     if (g_ui.screen == kScreen_Seed)
       Goto(kScreen_Gameplay);
-    else if (g_ui.screen == kScreen_JoinAddress)
+    else if (g_ui.screen == kScreen_JoinAddress || g_ui.screen == kScreen_Name)
       Goto(kScreen_Multiplayer);
     else if (g_ui.screen == kScreen_ApEdit)
       Goto(kScreen_Archipelago);
@@ -1631,6 +1698,22 @@ bool Ui_HandleKey(int key, bool pressed) {
       }
     } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
       Goto(kScreen_Archipelago);
+    } else if (key == SDLK_v && (SDL_GetModState() & KMOD_CTRL)) {
+      char *clip = SDL_GetClipboardText();
+      if (clip) {
+        Ui_HandleText(clip);
+        SDL_free(clip);
+      }
+    }
+    return true;  // swallow other keys while typing
+  }
+  if (g_ui.screen == kScreen_Name) {
+    size_t n = strlen(g_ui.name_edit);
+    if (key == SDLK_BACKSPACE) {
+      if (n)
+        g_ui.name_edit[n - 1] = 0;
+    } else if (key == SDLK_RETURN || key == SDLK_KP_ENTER) {
+      NameDone();
     } else if (key == SDLK_v && (SDL_GetModState() & KMOD_CTRL)) {
       char *clip = SDL_GetClipboardText();
       if (clip) {
@@ -1703,6 +1786,14 @@ void Ui_HandleText(const char *text) {
       }
     }
     v[n] = 0;
+    return;
+  }
+  if (g_ui.screen == kScreen_Name) {
+    size_t n = strlen(g_ui.name_edit);
+    for (; *text && n < kNameMax; text++)
+      if (strchr(kNameLetters, *text) && !(n == 0 && *text == ' '))
+        g_ui.name_edit[n++] = *text;
+    g_ui.name_edit[n] = 0;
     return;
   }
   if (g_ui.screen != kScreen_JoinAddress)

@@ -168,6 +168,8 @@
 //   waitseat <p> <open|playing|reconnecting>  tick until seat p is so (max 25s)
 //   waitoffline / waitclientstate <n>  tick until offline / the client state is n (4 = reconnecting) (max 25s)
 //   name <name>         this computer's player name online
+//   expect_name <name>  it is that (also as set in the menu: Multiplayer > Player name)
+//   keypress <backspace|enter|escape> [times]  a keyboard key in the menu
 //   netblackout <0|1>   pull the network cable out / put it back (nothing sent or received)
 //   kick <p>            the host removes the remote player in seat p
 //   expect_seat <p> <open|playing|reconnecting> [name] / expect_myseat <p> / expect_client_state <n>
@@ -2300,8 +2302,19 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ui_Update(none, bit);
         Ui_Update(none, 0);
       }
+    } else if (!strcmp(cmd, "keypress")) {
+      // keypress <backspace|enter|escape> [times]: a keyboard key in the menu (Ui_HandleKey)
+      int key = !strcmp(arg1, "backspace") ? SDLK_BACKSPACE : !strcmp(arg1, "enter") ? SDLK_RETURN : SDLK_ESCAPE;
+      for (int n = arg2[0] ? atoi(arg2) : 1; n > 0; n--)
+        Ui_HandleKey(key, true);
     } else if (!strcmp(cmd, "type")) {
       Ui_HandleText(arg1);
+    } else if (!strcmp(cmd, "expect_name")) {
+      // expect_name <name>: this computer's player name online (the menu's)
+      if (strcmp(Session_GetName(), arg1)) {
+        printf("FAIL: the player name is '%s', expected '%s' at frame %d\n", Session_GetName(), arg1, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "expect_apsettings")) {
       static const char *const kDl[3] = { "auto", "on", "off" };
       const char *server = g_ap_settings.server[0] ? g_ap_settings.server : "-";

@@ -1,0 +1,32 @@
+# The player name in the menu (Multiplayer > Player name): typed on the
+# keyboard (Backspace, Enter), or picked a letter at a time with Left/Right
+# (for a controller) and Done. It is this computer's name online; left
+# empty it is "Link". Leaving the screen with Esc keeps the old name. (The
+# test harness starts as "Tester".)
+load 2
+run 30
+expect_name Tester
+menu
+key down
+key enter
+key enter
+keypress backspace 4
+type Zelda
+keypress enter
+expect_name Zelda
+# Back in, the 6th letter picked: one step right from empty is A; Done.
+key enter
+key down 5
+key right
+key down 5
+key enter
+expect_name ZeldaA
+# Esc keeps the old name; cleared and left empty, it is Link.
+key enter
+type Nobody
+keypress escape
+expect_name ZeldaA
+key enter
+keypress backspace 10
+keypress enter
+expect_name Link
