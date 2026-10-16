@@ -64,6 +64,7 @@ fault shows it (=sh tests/recipe/run.sh --prove-red=).
 | the books | two game books, one Markdown file each | =docs/books/=, =tools/books.py= |
 | the models | first-person models, relations, words | =CONTEXT-MODELS/= |
 | the campaign | a composition written as a C4 change | =mods/CAMPAIGN-example.assy= |
+| the Switch | a build option with its own set of mods (=make switch=) | =src/platform/switch/=, =mods/switch.cfg= |
 
 * The ground: build once, test once
 

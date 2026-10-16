@@ -143,6 +143,17 @@ jobs:
         path: build-windows/dist/
         if-no-files-found: error
 
+  build-switch:
+    # The Nintendo Switch build: built here so it keeps building, not shipped (no artifact).
+    # It carries its own set of mods (mods/switch.cfg). Untested on hardware.
+    name: on Nintendo Switch (devkitPro; built, not shipped)
+    runs-on: ubuntu-latest
+    container: devkitpro/devkita64
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build (its own mods, mods/switch.cfg)
+      run: make switch -j$(nproc)
+
   archipelago:
     name: Archipelago client
     runs-on: ubuntu-latest

@@ -41,6 +41,12 @@ $(RES): src/platform/win32/zelda3.rc
 books:
 	$(PYTHON) tools/books.py build
 
+# The Nintendo Switch build (src/platform/switch), with its own set of mods (mods/switch.cfg).
+# Needs devkitPro (libnx, switch-sdl2); its container image works: devkitpro/devkita64.
+.PHONY: switch
+switch:
+	$(MAKE) -C src/platform/switch
+
 zelda3_assets.dat:
 	@echo "Extracting game resources"
 	$(PYTHON) assets/restool.py --extract-from-rom

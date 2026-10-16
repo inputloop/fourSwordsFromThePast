@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Build-time mods for Four Swords of the Past. The rules are in mods/SPEC.md (clauses M1-M18).
 
-usage: python3 tools/mods.py [--root DIR] COMMAND
+usage: python3 tools/mods.py [--root DIR] [--cfg FILE] COMMAND
+  --cfg FILE         read your choices from FILE instead of mods.cfg (a platform's own set,
+                     e.g. mods/switch.cfg) (M23)
   write              make src/mods_build.h from the composition (M10, M11)
   write-default      make src/mods_default.h: the shipped composition, for builds without Python (M21)
   show               the composition in words (M12)
@@ -17,6 +19,8 @@ import fnmatch, os, re, sys, zlib
 
 class Refusal(Exception):
     pass
+
+CFG = None  # --cfg: a composition file in place of mods.cfg (M23)
 
 def read_catalog(root):  # M1
     mods, owners = [], {}
@@ -80,7 +84,7 @@ def compose(root):
     for nm in names:
         if nm not in default:
             raise Refusal(f'mods/default.cfg does not say whether {nm} is on or off')
-    mine = parse_composition(os.path.join(root, 'mods.cfg'), names)
+    mine = parse_composition(CFG or os.path.join(root, 'mods.cfg'), names)
     state = {nm: (mine.get(nm) or default[nm]) for nm in names}
     for m in mods:  # M7
         if state[m['name']][0]:
@@ -234,8 +238,16 @@ def guard(root, fix):  # M19
 
 def main(argv):
     root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-    if len(argv) >= 2 and argv[0] == '--root':
-        root, argv = argv[1], argv[2:]
+    global CFG
+    while len(argv) >= 2 and argv[0] in ('--root', '--cfg'):
+        if argv[0] == '--root':
+            root = argv[1]
+        else:
+            CFG = os.path.abspath(argv[1])
+            if not os.path.exists(CFG):
+                print(f'mods: {argv[1]} does not exist', file=sys.stderr)
+                return 1
+        argv = argv[2:]
     cmd = argv[0] if argv else 'show'
     try:
         if cmd == 'write': write(root)

@@ -1,19 +1,27 @@
-# The Nintendo Switch build (kept, not built by default)
+# The Nintendo Switch build
 
 Upstream removed this build in 6a7984b ("Remove the Nintendo Switch build"). The recipe branch
-keeps its files, exactly as they were at 0831a3d, so anyone who wants it can still make it; nothing
-builds it unless asked (no CI job, not the top Makefile, not the README). That is what "off by
-default" means for a whole platform, where it means "not in the program" for a mod (mods/SPEC.md).
+relands it as a **build option**: nothing builds it for players (no download, not the top `make`,
+not the README), and `make switch` builds it for anyone who asks. CI builds it on every push
+(the "on Nintendo Switch" job, in devkitPro's own image), so it keeps building.
 
-To build it you need devkitPro with libnx and the Switch port of SDL2:
+    make switch          # from the top of the tree, with devkitPro (libnx and switch-sdl2)
 
-    python3 tools/mods.py write     # from the top of the tree: which mods it carries (mods/SPEC.md)
-    cd src/platform/switch
-    make
+or, with Docker and nothing else installed:
 
-The first line is the one new step: the game's sources now include `src/mods_build.h`, which the top
-Makefile, Visual Studio and the Windows scripts make for you and this Makefile does not.
+    docker run --rm -v "$PWD":/src -w /src devkitpro/devkita64 make switch
 
-**Not checked.** The recipe branch was not able to build this (no devkitPro where it was made). If
-it no longer builds, the likeliest cause is a file added to `src/` since 0831a3d that the Switch
-cannot compile; switching that file's mod off (mods.cfg) is the first thing to try.
+It makes `src/platform/switch/zelda3.nro`.
+
+**Its own mods.** The Switch reads `mods/switch.cfg` in place of `mods.cfg`, so it carries its own
+set: the shipped mods without **Archipelago** (its secure connections load the system's OpenSSL at
+run time, which a Switch does not have) and without **the network** (this port never starts the
+Switch's sockets). Change that file to try others; `python3 tools/mods.py --cfg mods/switch.cfg show`
+says what the Switch would carry.
+
+**What changed from the files upstream removed.** The Makefile's `SRC_DIR` was `../..`, which is
+`src/`; it could not reach `snes/` or `third_party/`, so the build had not worked for some time. It
+is now the top of the tree, and the Makefile writes the Switch's composition before it compiles.
+The other files (`zelda3.ini`, `icon.jpg`, `.gitignore`) are as they were at 0831a3d.
+
+**Not checked:** running it. It builds and links; it has not been run on a Switch or an emulator.

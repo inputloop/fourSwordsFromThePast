@@ -37,14 +37,16 @@ include $(DEVKITPRO)/libnx/switch_rules
 #   of a homebrew executable (.nro). This is intended to be used for sysmodules.
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
-SRC_DIR     := ../..
+# The top of the tree (this file is at src/platform/switch). It was ../.. (src/) until the recipe
+# branch, which made snes/ and third_party/ unreachable: the build had not worked for a while.
+SRC_DIR     := ../../..
 TARGET		:=	zelda3
 BUILD		:=	bin
-SOURCES		:=  $(SRC_DIR) $(SRC_DIR)/snes $(SRC_DIR)/third_party/gl_core $(SRC_DIR)/third_party/opus-1.3.1-stripped
+SOURCES		:=  $(SRC_DIR)/src $(SRC_DIR)/snes $(SRC_DIR)/third_party/gl_core $(SRC_DIR)/third_party/opus-1.3.1-stripped
 
-CFILES := $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/snes/*.c) $(SRC_DIR)/third_party/gl_core/gl_core_3_1.c $(SRC_DIR)/third_party/opus-1.3.1-stripped/opus_decoder_amalgam.c
+CFILES := $(wildcard $(SRC_DIR)/src/*.c $(SRC_DIR)/snes/*.c) $(SRC_DIR)/third_party/gl_core/gl_core_3_1.c $(SRC_DIR)/third_party/opus-1.3.1-stripped/opus_decoder_amalgam.c
 
-INCLUDES	:=	include
+INCLUDES	:=	include $(SRC_DIR) $(SRC_DIR)/src
 APP_TITLE   :=  The Legend of Zelda: A Link to the Past
 APP_AUTHOR  :=  snesrev & Lywx
 APP_VERSION :=  $(shell git rev-parse --short HEAD) $(shell git rev-parse --abbrev-ref HEAD)
@@ -162,7 +164,7 @@ endif
 all: $(BUILD)
 
 $(BUILD):
-	@echo $(CFILES) ...
+	@python3 $(CURDIR)/$(SRC_DIR)/tools/mods.py --cfg $(CURDIR)/$(SRC_DIR)/mods/switch.cfg write
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 

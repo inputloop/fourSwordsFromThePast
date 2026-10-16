@@ -75,3 +75,6 @@ tool `tools/mods.py` is written to these clauses, not the other way round.*
   script, `cc src/x.c`), gets the shipped composition from `src/mods_default.h`: every mod's own
   file compiles that way in a clean tree. (Added after the Archipelago client tests, which compile
   `src/ap_*.c` directly, failed in CI on the first push: `mods.h` used to stop with an error there.)
+- **M23.** `--cfg FILE` reads the developer's choices from FILE instead of `mods.cfg`, so a platform
+  can carry its own set (the Switch build reads `mods/switch.cfg`). A FILE that does not exist is
+  refused. Everything else (M4 to M8, the default, the requirements) holds as for `mods.cfg`.

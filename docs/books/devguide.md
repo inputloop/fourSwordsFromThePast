@@ -296,9 +296,12 @@ Three ways, and each one chooses the mods first.
 The help key opens a browser with `SDL_OpenURL`, which needs SDL 2.0.14 or later (every build script
 here uses 2.28).
 
-**Other platforms.** The Nintendo Switch build, removed upstream, is kept in
-`src/platform/switch/` and built by nothing unless you ask (its README says how). A whole platform is
-"off by default" by not being built; a mod is "off" by not being in the program.
+**Other platforms.** The Nintendo Switch build, removed upstream, is relanded as a build option:
+`make switch` (with devkitPro, or its container image `devkitpro/devkita64`) makes
+`src/platform/switch/zelda3.nro`, and CI builds it on every push so it keeps building. It reads its
+own set of mods, `mods/switch.cfg`, through the tool's `--cfg` option: the shipped set without
+Archipelago and the network, each with its reason in that file. A whole platform is "off by default"
+by not being built for players; a mod is "off" by not being in the program.
 
 Back to choosing mods: turn to §2.
 

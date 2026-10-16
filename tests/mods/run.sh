@@ -23,13 +23,14 @@ PY
     else echo "RED as it should be: $what ($(grep -c '^FAIL' "$pr/out") test(s))"; fi
   done <<'FAULTS'
 requirements not checked|if not state[r][0]:|if False:
-mods.cfg ignored|mine = parse_composition(os.path.join(root, 'mods.cfg'), names)|mine = {}
+mods.cfg ignored|mine = parse_composition(CFG or os.path.join(root, 'mods.cfg'), names)|mine = {}
 header rewritten every time|    if old != text:|    if True:
 unknown names accepted|            if name not in names:|            if False:
 sim tag always 0|    if all(state[m['name']][0] == default[m['name']] for m in mods if m['sim']):|    if True:
 a campaign typo dropped in silence|        print(f'mods: {x}', file=sys.stderr)|        pass
 half guards patched|            if fix and not partial:|            if fix:
 a byte-order mark refused|encoding='utf-8-sig'|encoding='utf-8'
+--cfg ignored|    mine = parse_composition(CFG or os.path.join(root, 'mods.cfg'), names)|    mine = parse_composition(os.path.join(root, 'mods.cfg'), names)
 stale default header let through|    if os.path.exists(path) and open(path, encoding='utf-8').read() != default_header(root):|    if False:
 FAULTS
   # A fault outside the tool: the guard header that stopped with #error when mods_build.h was missing.
@@ -146,6 +147,13 @@ expect_has "M21 write-default holds the shipped composition" "#define MOD_A 1" c
 expect_rc  "M21 ...and check agrees with it"         0 mods check
 printf 'a on\nb off\nc on\n' > "$R/mods/default.cfg"
 expect_has "M21 a stale mods_default.h is refused"   "does not match" mods check
+
+R=$(fixture 10); printf -- '-b\n' > "$R/mods.cfg"; printf -- '-a -c\n' > "$R/plat.cfg"
+expect_has "M23 --cfg reads the named file"          "a  off  (plat.cfg:1)" python3 "$TOOL" --root "$R" --cfg "$R/plat.cfg" show
+expect_has "M23 ...in place of mods.cfg"             "b  on   (default)" python3 "$TOOL" --root "$R" --cfg "$R/plat.cfg" show
+expect_rc  "M23 a --cfg file that does not exist is refused" 1 python3 "$TOOL" --root "$R" --cfg "$R/nope.cfg" check
+printf -- '-a\n' > "$R/plat.cfg"
+expect_has "M23 the requirements hold for it too"    "c is on" python3 "$TOOL" --root "$R" --cfg "$R/plat.cfg" check
 
 # M22: every mod's own file compiles alone in a clean tree (no src/mods_build.h), as a test driver or
 # a packager compiles it. Needs cc and sdl2-config; without them this clause is NOT CHECKED, said aloud.
