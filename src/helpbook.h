@@ -6,7 +6,7 @@
 #include "types.h"
 
 // The manual page (a file name without .html) for this moment: "menus",
-// "starting", "online", "together", "dungeons" or "outdoors". Every name here
+// "starting", "last", "online", "together", "dungeons" or "outdoors". Every name here
 // must be a page of docs/books/manual (tools/books.py check says so).
 const char *Helpbook_Topic(void);
 // Opens that page: the compiled help (help/FourSwords-Manual.chm) on Windows,

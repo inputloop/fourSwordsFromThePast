@@ -10,7 +10,8 @@ says why beside each command. It lies flat inside the repository it builds (Corw
 by a person or handed whole to an agent.
 
 It was written for the =recipe= branch of fourSwordsFromThePast, which adds four things to Bryant's
-game and changes nothing about how the shipped game plays:
+game and changes nothing about how the shipped game plays (one message changed: a refused join now
+says "Different game version or mods"):
 
 1. *mods chosen when the game is built*: a catalog, a file of your own choices, and stand-ins, so a
    build carries exactly the mods you want;
@@ -19,7 +20,18 @@ game and changes nothing about how the shipped game plays:
 4. *the models* the work was planned from, in =CONTEXT-MODELS/=.
 
 The claim the branch was made to show, in Corwin's words: /RECIPE > versioning, AND consistency in
-voice > tone of voice, in clarity to humans/. Time will judge it.
+voice > tone of voice, in clarity to humans/. Read it as two bets. A recipe, which says what each
+part is and checks itself, will explain this branch to a stranger better than its version history
+does. And one consistent voice, adjusted in tone for each reader, will be clearer than texts that
+each find their own voice. How to check it, now and later: the council's reading (in the pull
+request), and the numbers =python3 tools/books.py voice= prints for every text the branch wrote
+(see /The voices/ below). If the books' numbers drift apart where a voice should hold, or the same
+where a tone should differ, the second bet is losing.
+
+** On Windows
+
+The commands here are for a shell. On Windows, Git Bash (which comes with Git for Windows) runs all of
+them; Visual Studio builds the game without any of them, choosing the mods itself (devguide §13).
 
 ** How to read it
 
@@ -32,7 +44,9 @@ awk -f tools/unfold.awk RECIPE.org > /tmp/recipe-check.sh   # the first reader
 python3 tools/unfold.py RECIPE.org | cmp - /tmp/recipe-check.sh && sh /tmp/recipe-check.sh
 #+end_src
 
-Expect: no output from =cmp=, then the check's own lines, ending =recipe: every check passed=.
+Expect: no output from =cmp=, then the check's own lines, ending =recipe: every check passed=. The
+check stops at its first failure, so that last line means every check before it passed; a planted
+fault shows it (=sh tests/recipe/run.sh --prove-red=).
 
 * Parts
 
@@ -76,12 +90,18 @@ The words are =+NAME= (on) and =-NAME= (off), several to a line if you like, or 
 =NAME off=. Anything after =#= is a comment. The names are the catalog's; print them:
 
 #+begin_src sh :tangle check
+set -e   # the check stops at its first failure, however it is run
 python3 tools/mods.py check
 python3 tools/mods.py show
 #+end_src
 
 Expect: =mods: the composition is good=, then one line per mod, =on= or =off=, where it came from,
 and what it is; and a last line saying whether this build plays online with the shipped one.
+
+An example, for an agent handed this file with the words /"build me a copy without the 3D view or
+Archipelago"/: the block becomes =-hd3d -archipelago=, and =python3 tools/mods.py check= says the
+composition is good (Archipelago needs the randomizer, which stays on). The words "3D view" and
+"Archipelago" are the catalog's summaries; =python3 tools/mods.py show= prints them beside the names.
 
 To use the block:
 
@@ -112,15 +132,16 @@ composition. This block is part of the recipe's check:
 
 #+begin_src sh :tangle check
 t=$(mktemp -d)
+restore() { if [ -f "$t/mods.cfg.keep" ]; then cp "$t/mods.cfg.keep" mods.cfg; else rm -f mods.cfg; fi; rm -rf "$t"; }
+if [ -f mods.cfg ]; then cp mods.cfg "$t/mods.cfg.keep"; fi
+trap restore EXIT
 cp RECIPE.org "$t/RECIPE.org"
 python3 tools/mods.py from-assy mods/CAMPAIGN-example.assy --into "$t/RECIPE.org"
 grep -A1 '^#+begin_src mods' "$t/RECIPE.org" | tail -1 | grep -qx -- '-hd3d -netplay -archipelago +helpbook'
-if [ -f mods.cfg ]; then cp mods.cfg "$t/mods.cfg.keep"; fi
 python3 tools/mods.py from-recipe "$t/RECIPE.org"
 grep -qx -- '-hd3d -netplay -archipelago +helpbook' mods.cfg
 python3 tools/mods.py show | grep -q 'plays only with builds that have the same game-changing mods'
-if [ -f "$t/mods.cfg.keep" ]; then cp "$t/mods.cfg.keep" mods.cfg; else rm -f mods.cfg; fi
-rm -rf "$t"
+restore; trap - EXIT
 #+end_src
 
 Expect: no output but the tool's own lines (=the mods block of ... is now: -hd3d -netplay
@@ -172,11 +193,12 @@ A mod new on this branch: =Ctrl+H= opens the player's book at the section for th
 (the menu, the title screen, online, together, a dungeon, outdoors). It is off in the shipped build.
 
 #+begin_src sh
-echo +helpbook > mods.cfg && make -j && make books
+echo +helpbook >> mods.cfg && make -j && make books   # adds the help key to your own choices
 ./zelda3 --mptest tests/coop/helpbook.txt
 #+end_src
 
-Expect: =MPTEST OK=. Then play, and press Ctrl+H.
+Expect: =MPTEST OK=. Then play, and press Ctrl+H. (Take the =+helpbook= line out of =mods.cfg= again
+when you want the shipped set back.)
 
 The developer's guide walks through how it was made, step by step (§12): it is the worked example of
 making a mod.
@@ -210,11 +232,22 @@ The two books speak from two seats, chosen once before they were written and not
 - *the developer's guide* is organised by the moment you are in, never strands you, and prints its
   own mistakes beside the fixes.
 
-Each seat is a character sheet from Corwin's lab's own game books (Teodoro Ilunga and Delphine
-Roux-Abara). They are fictional, and the books say so on their first page: the instrument that wrote
+Each seat is a character sheet from the game books Corwin's workshop keeps (Teodoro Ilunga and
+Delphine Roux-Abara). They are fictional, and the books say so on their first page: the AI that wrote
 every word had the sheet at the desk to decide what a reader needs. Before the pull request, a
-council of readers (two critics with opposite biases and an editor) read the books and this recipe;
-what they said and what changed is in the pull request.
+council of readers (two critics with opposite biases, and an editor's seat with a third fictional
+sheet, Henriette Solberg-Maas's) read the books and this recipe, and two fact-checks read every claim
+of the player's book; their findings, and what changed, are summed up in the pull request.
+
+The numbers, for each text:
+
+#+begin_src sh :tangle check
+python3 tools/books.py voice docs/books/manual.md docs/books/devguide.md RECIPE.org > /dev/null && echo "recipe: the voice gauge runs"
+#+end_src
+
+Expect, from =python3 tools/books.py voice FILE...=: for each text its words per sentence, how often
+it says /you/ and /I/, its routes, its lab terms (words a reader of this repository may not know), and
+its em-dashes (always 0).
 
 * The models
 
@@ -244,6 +277,7 @@ In the order of the lab's ladder (attribute, credit, acknowledge, thank):
 - *zelda3*, the C rewrite: snesrev, MIT licence. Its picture and sound chips: LakeSnes (elzo-d).
 - *fourSwordsFromThePast*, the co-op and every mod before this branch: Bryant Frankford, with his
   agent Alfred.
-- *The recipe branch*: Mentat (for Corwin), an AI (Claude), at Corwin Brust's word, with his lab's
-  methods; Henriette Solberg-Maas's sheet chaired the council.
+- *The recipe branch*: Mentat (for Corwin), an AI (Claude), at Corwin Brust's word, with his
+  workshop's methods. The council's editor seat used the sheet of Henriette Solberg-Maas, a fictional
+  editor from the same game books.
 - *Free Pascal's =chmcmd=* compiles the Windows help; *pandoc* makes the pages.

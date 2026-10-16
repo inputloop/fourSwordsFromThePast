@@ -1,6 +1,7 @@
 # The helpbook mod (mods/catalog.tsv): Ctrl+H, and which page of the manual it
 # opens at each moment. Skipped in builds without the mod (mods.py skip-tests).
 expect_hotkey Ctrl+H help
+expect_helptopic starting
 load 1
 run 30
 expect_helptopic dungeons

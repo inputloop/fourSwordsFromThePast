@@ -6,9 +6,10 @@
 moment you are in. Every section tells you where to go next; none of them strands you, and a program
 checks that (§14).*
 
-**Who is talking.** The instrument that built the recipe branch (Mentat, an AI, writing for Corwin)
-wrote this, with one character sheet at the desk: Delphine Roux-Abara, an author from the lab's own
-game books, who is fictional and holds one conviction: the hard part of a big system is not learning
+**Who is talking.** An AI (Claude, working as "Mentat" for Corwin Brust, who makes things with Bryant
+in the inputloop organisation) wrote this, with one character sheet at the desk: Delphine
+Roux-Abara, an author from the game books Corwin's workshop keeps, who is fictional and holds one
+conviction: the hard part of a big system is not learning
 it, it is *finding the table again*. So this book is arranged by the moment you are in, not by the
 order the code was written.
 
@@ -74,8 +75,9 @@ python3 tools/mods.py show
 
 Two things the table cannot show you, both measured with the census (§7):
 
-- **Co-op is not a mod.** It is the game now: 103 of its functions are used from outside its own
-  files. Nothing switches it off.
+- **Co-op is not a mod.** It is the game now: its files (`mp.c`, `instance.c` and the session code)
+  define 138 names that 22 other files use (`CONTEXT-MODELS/data/census-coop.tsv`). Nothing switches
+  it off.
 - **Online play is the network layer only** (`net.c`, `upnp.c`). The session code also runs couch
   co-op, so it stays.
 
@@ -132,6 +134,10 @@ block. A line that names something that is not a mod is kept as a comment, as C4
 The route, end to end: edit in C4, plan it (`sh h/assy.sh plan` in a C4 tree, which never acts),
 write it into the RECIPE, hand the RECIPE on, `from-recipe`, `make`. The worked example is in
 `RECIPE.org`.
+
+**You do not need C4 for any of this.** C4 is Corwin's own workshop of tools and notes; it is not
+published with this game. `tools/mods.py from-assy` reads a campaign file by itself, so you can
+write one in any editor. C4, where it is at hand, only adds a second reader that checks the first.
 
 Back to choosing by hand: turn to §2.
 To see how the tests hold this route: turn to §9.
@@ -205,8 +211,8 @@ Three layers. Run them in this order.
 1. **The tool's own tests**: `sh tests/mods/run.sh`. One test or more for each clause of
    `mods/SPEC.md`, written in shell, a different language from the Python tool, so a misreading of the
    spec in one is not copied into the other. Then `sh tests/mods/run.sh --prove-red`: it plants eight
-   faults in a copy of the tool, one at a time, and each must turn the tests red. A test suite that
-   has never failed has not been tested.
+   faults in a copy of the tool, one at a time, and each must turn the tests red. Until you have seen a
+   test fail on a real fault, you do not know it can.
 2. **The game's tests**: `sh tests/run_coop_tests.sh`. Tests that need a mod your build leaves out
    say `SKIP` and why (the catalog's `tests` column).
 3. **The matrix**: `sh tools/mods_matrix.sh OUT`. It builds the shipped set, each mod off alone,
@@ -282,9 +288,13 @@ Three ways, and each one chooses the mods first.
 - **Visual Studio** (`Zelda3.sln`): a pre-build step runs `python tools\mods.py write`.
 - **MinGW from Linux** (`tools/build_windows_mingw.sh`): runs the same, and copies the books
   (`help/`) into the ready-to-play folder if you built them.
-- **`run_with_tcc.bat`**, on the player's own PC: if there is no Python, it uses
-  `src/mods_default.h`, the shipped set, committed. `mods.py check` refuses if that file ever stops
-  matching `mods/default.cfg`, so it cannot go stale unseen.
+- **`run_with_tcc.bat`**, on the player's own PC: a `mods.cfg` the tool refuses stops the build, with
+  the tool's reason. If there is no Python, it says so and builds the shipped set from
+  `src/mods_default.h`, committed. `mods.py check` refuses if that file ever stops matching
+  `mods/default.cfg`, so it cannot go stale unseen.
+
+The help key opens a browser with `SDL_OpenURL`, which needs SDL 2.0.14 or later (every build script
+here uses 2.28).
 
 **Other platforms.** The Nintendo Switch build, removed upstream, is kept in
 `src/platform/switch/` and built by nothing unless you ask (its README says how). A whole platform is
@@ -305,8 +315,8 @@ reached from §1, a section strands its reader, or a page the help key can ask f
 `python3 tools/books.py build` (or `make books`) makes the `help/` folder: a Windows help file
 (`.chm`) for each book, the pages as HTML, each book on one page, and plain text.
 
-The markers at the top are the lab's game-book markers, so the lab's own linter (`c4/h/gb1md`) can
-read these books too: a second reader.
+The markers at the top are the game-book markers of Corwin's workshop (C4), so its own linter can
+read these books too, as a second reader where C4 is at hand. Nothing here needs it.
 
 Then turn to §15, which is where this book keeps its own mistakes.
 
@@ -347,7 +357,14 @@ What none of these caught is the next one. Turn to §16.
 <!-- page: recipe -->
 
 `RECIPE.org` at the top of the tree is the literate recipe for this branch: what each part is, in
-order, with the commands that make it and what you should see. Read it top to bottom once.
+order, with the commands that make it and what you should see. Read it top to bottom once, then run
+its own check:
+
+```
+awk -f tools/unfold.awk RECIPE.org > /tmp/recipe-check.sh && sh -e /tmp/recipe-check.sh
+```
+
+You should see a line for each part, ending `recipe: every check passed`. (CI runs the same.)
 
 `CONTEXT-MODELS/` holds the models the work was planned from: each mod speaking for itself, in the
 first person, with its numbers; the readers these books were written for; the contributors (whose own

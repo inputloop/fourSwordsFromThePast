@@ -53,3 +53,10 @@ The ROM needs to be named `zelda3.sfc` and has to be from the US region with thi
 `66871d66be19ad2c34c927d6b14cd8eb6fc3181965b6e517cb361f7316009cfb`
 
 In case you're planning to move the executable to a different location, please include the file `zelda3_assets.dat`.
+## Choosing the mods
+Which mods a build carries is chosen before it compiles: `src/mods_build.h` is made by
+`python3 tools/mods.py write` from `mods/default.cfg` and your own `mods.cfg` (if you have one).
+`make`, Visual Studio, `tools/build_windows_mingw.sh` and `run_with_tcc.bat` do this for you. For any
+other build (a packager's script, `cc src/*.c` by hand), run it first; Python 3 is then needed at build
+time. Without Python, copy `src/mods_default.h` to `src/mods_build.h` for the shipped set. The
+developer's guide (`docs/books/devguide.md`) has the rest.

@@ -1312,11 +1312,18 @@ static void ScreenControls() {
   Label("  A sends a teammate a heart");
   Label("Lift teammate: A, A again throws");
   Label("Heavy rock: both press A to lift it");
+#if MOD_HD3D
   Label("3D view: right stick turns camera");
   Label("  (or hold the right mouse button)");
   Label("Left click or L3: first person");
+#endif  // MOD_HD3D
+#if MOD_SCREENSHOT
   Label("Screenshot: F12 (Ctrl+F12 without");
   Label("  the overlay), into screenshots/");
+#endif  // MOD_SCREENSHOT
+#if MOD_HELPBOOK
+  Label("Help: Ctrl+H opens the manual");
+#endif  // MOD_HELPBOOK
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);

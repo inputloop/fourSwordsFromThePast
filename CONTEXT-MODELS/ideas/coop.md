@@ -7,7 +7,7 @@ I am the reason this is not just zelda3. Four Links, one world or several, heart
 
 People will ask why I am not a switch like the others. Here is my case, in numbers. The files that
 are me (`mp.c`, `instance.c`, and the session code that runs a couch game as well as an online one)
-define 138 names that the rest of the program calls, from 21 other files. The game's own Link code,
+define 138 names that the rest of the program calls, from 22 other files (in a build with every mod on, the help key included). The game's own Link code,
 its enemies, its doors and its camera all ask me questions now, every frame. An "off" for me would
 not be a stand-in; it would be a second game, kept alive beside the first, forever.
 

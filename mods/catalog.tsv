@@ -5,11 +5,11 @@
 # requires: mods that must also be on (space-separated, - for none).
 # sources: the src/ files that hold the mod (each is compiled out when it is off).
 # tests: tests/coop/ scripts that need the mod (shell globs, - for none).
-story	yes	-	story.c	story* opening*	The retold Four Swords legend after the title screen.
-screenshot	no	-	screenshot.c	screenshot*	F12 saves a picture of the screen.
-hd2d	no	-	hd2d.c	hd2d*	The 2D-HD look: depth of field, bloom, lighting.
-hd3d	no	-	hd3d.c hd3d_input.c hd3d_linkpose.c hd3d_sprites.c hd3d_world.c r3d.c cam3d.c	hd3d* net_hd3d* fp_* cam3d*	The 3D view and first person (beta).
-randomizer	yes	-	randomizer.c	rando* tracker* spoiler*	The built-in item randomizer and the check tracker.
+story	yes	-	story.c	story story_text	The retold Four Swords legend after the title screen.
+screenshot	no	-	screenshot.c	screenshot	F12 saves a picture of the screen.
+hd2d	no	-	hd2d.c	hd2d_* visual hd3d_shots hd3d_dark	The 2D-HD look: depth of field, bloom, lighting.
+hd3d	no	hd2d	hd3d.c hd3d_input.c hd3d_linkpose.c hd3d_sprites.c hd3d_world.c r3d.c cam3d.c	hd3d_camera hd3d_dark hd3d_doors hd3d_exact hd3d_fallback hd3d_firstperson hd3d_horizon hd3d_input hd3d_linkpose hd3d_outdoor hd3d_panes hd3d_perplayer hd3d_pure hd3d_remap hd3d_review hd3d_shots hd3d_transitions net_hd3d_* multiview net_multiview_*	The 3D view and first person (beta).
+randomizer	yes	-	randomizer.c	randomizer randomizer_master_sword randomizer_oldsave randomizer_open randomizer_progressive randomizer_spoiler randomizer_sword randomizer_sword0 randomizer_uncle randomizer_version1 tracker full_inventory_rando object_slot_owner save_quit_coop save_quit_menu_chest throw_to_edge title_join	The built-in item randomizer and the check tracker.
 archipelago	yes	randomizer	archipelago.c ap_client.c ap_json.c ap_tls.c ap_ws.c	archipelago* net_ap*	Archipelago multiworld: items shared with other games online.
 netplay	yes	-	net.c upnp.c	net_*	Playing over a LAN or the internet: hosting, joining, rollback.
 helpbook	no	-	helpbook.c helpbook_os.c	helpbook*	Ctrl+H opens the player's manual at the page for what you are doing.

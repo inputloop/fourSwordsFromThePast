@@ -47,7 +47,22 @@ IF NOT EXIST "zelda3_assets.dat" (
 
 
 echo Choosing the mods (mods\default.cfg and your mods.cfg; see mods\SPEC.md)...
-python tools\mods.py write 2>NUL || py -3 tools\mods.py write 2>NUL || copy /Y src\mods_default.h src\mods_build.h >NUL
+set MODS_PY=
+where python >NUL 2>NUL && set MODS_PY=python
+if not defined MODS_PY where py >NUL 2>NUL && set MODS_PY=py -3
+if defined MODS_PY (
+  %MODS_PY% tools\mods.py write
+  IF ERRORLEVEL 1 (
+    ECHO:
+    ECHO The mods in mods.cfg were refused: the reason is above. Fix mods.cfg, or delete it
+    ECHO to build the shipped set.
+    PAUSE
+    EXIT /B 1
+  )
+) ELSE (
+  ECHO No Python found: building the shipped set of mods ^(src\mods_default.h^); a mods.cfg is not read.
+  copy /Y src\mods_default.h src\mods_build.h >NUL
+)
 echo Building with TCC...
 third_party\tcc\tcc.exe -ozelda3.exe -DCOMPILER_TCC=1 -DSTBI_NO_SIMD=1 -DHAVE_STDINT_H=1 -D_HAVE_STDINT_H=1 -DSYSTEM_VOLUME_MIXER_AVAILABLE=0 -I%SDL2%/include -L%SDL2%/lib/x64 -lSDL2 -lws2_32 -I. src/*.c snes/*.c third_party/gl_core/gl_core_3_1.c third_party/opus-1.3.1-stripped/opus_decoder_amalgam.c
 IF ERRORLEVEL 1 goto GETOUT

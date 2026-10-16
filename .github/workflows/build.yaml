@@ -70,6 +70,21 @@ jobs:
         awk -f tools/unfold.awk RECIPE.org > recipe-check.sh
         python3 tools/unfold.py RECIPE.org | cmp - recipe-check.sh
         sh -e recipe-check.sh
+    - name: The recipe check, proved (a broken tree must not pass)
+      if: ${{ matrix.name == 'Linux' }}
+      run: sh tests/recipe/run.sh
+    - name: A build with every mod off but the help key (the stand-ins and the off branches compile)
+      if: ${{ matrix.name == 'Linux' }}
+      run: |
+        printf -- '-story -screenshot -hd2d -hd3d -randomizer -archipelago -netplay +helpbook\n' > mods.cfg
+        make -j$(nproc) zelda3
+        ./zelda3 --mods
+        rm mods.cfg && make -j$(nproc) zelda3
+    - name: The help key's file:// URLs (no ROM)
+      if: ${{ matrix.name == 'Linux' }}
+      run: |
+        cc -O2 -Werror -DZELDA3_MODS_H_ -DMOD_HELPBOOK=1 tests/unit/helpbook_url_test.c src/helpbook_os.c $(sdl2-config --cflags) -o helpbook_url_test
+        ./helpbook_url_test
     - name: The two books (Windows help and web pages)
       if: ${{ matrix.name == 'Linux' }}
       run: |
@@ -112,6 +127,10 @@ jobs:
         python3 tools/books.py build
     - name: Build
       run: tools/build_windows_mingw.sh
+    - name: The help key's Windows file compiles (no ROM)
+      run: |
+        SDL=build-windows/SDL2-2.28.2/x86_64-w64-mingw32
+        x86_64-w64-mingw32-gcc -O2 -Werror -fsyntax-only -DZELDA3_MODS_H_ -DMOD_HELPBOOK=1 -I$SDL/include/SDL2 -Dmain=SDL_main src/helpbook_os.c
     - name: 3D view unit tests compile (no ROM)
       run: |
         x86_64-w64-mingw32-gcc -O2 -Werror tests/unit/r3d_test.c src/r3d.c -o build-windows/r3d_test.exe

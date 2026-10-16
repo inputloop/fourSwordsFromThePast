@@ -7,8 +7,9 @@ person; Bryant's own words, if he wants them here, go in `contributors/BRYANT.md
 I did not ask for a build system. I asked for a game that works. Whatever this branch adds, I will be
 the one who keeps it working when I add the next feature.
 
-**What I will check first:** that the shipped build is the game I ship, byte for byte in behaviour,
-and plays online with builds made without this branch. That my tests still pass. That nothing I wrote
+**What I will check first:** that the shipped build is the game I ship, in how it plays (one message
+is new: a refused join says "Different game version or mods"), and plays online with builds made
+without this branch. That my tests still pass. That nothing I wrote
 was renamed or moved for the branch's convenience.
 
 **What would make me reject it:** a change that makes every future feature of mine cost an extra step

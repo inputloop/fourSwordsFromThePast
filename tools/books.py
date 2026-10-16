@@ -6,6 +6,7 @@ that a game book's routes are sound.
 usage: python3 tools/books.py check [BOOK...]     the routes, the pages the help key needs
        python3 tools/books.py build [--out help]  every target (CHM needs chmcmd; HTML needs pandoc)
        python3 tools/books.py graph BOOK          the routes as TSV: from, to (data for the lab)
+       python3 tools/books.py voice FILE...       numbers for "consistency of voice > tone of voice" (TSV)
 
 A BOOK is docs/books/<name>.md. Its form (the C4 game-book markers, so c4/h/gb1md can lint it too):
   <!-- GB:book title="..." author="..." -->     once, at the top
@@ -161,6 +162,34 @@ def write_chm_project(d, chm, book, files):
     idx = '\n'.join(obj(s['title'], s['page'] + '.html') for s in sorted(book['secs'], key=lambda s: s['title'].lower()))
     open(os.path.join(d, chm + '.hhk'), 'w', newline='\r\n').write(f'<HTML><BODY><UL>\n{idx}\n</UL></BODY></HTML>\n')
 
+def voice(paths):
+    """Numbers for the claim "consistency of voice > tone of voice": what should match across the
+    books (voice) and what should differ by reader (tone). Counts only; no verdict."""
+    tax = os.path.join(ROOT, 'CONTEXT-MODELS', 'TAXONOMY.tsv')
+    lab = []
+    if os.path.exists(tax):
+        for line in open(tax, encoding='utf-8'):
+            f = line.rstrip('\n').split('\t')
+            if len(f) == 6 and f[1] in ('lab', 'branch') and not line.startswith('#'):
+                lab += [a.strip() for a in re.split(r'[/,(]', f[0]) if len(a.strip()) > 3]
+    print('file\twords\tsentences\twords_per_sentence\tyou_per_100\tI_per_100\troutes\tlab_terms\tem_dashes')
+    for p in paths:
+        text = open(p, encoding='utf-8').read()
+        text = re.sub(r'<!--.*?-->', '', text, flags=re.S)
+        text = re.sub(r'```.*?```', '', text, flags=re.S)
+        text = re.sub(r'(?im)^[ \t]*#\+begin_src.*?^[ \t]*#\+end_src[^\n]*', '', text, flags=re.S)
+        text = re.sub(r'(?m)^[ \t]*(#\+[A-Z_]+:.*|\|.*)$', '', text)  # Org keywords and table rows are not sentences
+        words = re.findall(r"[A-Za-z][A-Za-z']*", text)
+        n = max(len(words), 1)
+        sents = [s for s in re.split(r'(?<=[.!?])\s+', text) if re.search(r'[A-Za-z]', s)]
+        low = [w.lower() for w in words]
+        you = sum(1 for w in low if w in ('you', 'your', "you're", 'yours'))
+        me = sum(1 for w in low if w in ('i', "i'm", 'my', 'me'))
+        routes = len(re.findall(r'turn to §\d+', text, re.I))
+        labn = sum(len(re.findall(r'(?<![A-Za-z])' + re.escape(t) + r'(?![A-Za-z])', text, re.I)) for t in lab)
+        print(f'{os.path.relpath(p, ROOT)}\t{len(words)}\t{len(sents)}\t{len(words)/max(len(sents),1):.1f}\t'
+              f'{100*you/n:.1f}\t{100*me/n:.1f}\t{routes}\t{labn}\t{text.count(chr(0x2014))}')
+
 def main(argv):
     cmd = argv[0] if argv else 'check'
     if cmd == 'check':
@@ -170,6 +199,9 @@ def main(argv):
     if cmd == 'build':
         out = argv[argv.index('--out') + 1] if '--out' in argv else os.path.join(ROOT, 'help')
         build(out)
+        return 0
+    if cmd == 'voice' and len(argv) >= 2:
+        voice(argv[1:])
         return 0
     if cmd == 'graph' and len(argv) == 2:
         b = parse(argv[1])

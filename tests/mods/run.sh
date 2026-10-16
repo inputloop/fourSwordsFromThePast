@@ -29,6 +29,7 @@ unknown names accepted|            if name not in names:|            if False:
 sim tag always 0|    if all(state[m['name']][0] == default[m['name']] for m in mods if m['sim']):|    if True:
 a campaign typo dropped in silence|        print(f'mods: {x}', file=sys.stderr)|        pass
 half guards patched|            if fix and not partial:|            if fix:
+a byte-order mark refused|encoding='utf-8-sig'|encoding='utf-8'
 stale default header let through|    if os.path.exists(path) and open(path, encoding='utf-8').read() != default_header(root):|    if False:
 FAULTS
   rm -rf "$pr"; exit $status
@@ -63,6 +64,8 @@ expect_has "M2 the default composition shows"        "a  on " mods show
 printf -- '-b\n' > "$R/mods.cfg"
 expect_has "M3 mods.cfg changes only what it names"  "b  off  (mods.cfg:1)" mods show
 expect_has "M3 the rest keep their default"          "a  on   (default)" mods show
+printf '\357\273\277-b\n' > "$R/mods.cfg"
+expect_rc  "M4 a byte-order mark at the start is fine" 0 mods check
 printf 'B off   # upper case\n' > "$R/mods.cfg"
 expect_rc  "M4 NAME off, any case"                   0 mods check
 printf -- '-b +b\n' > "$R/mods.cfg"

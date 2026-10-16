@@ -5,20 +5,9 @@
 *A game book. Start at §1 and follow the routes; each section ends by telling you where to go next.
 Or open any section from the list: nothing here needs the one before it, except the first.*
 
-**Who is talking.** This book was written by the instrument that worked on the recipe branch (Mentat,
-an AI, writing for Corwin), with one character sheet at the desk: Teodoro Ilunga, an author from the
-lab's own game books. He is fictional. He is here for one habit: he counts the ways from where you are
-to where you want to be, and then checks whether two of those ways are really the same way. I wrote
-every word; his sheet decided what to count.
+*Written by an AI for Corwin Brust; who is talking, and whose game this is, is at the end of §17.*
 
-**Whose game this is.** The game is Nintendo's *A Link to the Past* (1991), rewritten in C by snesrev
-(zelda3), with LakeSnes's picture and sound chips, and turned into four-player co-op by Bryant
-Frankford with his agent Alfred. This book is new; the game is theirs.
-
-<!-- GB:box kind=rule -->
-**Seventeen sections.** Seventeen is a house number, not a measured one: the lab keeps 4, 9 and 17
-for the times a number must be picked, and says so when it does.
-<!-- GB:endbox -->
+*(Seventeen sections is a number we picked, not one we counted.)*
 
 ## §1 · The one thing every route shares
 
@@ -29,8 +18,8 @@ internet; with the items shuffled; and in an Archipelago multiworld with other g
 
 Now the check I owe you before the count means anything. Is there one failure that closes all six?
 There is. **Every route needs your own copy of the original game** (a ROM file of *A Link to the Past*,
-the US version). This project ships the code and none of Nintendo's pictures, music, maps or words;
-the game makes them from your ROM, once, into a file called `zelda3_assets.dat`.
+the US version). The game's pictures, music, maps and words are not in the download; the game makes
+them from your ROM, once, into a file called `zelda3_assets.dat`.
 
 So the six routes are really one road that forks later.
 
@@ -63,8 +52,10 @@ Otherwise, turn to §4.
 The code in this project is free software: you may read it, change it and share it. The game's
 pictures, music, maps and text are not; they belong to Nintendo, and they are in the ROM.
 
-So the project draws the line exactly there. Everything made from your ROM (the ROM itself,
-`zelda3_assets.dat`, your saves, the screenshots) stays on your computer. **Never share those files,
+So the project draws the line there. Everything made from your ROM (the ROM itself,
+`zelda3_assets.dat`, your own saves, your screenshots) stays on your computer. (The project keeps a
+few screenshots of its own on its web page, to show what the game looks like; that was its
+maintainers' choice. The game data itself is never in it.) **Never share those files,
 and never put them in a copy of the project you send to someone.** Each player brings their own,
 including the friends you play with online.
 
@@ -146,8 +137,11 @@ What changes when you are more than one:
 - **A Link with no hearts becomes a ghost.** Stand next to the ghost to bring them back.
 - **You can pick a teammate up and throw them**, over a pit if you like, and two of you can lift the
   heavy rocks one Link cannot.
-- **Pings**: a button (set it under *Controls*) puts a marker where you stand: *look here*, or
-  *help*.
+- **Pings**: a button (set it under *Controls*). A tap puts a *look here* ring just in front of you;
+  holding it calls *help* where you stand.
+- **Watch everyone**: **Ctrl+F11** (or *Multiplayer > Watch everyone*) shows every player's world on
+  screen at once, side by side or in four quarters. Press it again for your own screen. It only
+  changes the picture, so it works online too.
 - **Friendly fire** is off unless you switch it on (*Multiplayer*).
 
 To leave: *Multiplayer > Remove local player*, or unplug the controller. Coming back gives you the
@@ -173,6 +167,8 @@ The screens, and the route to each one's section:
 - **Gameplay options**: the randomizer, the opening story, new files with all items, and the
   original game's optional fixes. For the randomizer, turn to §12.
 - **Controls**: each player's keys and buttons. Turn to §11.
+- **Controls help**: every key and button on one page. **Save settings**, and **Quit game** (press it
+  twice).
 
 Settings are saved when you close the menu, in `zelda3.coop.ini` next to the game.
 
@@ -216,7 +212,7 @@ The game can look like the original, or not.
 - **2D-HD look** (beta): depth of field, bloom, warm light from torches and the lamp, dark rooms lit
   by what is burning in them. Its settings are under *Video and HD options > 2D-HD settings*.
 - **3D view** (beta): the world as blocks and standing pictures, with a camera you turn (the right
-  stick, or drag with the right mouse button). A left click, or pressing the right stick in, goes to
+  stick, or drag with the right mouse button). A left click, or pressing the left stick in (L3), goes to
   **first person**. **F11** switches the 3D view on or off for a while. Each player on a couch picks
   2D or 3D for themselves.
 
@@ -238,8 +234,8 @@ SNES button, which controller is whose, the stick's dead zone, and a swap for co
 buttons are the other way round. A *Pressed* line shows what the game sees, so you can check a pad
 before you play.
 
-Every key the game listens for is also in `zelda3.ini`, in plain words (`Screenshot = F12`), if you
-prefer to edit a file.
+Most keys the game listens for are also in `zelda3.ini`, in plain words (`Screenshot = F12`), if you
+prefer to edit a file. (The ping and view buttons are set in *Controls*; Esc always opens the menu.)
 
 Turn back to §8.
 
@@ -267,7 +263,8 @@ Back to choosing a route? Turn to §4.
 the others' worlds. Find someone else's sword in a chest here, and it appears in their game.
 
 *Multiplayer > Archipelago* connects to a room: the server's address, your slot name and the
-password. *DeathLink* (if the room uses it) means that when one player falls, everyone does.
+password. *DeathLink* (if the room uses it) ties the games together: when one game ends in a game over, the
+others' do too. (In co-op, one Link going down is not a death; the team's game over is.)
 
 To make a room you need this game's YAML file (`Four Swords of the Past.yaml`, which comes with the
 Windows build) and the Archipelago software, from its own site.
@@ -278,6 +275,9 @@ Back to the shuffle on its own? Turn to §12.
 ## §14 · Which mods your copy has
 
 <!-- page: builds -->
+
+**Can we play together tonight?** If you all downloaded the same build from the project's page, yes.
+The rest of this section is for when someone built their own copy.
 
 This game is made of the original plus several **mods**: the opening story, the screenshots, the
 2D-HD look, the 3D view, the randomizer, Archipelago, online play, and the help key. Whoever builds
@@ -307,15 +307,15 @@ Back to the start of a game? Turn to §4.
 
 Four things go wrong more than others. For each, here is what it means and what to do.
 
-**"zelda3_assets.dat was not found"**, or the game offers to extract: the assets have not been made
+**"zelda3_assets.dat is missing"**, and the game offers to extract: the assets have not been made
 from your ROM yet. Put the ROM in the game's folder and choose *Extract now*. If that fails, Python
 3 is missing (§2).
 
 **"Different game version or mods"**, when joining: the two copies differ (§9, §14). Use the same
 build, or builds with the same game-changing mods.
 
-**macOS says it "cannot be opened"**: the build is not signed by Apple. Right-click it, choose
-*Open*, and confirm.
+**macOS says it "cannot be opened"**: the build is not notarized by Apple, so the download is held
+back. Right-click it, choose *Open*, and confirm.
 
 **No sound, or the wrong player's music**: check *Sound* (§11). On a couch, the music is player 1's.
 
@@ -330,11 +330,13 @@ To read about this book's help key, turn to §16.
 <!-- page: help -->
 
 In a copy built with the **helpbook** mod, **Ctrl+H** opens this book at the section for what you are
-doing: the menu if it is open, §4 at the title screen, §9 online, §7 with friends, §6 in a dungeon,
-and §5 outdoors. On Windows it opens as a help window (the `.chm` file in the `help` folder); on other
+doing: the menu if it is open; §4 at the title screen, the legend, file select or a game over; §17
+at the credits; §9 online; §7 with friends; §6 in a dungeon; and §5 outdoors. On Windows it opens as a help window (the `.chm` file in the `help` folder); on other
 systems, in your browser.
 
 The help key is off in the copies the project ships; it is a new mod, and a builder switches it on.
+If the help window opens with blank pages, Windows is holding back a file that came from the
+internet: right-click `FourSwords-Manual.chm`, choose *Properties*, tick *Unblock*, and open it again.
 The key can be changed in `zelda3.ini` (`Help = Ctrl+H`).
 
 This book is also in the `help` folder as web pages, as one long page, and as plain text, and its
@@ -356,6 +358,12 @@ the edges of this book:
   words, at length.
 - **Making your own changes.** That is the other book: *the Developer's Guide*.
 
-The thanks belong in the body, not the back of the book, so once more: the game is Nintendo's; the
-C rewrite is snesrev's; the picture and sound chips are LakeSnes's; the co-op and every mod but the
-help key are Bryant Frankford's and his agent Alfred's.
+**Who was talking.** This book was written by an AI (Claude, working as "Mentat" for Corwin Brust, who
+makes things with Bryant in the inputloop organisation), with one character sheet at the desk:
+Teodoro Ilunga, an author from the game books Corwin's workshop keeps. He is fictional. He is here
+for one habit: he counts the ways from where you are to where you want to be, and then checks whether two of those ways are really the same way. I wrote
+every word; his sheet decided what to count.
+
+**Whose game this is.** The game is Nintendo's *A Link to the Past* (1991), rewritten in C by snesrev
+(zelda3), with LakeSnes's picture and sound chips, and turned into four-player co-op by Bryant
+Frankford with his agent Alfred. This book is new; the game is theirs.

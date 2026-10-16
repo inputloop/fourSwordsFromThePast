@@ -12,15 +12,23 @@
 const char *Helpbook_Topic(void) {
   if (Ui_IsOpen())
     return "menus";
-  uint8 m = main_module_index;
-  if (m <= 5)  // the title, the legend, file select, naming a file
+  // The game's own modules (src/misc.c, kMainRouting), by what the player is looking at.
+  switch (main_module_index) {
+  case 0x00: case 0x01: case 0x02: case 0x03: case 0x04: case 0x05:  // the title, file select, naming
+  case 0x14:  // the legend after the title
+  case 0x12: case 0x17: case 0x1B:  // game over, save and quit, choosing where to start
     return "starting";
+  case 0x19: case 0x1A:  // the Triforce room, the credits
+    return "last";
+  }
   if (Session_IsNetplay())
     return "online";
   if (Inst_NumJoined() > 1)
     return "together";
-  if (m == 7)
+  switch (main_module_index) {
+  case 0x06: case 0x07: case 0x11: case 0x13: case 0x16:  // a dungeon, falling into one, its boss beaten
     return "dungeons";
+  }
   return "outdoors";
 }
 

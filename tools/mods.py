@@ -50,7 +50,7 @@ def parse_composition(path, names):  # M4, M5, M6, M8
     got = {}
     if not os.path.exists(path):
         return got
-    for n, raw in enumerate(open(path, encoding='utf-8'), 1):
+    for n, raw in enumerate(open(path, encoding='utf-8-sig'), 1):  # (-sig: a BOM from an old Notepad is fine)
         line = raw.split('#', 1)[0].strip()
         if not line:
             continue

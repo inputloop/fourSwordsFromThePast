@@ -9,9 +9,9 @@ Thirty-nine names. Most are questions the game asks me ("is this pane 3D?", "whe
 and the honest answer when I am not built in is "no" and "nowhere". The input code asks me to turn
 the d-pad to match the camera; without me, a d-pad stays a d-pad.
 
-I lean on the 2D-HD look for its threads and lights, and it leans on me for the frame's route. We
-are each other's nearest neighbour, which is why both of our stand-ins had to be written with the
-other in mind.
+I lean on the 2D-HD look for its threads and its lights (dark rooms, the lamp), and it leans on me for
+the frame's route. I cannot be built without it: the catalog says I require it. It can be built
+without me.
 
 I change only what you see and which way your buttons point on your own screen, so I am not part of
 the simulation. Each player on a couch can pick me or not.
