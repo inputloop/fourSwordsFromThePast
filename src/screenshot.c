@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the screenshot mod)
+#if MOD_SCREENSHOT
 // The screenshot keys (see screenshot.h). The frame is copied on the main
 // thread when it is finished; the PNG is compressed and written on a worker
 // thread, so a big picture (4x the resolution, widescreen) doesn't hitch the
@@ -130,3 +132,4 @@ void Screenshot_Grab(int stage, const uint8 *pixels, int pitch, int width, int h
   else
     WriteThread(NULL);  // (no thread: write it right away)
 }
+#endif  // MOD_SCREENSHOT

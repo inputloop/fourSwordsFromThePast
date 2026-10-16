@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the archipelago mod)
+#if MOD_ARCHIPELAGO
 // WebSocket client (RFC 6455) for the Archipelago connection.
 //
 // Archipelago servers offer permessage-deflate (RFC 7692). We ask for
@@ -868,3 +870,4 @@ void ApWs_Close(ApWs *ws) {
   free(ws->msg);
   free(ws);
 }
+#endif  // MOD_ARCHIPELAGO

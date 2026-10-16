@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the archipelago mod)
+#if MOD_ARCHIPELAGO
 #include "archipelago.h"
 #include "ancilla.h"
 #include "ap_client.h"
@@ -956,3 +958,4 @@ void Ap_TestDeathLink() {
 const ApTestSent *Ap_TestSent() {
   return &g_test.sent;
 }
+#endif  // MOD_ARCHIPELAGO

@@ -54,3 +54,10 @@ __pycache__
 
 # Pictures taken with F12 / Ctrl+F12
 /screenshots/
+
+# Your own build composition (mods/SPEC.md) and what tools/mods.py makes from it
+mods.cfg
+mods.cfg.new
+src/mods_build.h
+# The books, built (make books)
+help/

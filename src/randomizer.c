@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the randomizer mod)
+#if MOD_RANDOMIZER
 #include "randomizer.h"
 #include "archipelago.h"
 #include "variables.h"
@@ -948,3 +950,4 @@ bool Rando_Tracker(const uint8 *save, RandoTracker *t) {
   g_logic_version = version_was;
   return true;
 }
+#endif  // MOD_RANDOMIZER

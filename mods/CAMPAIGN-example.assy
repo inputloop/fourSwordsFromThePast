@@ -1,0 +1,18 @@
+# CAMPAIGN-example.assy: a build composition, written the way C4 writes a change.
+#
+# Read it with C4's own planner (it only plans; it never acts):
+#     sh h/assy.sh plan mods/CAMPAIGN-example.assy        (from a C4 tree)
+# Write it into the RECIPE's mods block:
+#     python3 tools/mods.py from-assy mods/CAMPAIGN-example.assy --into RECIPE.org
+#
+# Every line either names one act or is a comment, kept as it is. There is no error state,
+# so you may write prose anywhere, as below. A line that names something that is not a mod
+# stays a comment, and tools/mods.py says so out loud.
+
+# The cabin laptop: an old graphics chip, no internet, two controllers.
+c4.m.mods ADD hd3d as(off)
+c4.m.mods ADD netplay as(off)
+c4.m.mods ADD archipelago as(off)
+
+# The two cousins have never played; give them the help key.
+c4.m.mods ADD helpbook as(on)

@@ -17,6 +17,7 @@ fi
 
 CFLAGS="-O2 -Werror -I. -I$SDL_DIR/include/SDL2 -Dmain=SDL_main -DSYSTEM_VOLUME_MIXER_AVAILABLE=0"
 OBJS=""
+python3 tools/mods.py write  # which mods this build carries (mods/SPEC.md)
 for f in src/*.c snes/*.c third_party/gl_core/gl_core_3_1.c third_party/opus-1.3.1-stripped/opus_decoder_amalgam.c; do
   o=$OUT/obj/$(echo $f | tr / _).o
   $CC -c $CFLAGS $f -o $o
@@ -34,6 +35,8 @@ cp $OUT/zelda3.exe $OUT/SDL2.dll zelda3.ini extract_assets.bat README.md MULTIPL
 cp "archipelago/Four Swords of the Past.yaml" $DIST/
 cp other/3x5_font.png $DIST/other/
 git ls-files assets | tar -cf - -T - | tar -xf - -C $DIST
+# The two books (make books), when they have been built: help/ with the .chm files and HTML.
+[ -d help ] && cp -r help $DIST/
 cat > $DIST/HOW_TO_PLAY.txt <<'TXT'
 fourSwordsFromThePast for Windows
 

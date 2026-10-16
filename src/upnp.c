@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the netplay mod)
+#if MOD_NETPLAY
 #include "upnp.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -343,3 +345,4 @@ void Upnp_UnmapPort() {
   // (With the game closing before it gets to it, the lease runs out.)
   SDL_AtomicIncRef(&g_upnp.generation);
 }
+#endif  // MOD_NETPLAY

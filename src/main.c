@@ -35,6 +35,8 @@
 #include "instance.h"
 #include "archipelago.h"
 #include "screenshot.h"
+#include "mods.h"
+#include "helpbook.h"
 
 static bool g_run_without_emu = 0;
 
@@ -461,6 +463,11 @@ static void ApplyDisplaySettings() {
 #undef main
 int main(int argc, char** argv) {
   argc--, argv++;
+  // Which mods this program was built with (mods/SPEC.md, M18).
+  if (argc >= 1 && strcmp(argv[0], "--mods") == 0) {
+    printf("%s\n", MODS_COMPOSITION);
+    return 0;
+  }
   const char *config_file = NULL;
   if (argc >= 2 && strcmp(argv[0], "--config") == 0) {
     config_file = argv[1];
@@ -908,6 +915,11 @@ static void HandleCommand(uint32 j, bool pressed) {
   if (j == kKeys_WatchEveryone) {
     if (pressed)
       Ui_ToggleWatchEveryone();  // (display only: allowed online)
+    return;
+  }
+  if (j == kKeys_Help) {
+    if (pressed)
+      Helpbook_Open();  // (this computer only: allowed online)
     return;
   }
 

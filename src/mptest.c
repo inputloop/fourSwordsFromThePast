@@ -101,7 +101,8 @@
 //   screenshot <folder> <seen|clean> [overlay]  the screenshot keys (F12 / Ctrl+F12) on the frame "shot" draws:
 //                       the PNG written to that folder must read back as the frame as seen / without the
 //                       overlay, under a new name (overlay: the overlay must have drawn something)
-//   expect_hotkey <key> <screenshot|screenshotclean|view3d|none>  what a key (e.g. Ctrl+F12) does
+//   expect_hotkey <key> <screenshot|screenshotclean|view3d|help|none>  what a key (e.g. Ctrl+F12) does
+//   expect_helptopic <page>  the manual page the help key (the helpbook mod) would open now
 //   benchdraw <n>       times n frames drawn (with the current 2D-HD setting)
 //   record <dir> [game|view]  until "record off", every frame that run, gamerun, drawrun, srun, tick,
 //                       wander, tickwander or drawuntil goes through is drawn (game: as the game's window, split
@@ -251,6 +252,7 @@
 #include "ui.h"
 #include "upnp.h"
 #include "screenshot.h"
+#include "helpbook.h"
 #include "third_party/stb/stb_image.h"  // only the declarations: the code is in glsl_shader.c
 #include "audio.h"
 
@@ -1262,6 +1264,12 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       stbi_image_free(png);
       free(buf);
       free(bare);
+    } else if (!strcmp(cmd, "expect_helptopic")) {
+      // expect_helptopic <page>: the helpbook mod's choice of manual page right now
+      if (strcmp(Helpbook_Topic(), arg1)) {
+        printf("FAIL: the help key would open \"%s\", expected \"%s\" at frame %d\n", Helpbook_Topic(), arg1, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "expect_hotkey")) {
       // expect_hotkey <[Ctrl+|Shift+|Alt+]key> <command>
       const char *k = arg1;
@@ -1278,7 +1286,7 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       }
       static const struct { const char *name; int cmd; } kHotkeys[] = {
         { "none", 0 }, { "screenshot", kKeys_Screenshot }, { "screenshotclean", kKeys_ScreenshotClean },
-        { "view3d", kKeys_View3d },
+        { "view3d", kKeys_View3d }, { "help", kKeys_Help },
       };
       int want = -1, got = FindCmdForSdlKey(SDL_GetKeyFromName(k), (SDL_Keymod)mod);
       for (size_t i = 0; i < countof(kHotkeys); i++)
