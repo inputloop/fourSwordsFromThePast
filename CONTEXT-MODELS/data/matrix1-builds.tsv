@@ -1,8 +1,0 @@
-# made by: sh tools/mods_matrix.sh (run 1, discovery; see matrix1-tests.tsv)
-composition	built	bytes	seconds	mods_on
-shipped	yes	2420416	29	story screenshot hd2d hd3d randomizer archipelago netplay
-no-story	yes	2391488	28	screenshot hd2d hd3d randomizer archipelago netplay
-no-screenshot	yes	2392456	29	story hd2d hd3d randomizer archipelago netplay
-no-hd2d	yes	2406592	29	story screenshot hd3d randomizer archipelago netplay
-no-hd3d	yes	2279384	47	story screenshot hd2d randomizer archipelago netplay
-no-randomizer	yes	2326272	25	story screenshot hd2d hd3d netplay
