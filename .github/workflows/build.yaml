@@ -64,6 +64,17 @@ jobs:
         codesign --force -s - zelda3
         otool -L zelda3
         lipo -info zelda3
+    - name: The recipe's own check (no ROM; RECIPE.org, "How to read it")
+      if: ${{ matrix.name == 'Linux' }}
+      run: |
+        awk -f tools/unfold.awk RECIPE.org > recipe-check.sh
+        python3 tools/unfold.py RECIPE.org | cmp - recipe-check.sh
+        sh -e recipe-check.sh
+    - name: The two books (Windows help and web pages)
+      if: ${{ matrix.name == 'Linux' }}
+      run: |
+        sudo apt install -y pandoc fp-utils
+        python3 tools/books.py build
     - name: 3D view unit tests (no ROM)
       run: |
         cc -O2 -Werror tests/unit/r3d_test.c src/r3d.c -lm -o r3d_test
@@ -78,6 +89,7 @@ jobs:
         python3 archipelago/build_apworld.py dist/fsotp.apworld
         cp other/3x5_font.png dist/other/
         git ls-files assets | tar -cf - -T - | tar -xf - -C dist
+        if [ -d help ]; then cp -r help dist/; fi
         tar -czf ${{ matrix.artifact }}.tar.gz -C dist .
     - uses: actions/upload-artifact@v4
       with:
@@ -94,6 +106,10 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y gcc-mingw-w64-x86-64
+    - name: The two books (the build copies help/ into the Windows folder)
+      run: |
+        sudo apt install -y pandoc fp-utils
+        python3 tools/books.py build
     - name: Build
       run: tools/build_windows_mingw.sh
     - name: 3D view unit tests compile (no ROM)
