@@ -32,6 +32,10 @@ half guards patched|            if fix and not partial:|            if fix:
 a byte-order mark refused|encoding='utf-8-sig'|encoding='utf-8'
 stale default header let through|    if os.path.exists(path) and open(path, encoding='utf-8').read() != default_header(root):|    if False:
 FAULTS
+  # A fault outside the tool: the guard header that stopped with #error when mods_build.h was missing.
+  printf '#ifndef ZELDA3_MODS_H_\n#define ZELDA3_MODS_H_\n#if defined(__has_include)\n#if !__has_include("mods_build.h")\n#error "src/mods_build.h is missing"\n#endif\n#endif\n#include "mods_build.h"\n#endif\n' > "$pr/mods.h"
+  if MODS_H="$pr/mods.h" sh "$0" > "$pr/out" 2>&1; then echo "STILL GREEN: the old erroring mods.h"; status=1
+  else echo "RED as it should be: the old erroring mods.h ($(grep -c '^FAIL' "$pr/out") test(s))"; fi
   rm -rf "$pr"; exit $status
 fi
 TOOL=${MODS_TOOL:-$here/tools/mods.py}
@@ -142,6 +146,22 @@ expect_has "M21 write-default holds the shipped composition" "#define MOD_A 1" c
 expect_rc  "M21 ...and check agrees with it"         0 mods check
 printf 'a on\nb off\nc on\n' > "$R/mods/default.cfg"
 expect_has "M21 a stale mods_default.h is refused"   "does not match" mods check
+
+# M22: every mod's own file compiles alone in a clean tree (no src/mods_build.h), as a test driver or
+# a packager compiles it. Needs cc and sdl2-config; without them this clause is NOT CHECKED, said aloud.
+if command -v cc >/dev/null && command -v sdl2-config >/dev/null; then
+  C=$tmp/clean; mkdir -p "$C"
+  (cd "$here" && tar cf - src snes third_party) | (cd "$C" && tar xf -)
+  rm -f "$C/src/mods_build.h"
+  [ -n "${MODS_H:-}" ] && cp "$MODS_H" "$C/src/mods.h"
+  bad22=""
+  for f in $(awk -F'\t' '!/^#/ && NF==6 {print $4}' "$here/mods/catalog.tsv"); do
+    (cd "$C" && cc -fsyntax-only -I. $(sdl2-config --cflags) "src/$f" > /dev/null 2>&1) || bad22="$bad22 $f"
+  done
+  if [ -z "$bad22" ]; then ok "M22 every mod file compiles alone, without mods_build.h"; else bad "M22 compiles alone" "failed:$bad22"; fi
+else
+  echo "NOT CHECKED M22 (no cc or sdl2-config here)"
+fi
 
 echo "$passes passed, $fails failed"
 [ "$fails" = 0 ]

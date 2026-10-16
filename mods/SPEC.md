@@ -71,3 +71,7 @@ tool `tools/mods.py` is written to these clauses, not the other way round.*
   where Python is not at hand (`run_with_tcc.bat` copies it to `src/mods_build.h`). `write-default`
   makes it; `check` and `write` refuse when it no longer matches `mods/default.cfg`, so the two
   can never drift apart unseen.
+- **M22.** A file compiled on its own, without `src/mods_build.h` (a test driver, a packager's
+  script, `cc src/x.c`), gets the shipped composition from `src/mods_default.h`: every mod's own
+  file compiles that way in a clean tree. (Added after the Archipelago client tests, which compile
+  `src/ap_*.c` directly, failed in CI on the first push: `mods.h` used to stop with an error there.)

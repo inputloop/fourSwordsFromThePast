@@ -56,7 +56,7 @@ In case you're planning to move the executable to a different location, please i
 ## Choosing the mods
 Which mods a build carries is chosen before it compiles: `src/mods_build.h` is made by
 `python3 tools/mods.py write` from `mods/default.cfg` and your own `mods.cfg` (if you have one).
-`make`, Visual Studio, `tools/build_windows_mingw.sh` and `run_with_tcc.bat` do this for you. For any
-other build (a packager's script, `cc src/*.c` by hand), run it first; Python 3 is then needed at build
-time. Without Python, copy `src/mods_default.h` to `src/mods_build.h` for the shipped set. The
+`make`, Visual Studio, `tools/build_windows_mingw.sh` and `run_with_tcc.bat` do this for you. Any
+other build (a packager's script, `cc src/*.c` by hand) gets the shipped set without it, from
+`src/mods_default.h`; run `python3 tools/mods.py write` first only to choose a different set. The
 developer's guide (`docs/books/devguide.md`) has the rest.
