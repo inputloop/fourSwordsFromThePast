@@ -1,0 +1,50 @@
+# TAXONOMY: the words this project uses, from three places, in one file, none renamed to suit another.
+# origin  game: the game and its mod (Bryant's code and docs) · garden: Bryant and Alfred's working words
+#         lab: Corwin's lab (C4), physics and chess · branch: coined on the recipe branch
+# status  fixed: the game's own word, not ours to move · pinned: its keeper has ruled on it
+#         hand-turning: in use, meaning offered, waiting for its keeper's word
+# bridge  the nearest term from another origin, and how they differ ("=" same thing, "~" kin, "!=" an isotope:
+#         the same spelling weighing differently in two places, kept apart on purpose)
+term	origin	status	meaning here	where	bridge
+Link	game	fixed	one player's hero; four of them in co-op	everywhere	-
+leader	game	fixed	the Link the game's own code sees as Link this frame; the camera and cutscenes follow it	docs/HOW_THE_MOD_WORKS.md	~ CHARGE (lab): the brief a session is handed at its start: the one the rest follow
+Link context	game	fixed	the 315 or so bytes of memory that are one Link, swapped in and out	src/mp.c	~ planks (garden, theseus): what is handed aboard so the same ship sails
+world	game	fixed	an instance of the game's world; players who split up each get one	src/instance.c	-
+ghost	game	fixed	a Link with no hearts, waiting for a teammate to stand beside it	MULTIPLAYER.md	~ parked (garden): held, not gone, until someone acts
+seat	game	fixed	a player's place in an online game, kept two minutes after a dropped connection	MULTIPLAYER.md	!= seat (lab): the memory seat a session opens. An isotope: same word, kept apart
+room code	game	fixed	a host's public address and port, written short, with a check against typos	MULTIPLAYER.md	-
+rollback	game	fixed	going back a few frames when a late input arrives, and replaying them	src/session.c	~ backed-out final swing (lab): undoing the last step when it made things worse
+desync	game	fixed	two computers' games drifting apart	MULTIPLAYER.md	= the thing the wire tag exists to prevent (branch)
+couch	game	fixed	several players at one computer	README.md	-
+seed	game	fixed	the number a shuffle is made from; the same seed, the same shuffle	src/randomizer.c	-
+keeper	garden	pinned	the person whose garden it is (Bryant in his, Corwin in his)	Alfred's skill	-
+garden	garden	pinned	a person's working world: their skills, files and agents	Alfred's skill	~ shop (lab)
+walk / ride	garden	pinned	a walk is one step with nothing changed; a ride is anything else, and gets the glove	Alfred's skill	~ route (branch): the books send the reader on a walk or a longer way
+glove	garden	pinned	the one front door for any task that changes something (power-glove)	Alfred's skill	= the strings ledger of reformat-prompt (lab), which takes the same idea for prompts
+door	garden	pinned	where a newcomer enters a garden; what the boot reads first	Alfred's skill	~ RECIPE.org's first section (branch)
+no em-dashes	garden	pinned	the keeper's standing rule for every artifact	Alfred's skill	followed on the whole branch
+ship, hull, planks	garden	pinned	theseus: weights are the hull, a session is one voyage's crew, memory and skills are planks handed aboard	theseus skill	~ disco (branch): the same question asked of words
+RECIPE	lab	pinned	the ordered steps to reproduce a build or a result, literate: prose and commands together	RECIPE.org	-
+recumbent recipe	lab	hand-turning	a recipe that lies flat inside the thing it builds, folded into its own repository, rather than standing beside it	RECIPE.org	coined by Corwin 2026-10-16; meaning offered here, his to pin
+LENS	lab	pinned	a reflection pass: hold four views apart, try the persona and its inverse, restate from principles, write it down	RECIPE.org	-
+census	branch	hand-turning	the measured list of names a mod defines that the rest of the program uses	tools/mods_census.py	~ microscope (lab): keep only what survives with no trust in the scorer
+seam	lab	pinned	an opportunity to better pin someone's language; in code, where two parts meet	devguide	~ surface (branch): a mod's seam with the game, measured by the census
+GRAVITY	lab	pinned	the pull of a default	m/gloss	= mods/default.cfg (branch): every choice not written down falls to it
+ISOTOPE	lab	pinned	the same word weighing differently in two tables	m/gloss	see seat, mod, fork in this file
+NOBLE	lab	pinned	a record nothing may change	m/gloss	~ fixed (this file's status for the game's own words)
+fork	lab	pinned	(chess) one move that attacks two things; (lab) a decision branch	C4.md	!= fork (git). The manual's §1 is a fork in the lab's sense: one road, then routes
+opening	lab	pinned	c4 is the English Opening's first move: a quiet start that keeps options open	C4 facts	~ a default-off mod: in the build, not yet played
+mod	game	fixed	a change to the game; in this repository, also one of the parts the catalog can switch	mods/catalog.tsv	!= mod (branch): every mod in the catalog is a mod; not every change to the game is in the catalog
+composition	branch	hand-turning	which mods a build carries	mods/SPEC.md	~ GRAVITY: the shipped composition is the default's pull
+stand-in	branch	hand-turning	what the rest of the game gets when a mod is not in the program: what the game would do had it never been written	src/mods_off.c	~ planks (garden): something handed aboard so the ship still steers
+sim mod	branch	hand-turning	a mod that changes what the game remembers or decides, so online players must match	mods/catalog.tsv	-
+wire tag	branch	hand-turning	the number a build adds to its online version when its sim mods differ from the shipped set	src/session.c	-
+guard	branch	hand-turning	the #if around a mod's own files	tools/mods.py	-
+matrix	branch	hand-turning	every composition built, every test run in each, nothing skipped	tools/mods_matrix.sh	~ bubble chamber (lab): observe the tracks of many runs
+route	branch	hand-turning	a "turn to" in a game book	docs/books	~ walk (garden)
+flag	branch	hand-turning	a section of the developer's guide found by moment, not chapter	devguide §17	borrowed from Roux-Abara's sheet (lab)
+THUMP	lab	hand-turning	"tap case lightly with hammer to ensure contraption remains functional; note unusual smells": the docs step that is also a test	RECIPE.org	coined by Corwin 2026-10-16
+LGTC	lab	hand-turning	looks good to council: the personas taking part have read it and their concerns are answered	RECIPE.org	coined by Corwin 2026-10-16
+disco	lab	hand-turning	the app folder, beside argo, for keeping a taxonomy's meanings steady across the design-to-build turn	PLAN-theseus-argo-disco.md	named by Corwin 2026-10-16
+Power Glove	game	fixed	the item that lets Link lift heavy rocks	src/*.c	!= glove (garden). An isotope found by measurement, not by reading: disco's turn probe, run 0
+flag (memory)	game	fixed	a bit the game keeps to remember something happened (sram_progress_flags and the rest)	src/*.c	!= flag (branch). An isotope found by disco's turn probe, run 0
