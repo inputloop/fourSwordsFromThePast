@@ -1,12 +1,14 @@
 # made by: the census (CONTEXT-MODELS/data/census.tsv), one row per direction: who leans on whom, and how many names
-# A row "a  b  n" says a calls n names that b defines; its twin "b  a  n  leaned-on-by" is the other end of the same link.
+# A row "a  b  n  leans-on" says a calls n names that b defines; its twin "b  a  n  leaned-on-by" is the other end of the same link.
 from	to	names	direction
-archipelago	randomizer	1	leans-on
-randomizer	archipelago	1	leaned-on-by
+archipelago	randomizer	2	leans-on
+randomizer	archipelago	2	leaned-on-by
+game:ancilla	archipelago	3	leans-on
+archipelago	game:ancilla	3	leaned-on-by
 game:ancilla	hd3d	2	leans-on
 hd3d	game:ancilla	2	leaned-on-by
-game:dungeon	archipelago	1	leans-on
-archipelago	game:dungeon	1	leaned-on-by
+game:dungeon	archipelago	2	leans-on
+archipelago	game:dungeon	2	leaned-on-by
 game:dungeon	hd3d	2	leans-on
 hd3d	game:dungeon	2	leaned-on-by
 game:dungeon	randomizer	2	leans-on
@@ -29,8 +31,8 @@ game:messaging	randomizer	1	leans-on
 randomizer	game:messaging	1	leaned-on-by
 game:messaging	story	1	leans-on
 story	game:messaging	1	leaned-on-by
-game:mptest	archipelago	10	leans-on
-archipelago	game:mptest	10	leaned-on-by
+game:mptest	archipelago	16	leans-on
+archipelago	game:mptest	16	leaned-on-by
 game:mptest	hd2d	7	leans-on
 hd2d	game:mptest	7	leaned-on-by
 game:mptest	hd3d	30	leans-on
@@ -57,16 +59,20 @@ game:player_oam	hd3d	2	leans-on
 hd3d	game:player_oam	2	leaned-on-by
 game:select_file	randomizer	1	leans-on
 randomizer	game:select_file	1	leaned-on-by
-game:session	archipelago	5	leans-on
-archipelago	game:session	5	leaned-on-by
+game:session	archipelago	7	leans-on
+archipelago	game:session	7	leaned-on-by
 game:session	netplay	12	leans-on
 netplay	game:session	12	leaned-on-by
 game:session	randomizer	2	leans-on
 randomizer	game:session	2	leaned-on-by
 game:session	story	1	leans-on
 story	game:session	1	leaned-on-by
+game:sprite	archipelago	2	leans-on
+archipelago	game:sprite	2	leaned-on-by
 game:sprite	hd3d	2	leans-on
 hd3d	game:sprite	2	leaned-on-by
+game:sprite_main	archipelago	7	leans-on
+archipelago	game:sprite_main	7	leaned-on-by
 game:sprite_main	randomizer	6	leans-on
 randomizer	game:sprite_main	6	leaned-on-by
 game:ui	archipelago	10	leans-on
@@ -83,5 +89,5 @@ hd2d	hd3d	2	leans-on
 hd3d	hd2d	2	leaned-on-by
 hd3d	hd2d	5	leans-on
 hd2d	hd3d	5	leaned-on-by
-randomizer	archipelago	5	leans-on
-archipelago	randomizer	5	leaned-on-by
+randomizer	archipelago	6	leans-on
+archipelago	randomizer	6	leaned-on-by

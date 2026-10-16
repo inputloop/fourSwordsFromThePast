@@ -13,7 +13,8 @@ second language, with planted faults to prove they can fail; the matrix that run
 every composition; the help key; the two books and the tool that checks their routes; these models;
 the recipe.
 
-What I got wrong, and what caught it: six things, printed in the developer's guide, §15. A seventh,
+What I got wrong, and what caught it: six things, and a seventh I nearly did, printed in the
+developer's guide, §15. A seventh,
 in my own tests: a test that could not tell one fault from another, caught by planting the fault.
 
 What I did not do: write anyone else's words. Bryant's, Alfred's and Corwin's files are empty for

@@ -145,6 +145,7 @@ bool Rando_Tracker(const uint8 *save, RandoTracker *t) { (void)save; (void)t; re
 bool Rando_WriteSpoiler(uint32 seed, const char *path) { (void)seed; (void)path; return false; }
 bool Rando_Check(uint32 seed, bool verbose) { (void)seed; (void)verbose; return false; }
 int Rando_TestRoomAccess(const uint8 counts[256], int room) { (void)counts; (void)room; return 0; }
+int Rando_SwordLevel() { return 0; }  // (asked only by Archipelago, which needs the randomizer)
 bool Rando_TestWin(const uint8 counts[256]) { (void)counts; return false; }
 #endif
 
@@ -173,10 +174,26 @@ void Ap_OnFileLoaded() {}
 void Ap_OnStateLoaded() {}
 void Ap_OnGameOver() {}
 void Ap_OnGoal() {}
-void Ap_TestRoom(uint32 bind, bool death_link) { (void)bind; (void)death_link; }
+void Ap_TestRoom(uint32 bind, bool death_link, ApWorld world) { (void)bind; (void)death_link; (void)world; }
 void Ap_TestGiveItem(int64 item) { (void)item; }
 void Ap_TestDeathLink() {}
 const ApTestSent *Ap_TestSent() { static ApTestSent none; return &none; }
+// Archipelago's own A Link to the Past world (upstream 8464ead). Every place
+// below answers "not a place of the multiworld" (-1), and every gate the
+// original game's own answer, which the caller hands in as `vanilla`.
+int Ap_BossPlace(int dungeon) { (void)dungeon; return -1; }
+int Ap_FairyPlace(bool dark_world) { (void)dark_world; return -1; }
+int Ap_HeartPiecePlace(bool indoors, int where, int mask) { (void)indoors; (void)where; (void)mask; return -1; }
+int Ap_RoomFlagPlace(int room, int mask) { (void)room; (void)mask; return -1; }
+uint8 Ap_PlaceItem(int loc, uint8 vanilla_item) { (void)loc; return vanilla_item; }
+bool Ap_PrizeGate(int gate, bool vanilla) { (void)gate; return vanilla; }
+// The original game's rule lives here too (Ether opens Misery Mire, Quake opens
+// Turtle Rock), so the stand-in keeps it: returning false would seal both.
+bool Ap_MedallionOpens(int medallion, int screen) { return medallion == (screen == 0x70 ? 1 : 2); }
+bool Ap_IsAlttpFile() { return false; }
+ApWorld Ap_HostWorld() { return kApWorld_Fsotp; }
+void Ap_SetNewGameWorld(ApWorld w) { (void)w; }
+void Ap_TestSetOption(int which, int value) { (void)which; (void)value; }
 #endif
 
 #if !MOD_NETPLAY

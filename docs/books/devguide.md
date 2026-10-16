@@ -286,6 +286,10 @@ Three ways, and each one chooses the mods first.
   `src/mods_default.h`, the shipped set, committed. `mods.py check` refuses if that file ever stops
   matching `mods/default.cfg`, so it cannot go stale unseen.
 
+**Other platforms.** The Nintendo Switch build, removed upstream, is kept in
+`src/platform/switch/` and built by nothing unless you ask (its README says how). A whole platform is
+"off by default" by not being built; a mod is "off" by not being in the program.
+
 Back to choosing mods: turn to §2.
 
 ## §14 · These books
@@ -329,6 +333,12 @@ building this branch, each caught, each with what caught it.
 6. **The Windows header.** `windows.h` and the game's names for its memory cannot share a file; the
    Linux build was fine and the Windows build failed. Caught by building for Windows; it is why the
    helpbook mod is two files.
+7. **The sealed dungeons that did not ship.** Upstream's change taught Archipelago eleven new answers
+   the game asks for. One of them, `Ap_MedallionOpens`, also holds the original game's rule (Ether
+   opens Misery Mire, Quake opens Turtle Rock). A stand-in answering "no" would have sealed both
+   dungeons in every build without Archipelago. Caught by reading each new name's caller before
+   writing its stand-in, the habit the first erratum taught. The census found the eleven; reading
+   found the one.
 
 What none of these caught is the next one. Turn to §16.
 

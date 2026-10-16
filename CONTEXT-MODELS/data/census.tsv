@@ -1,14 +1,20 @@
-# made by: python3 tools/mods_census.py   (after make with every mod on: mods.cfg +helpbook)
+# made by: python3 tools/mods_census.py   (after make with every mod on: mods.cfg +helpbook; upstream 8464ead + the recipe branch)
 group	symbol	kind	user_objects
 archipelago	Ap_ApplyEvent	T	session.o
 archipelago	Ap_BeforeFrame	T	session.o
+archipelago	Ap_BossPlace	T	mptest.o sprite_main.o
 archipelago	Ap_Connect	T	mptest.o ui.o
 archipelago	Ap_Disconnect	T	ui.o
+archipelago	Ap_FairyPlace	T	mptest.o sprite_main.o
 archipelago	Ap_FileBind	T	ui.o
 archipelago	Ap_GetNewGameBind	T	randomizer.o ui.o
+archipelago	Ap_HeartPiecePlace	T	mptest.o sprite_main.o
 archipelago	Ap_HostBind	T	mptest.o session.o ui.o
+archipelago	Ap_HostWorld	T	session.o
+archipelago	Ap_IsAlttpFile	T	mptest.o randomizer.o sprite_main.o
 archipelago	Ap_IsApFile	T	randomizer.o ui.o
 archipelago	Ap_IsConnecting	T	ui.o
+archipelago	Ap_MedallionOpens	T	ancilla.o
 archipelago	Ap_NextEvent	T	session.o
 archipelago	Ap_OnChestOpened	T	dungeon.o
 archipelago	Ap_OnFileLoaded	T	randomizer.o
@@ -17,13 +23,18 @@ archipelago	Ap_OnGoal	T	ending.o
 archipelago	Ap_OnNewFile	T	randomizer.o
 archipelago	Ap_OnSpecialPlace	T	randomizer.o
 archipelago	Ap_OnStateLoaded	T	main.o
+archipelago	Ap_PlaceItem	T	ancilla.o dungeon.o sprite.o sprite_main.o
 archipelago	Ap_PollNotice	T	mptest.o ui.o
+archipelago	Ap_PrizeGate	T	ancilla.o sprite_main.o
+archipelago	Ap_RoomFlagPlace	T	mptest.o sprite.o sprite_main.o
 archipelago	Ap_SetNewGameBind	T	session.o
+archipelago	Ap_SetNewGameWorld	T	session.o
 archipelago	Ap_StatusLine	T	mptest.o ui.o
 archipelago	Ap_TestDeathLink	T	mptest.o
 archipelago	Ap_TestGiveItem	T	mptest.o
 archipelago	Ap_TestRoom	T	mptest.o
 archipelago	Ap_TestSent	T	mptest.o
+archipelago	Ap_TestSetOption	T	mptest.o
 archipelago	Ap_Tick	T	main.o mptest.o
 hd2d	Hd2d_Draw2D	T	mptest.o
 hd2d	Hd2d_DrawFrame	T	main.o mptest.o
@@ -100,6 +111,7 @@ randomizer	Rando_OnSmithsTakeSword	T	sprite_main.o
 randomizer	Rando_SetNewGameSetting	T	mptest.o session.o
 randomizer	Rando_SpecialDone	T	sprite_main.o
 randomizer	Rando_SpecialItem	T	sprite_main.o
+randomizer	Rando_SwordLevel	T	archipelago.o
 randomizer	Rando_TestRoomAccess	T	mptest.o
 randomizer	Rando_TestWin	T	mptest.o
 randomizer	Rando_Tracker	T	mptest.o ui.o
