@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd2d mod)
+#if MOD_HD2D
 // (SDL first: on Windows its headers clash with variables.h's short names.)
 #include <SDL.h>
 #include <math.h>
@@ -710,3 +712,4 @@ int Hd2d_NumLights(void) {
 bool Hd2d_LitDarkRoom(void) {
   return g_scene.dark;
 }
+#endif  // MOD_HD2D

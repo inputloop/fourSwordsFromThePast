@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the netplay mod)
+#if MOD_NETPLAY
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -303,3 +305,4 @@ int Net_TcpRequest(const NetAddr *to, const char *request, int reqlen, char *res
   CLOSESOCKET(fd);
   return total;
 }
+#endif  // MOD_NETPLAY

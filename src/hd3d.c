@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd3d mod)
+#if MOD_HD3D
 // The 3D view (beta): drawing a pane in 3D (see hd3d.h).
 //
 // A pane is drawn in two phases:
@@ -1288,3 +1290,4 @@ void Hd3d_DumpScene(const char *ppm_path) {
   if (s)
     Hd3dScene_Dump(s, ppm_path);
 }
+#endif  // MOD_HD3D

@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd3d mod)
+#if MOD_HD3D
 // The 3D view: which object drew which OAM entries, and sprites as cards
 // standing in the scene (see hd3d_internal.h).
 #include <SDL.h>
@@ -745,3 +747,4 @@ int Hd3dSprites_Build(const Hd3dSpriteFrame *sf, const Hd3dScene *scene, const R
   *num_decals = nd;
   return nc;
 }
+#endif  // MOD_HD3D

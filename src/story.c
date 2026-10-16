@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the story mod)
+#if MOD_STORY
 #include "story.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -474,3 +476,4 @@ int Story_MeasureOriginals(bool verbose) {
     printf("original text: widest line %d px, at most %d lines between key waits, %d over\n", max_px, max_lines, bad);
   return max_px;
 }
+#endif  // MOD_STORY

@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd3d mod)
+#if MOD_HD3D
 // The 3D view's software rasterizer (see r3d.h). A frame is drawn in three
 // steps:
 // - Setup, on the runner over the quads (in chunks dealt round robin, see
@@ -1413,3 +1415,4 @@ bool R3d_BoxVisible(const R3dCamera *cam, int w, int h, const float lo[3], const
   }
   return !out_and && beyond < 8;
 }
+#endif  // MOD_HD3D

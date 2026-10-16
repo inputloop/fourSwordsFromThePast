@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include "net.h"
 #include "upnp.h"
+#include "mods.h"
 #include "util.h"
 #include "zelda_rtl.h"
 #include "features.h"
@@ -17,6 +18,10 @@
 
 enum {
   kProtoVersion = 21,
+  // What goes on the wire: the protocol version, and, for a build whose
+  // game-changing mods differ from the shipped ones, a tag for which mods it
+  // has (mods/SPEC.md, M17). The shipped build sends kProtoVersion alone.
+  kWireVersion = MODS_SIM_TAG ? (0x8000 | MODS_SIM_TAG) : kProtoVersion,
   kRingSize = 1024,
   kChunkSize = 1024,
   kChunksPerTick = 24,
@@ -806,9 +811,9 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     name[23] = 0;
     uint32 token = Rd32(r);
     uint8 rejoin = Rd8(r);
-    if (ver != kProtoVersion) {
+    if (ver != kWireVersion) {
       WBegin(&w, kPkt_Reject);
-      WData(&w, "Different game version", 23);
+      WData(&w, "Different game version or mods", 31);
       Net_Send(g_s.sock, from, w.buf, w.pos);
       return;
     }
@@ -1628,7 +1633,7 @@ static void ClientSendInput(const uint16 *local_inputs) {
     if (now - g_s.last_hello > (g_s.st.client_state == 1 ? 250u : 500u)) {
       g_s.last_hello = now;
       WBegin(&w, kPkt_Hello);
-      Wr16(&w, kProtoVersion);
+      Wr16(&w, kWireVersion);
       WData(&w, g_s.name, 24);
       Wr32(&w, g_s.token);
       Wr8(&w, g_s.st.client_state == 4);

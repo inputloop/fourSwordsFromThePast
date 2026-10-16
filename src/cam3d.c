@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd3d mod)
+#if MOD_HD3D
 // The 3D view's camera and camera-relative movement (see cam3d.h).
 // World axes: x east, y south, z up, in SNES pixels. A camera with yaw p
 // (degrees, 0 looks north, + turns right) and pitch t (degrees below the
@@ -434,3 +436,4 @@ uint16 Cam3d_Rotate(Cam3dRemap *r, uint16 input, float move_x, float move_y, flo
   r->sector = (int8)k, r->last_dirs = (uint16)dirs;
   return (uint16)((input & ~0xf0) | kSectorBits[k]);
 }
+#endif  // MOD_HD3D

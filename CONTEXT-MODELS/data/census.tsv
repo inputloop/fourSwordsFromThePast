@@ -1,0 +1,137 @@
+# made by: python3 tools/mods_census.py   (after make with every mod on: mods.cfg +helpbook; upstream 8464ead + the recipe branch)
+group	symbol	kind	user_objects
+archipelago	Ap_ApplyEvent	T	session.o
+archipelago	Ap_BeforeFrame	T	session.o
+archipelago	Ap_BossPlace	T	mptest.o sprite_main.o
+archipelago	Ap_Connect	T	mptest.o ui.o
+archipelago	Ap_Disconnect	T	ui.o
+archipelago	Ap_FairyPlace	T	mptest.o sprite_main.o
+archipelago	Ap_FileBind	T	ui.o
+archipelago	Ap_GetNewGameBind	T	randomizer.o ui.o
+archipelago	Ap_HeartPiecePlace	T	mptest.o sprite_main.o
+archipelago	Ap_HostBind	T	mptest.o session.o ui.o
+archipelago	Ap_HostWorld	T	session.o
+archipelago	Ap_IsAlttpFile	T	mptest.o randomizer.o sprite_main.o
+archipelago	Ap_IsApFile	T	randomizer.o ui.o
+archipelago	Ap_IsConnecting	T	ui.o
+archipelago	Ap_MedallionOpens	T	ancilla.o
+archipelago	Ap_NextEvent	T	session.o
+archipelago	Ap_OnChestOpened	T	dungeon.o
+archipelago	Ap_OnFileLoaded	T	randomizer.o
+archipelago	Ap_OnGameOver	T	overworld.o player.o
+archipelago	Ap_OnGoal	T	ending.o
+archipelago	Ap_OnNewFile	T	randomizer.o
+archipelago	Ap_OnSpecialPlace	T	randomizer.o
+archipelago	Ap_OnStateLoaded	T	main.o
+archipelago	Ap_PlaceItem	T	ancilla.o dungeon.o sprite.o sprite_main.o
+archipelago	Ap_PollNotice	T	mptest.o ui.o
+archipelago	Ap_PrizeGate	T	ancilla.o sprite_main.o
+archipelago	Ap_RoomFlagPlace	T	mptest.o sprite.o sprite_main.o
+archipelago	Ap_SetNewGameBind	T	session.o
+archipelago	Ap_SetNewGameWorld	T	session.o
+archipelago	Ap_StatusLine	T	mptest.o ui.o
+archipelago	Ap_TestDeathLink	T	mptest.o
+archipelago	Ap_TestGiveItem	T	mptest.o
+archipelago	Ap_TestRoom	T	mptest.o
+archipelago	Ap_TestSent	T	mptest.o
+archipelago	Ap_TestSetOption	T	mptest.o
+archipelago	Ap_Tick	T	main.o mptest.o
+hd2d	Hd2d_Draw2D	T	mptest.o
+hd2d	Hd2d_DrawFrame	T	main.o mptest.o
+hd2d	Hd2d_GatherLights	T	hd3d.o
+hd2d	Hd2d_HiddenPixels	T	mptest.o
+hd2d	Hd2d_IsDarkRoom	T	hd3d.o
+hd2d	Hd2d_LitDarkRoom	T	mptest.o
+hd2d	Hd2d_NumLights	T	mptest.o
+hd2d	Hd2d_ParallelFor	T	hd3d.o
+hd2d	Hd2d_Post	T	hd3d.o
+hd3d	Hd3d_After2D	T	hd2d.o
+hd3d	Hd3d_BeginPanes	T	main.o mptest.o
+hd3d	Hd3d_ComputeViews	T	main.o mptest.o
+hd3d	Hd3d_DrawFrame	T	hd2d.o
+hd3d	Hd3d_DumpScene	T	mptest.o
+hd3d	Hd3d_FinishPanes	T	main.o mptest.o
+hd3d	Hd3d_GetCamera	T	mptest.o ui.o
+hd3d	Hd3d_GetStats	T	mptest.o
+hd3d	Hd3d_HandleViewButtons	T	main.o mptest.o
+hd3d	Hd3d_LastWhy2D	T	mptest.o
+hd3d	Hd3d_LocalEnabled	T	mptest.o ui.o
+hd3d	Hd3d_OnKeyCommand	T	main.o mptest.o
+hd3d	Hd3d_OnMouseButton	T	main.o mptest.o
+hd3d	Hd3d_OnMouseMotion	T	main.o mptest.o
+hd3d	Hd3d_OnMouseWheel	T	main.o mptest.o
+hd3d	Hd3d_OnWindowFocus	T	main.o mptest.o
+hd3d	Hd3d_PaneIs3D	T	mptest.o ui.o
+hd3d	Hd3d_PressViewButton	T	mptest.o
+hd3d	Hd3d_Project	T	ui.o
+hd3d	Hd3d_RemapInputs	T	main.o mptest.o
+hd3d	Hd3d_RemapLocal	T	mptest.o
+hd3d	Hd3d_ResetCamera	T	ui.o
+hd3d	Hd3d_ResetForTests	T	mptest.o
+hd3d	Hd3d_ScaleAt	T	ui.o
+hd3d	Hd3d_SetCamera	T	mptest.o
+hd3d	Hd3d_SetEnabled	T	main.o mptest.o
+hd3d	Hd3d_SetLocalEnabled	T	main.o mptest.o ui.o
+hd3d	Hd3d_SetLocalEnabledQuiet	T	mptest.o
+hd3d	Hd3d_SetPanes	T	main.o mptest.o
+hd3d	Hd3d_SetRightStick	T	mptest.o
+hd3d	Hd3d_SetTestCamera	T	mptest.o
+hd3d	Hd3d_StandZAt	T	mptest.o
+hd3d	Hd3d_TagBegin	T	ancilla.o dungeon.o player_oam.o sprite.o
+hd3d	Hd3d_TagEnd	T	ancilla.o dungeon.o player_oam.o sprite.o
+hd3d	Hd3d_TagFrameStart	T	zelda_rtl.o
+hd3d	Hd3d_ToggleFirstPerson	T	ui.o
+hd3d	Hd3d_Update	T	main.o mptest.o
+hd3d	Hd3d_WantsRelativeMouse	T	main.o mptest.o
+helpbook	Helpbook_Open	T	main.o
+helpbook	Helpbook_Topic	T	mptest.o
+netplay	Net_AddrEqual	T	session.o
+netplay	Net_AddrToString	T	session.o
+netplay	Net_Close	T	session.o
+netplay	Net_GetLocalIp	T	session.o
+netplay	Net_Init	T	session.o
+netplay	Net_LocalPort	T	session.o
+netplay	Net_Open	T	session.o
+netplay	Net_ParseAddr	T	mptest.o session.o
+netplay	Net_Recv	T	session.o
+netplay	Net_Send	T	session.o
+netplay	Net_SetBlackout	T	mptest.o
+netplay	Net_SetSim	T	mptest.o
+randomizer	Rando_AdjustReceivedItem	T	player.o
+randomizer	Rando_Check	T	mptest.o
+randomizer	Rando_ChestItem	T	dungeon.o
+randomizer	Rando_CurrentSeed	T	sprite_main.o ui.o
+randomizer	Rando_GetNewGameSetting	T	session.o ui.o
+randomizer	Rando_GiveStartItems	T	dungeon.o overworld.o
+randomizer	Rando_IsApLocation	T	archipelago.o
+randomizer	Rando_OnFileLoaded	T	messaging.o
+randomizer	Rando_OnNewFile	T	select_file.o
+randomizer	Rando_OnSmithsReturnSword	T	sprite_main.o
+randomizer	Rando_OnSmithsTakeSword	T	sprite_main.o
+randomizer	Rando_SetNewGameSetting	T	mptest.o session.o
+randomizer	Rando_SpecialDone	T	sprite_main.o
+randomizer	Rando_SpecialItem	T	sprite_main.o
+randomizer	Rando_SwordLevel	T	archipelago.o
+randomizer	Rando_TestRoomAccess	T	mptest.o
+randomizer	Rando_TestWin	T	mptest.o
+randomizer	Rando_Tracker	T	mptest.o ui.o
+randomizer	Rando_UncleGivesItems	T	sprite_main.o
+randomizer	Rando_WriteSpoiler	T	mptest.o ui.o
+screenshot	Screenshot_Grab	T	main.o mptest.o
+screenshot	Screenshot_LastFile	T	mptest.o
+screenshot	Screenshot_Request	T	main.o mptest.o
+screenshot	Screenshot_SetFolder	T	mptest.o
+screenshot	Screenshot_Wait	T	main.o mptest.o
+story	Story_CheckText	T	mptest.o
+story	Story_GetMessage	T	messaging.o
+story	Story_MeasureOriginals	T	mptest.o
+story	Story_SetEnabled	T	mptest.o session.o
+netplay	Upnp_MapPort	T	mptest.o
+netplay	Upnp_MapPortAsync	T	session.o
+netplay	Upnp_SetStunServer	T	main.o
+netplay	Upnp_StunPublicIp	T	mptest.o
+netplay	Upnp_UnmapPort	T	mptest.o session.o
+archipelago	g_ap_settings	B	main.o mptest.o ui.o
+hd2d	g_draw_extra_left_right	D	main.o mptest.o
+hd2d	g_hd2d	B	hd3d.o main.o mptest.o ui.o
+hd3d	g_hd3d	B	main.o mptest.o ui.o

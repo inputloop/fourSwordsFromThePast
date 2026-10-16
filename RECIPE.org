@@ -1,0 +1,284 @@
+#+TITLE: RECIPE: Four Swords of the Past, the recipe branch
+#+SUBTITLE: what each part is, in the order to make it, with the command and what you should see
+#+PROPERTY: header-args:sh :tangle no
+
+* What this is
+
+This file is a *recipe*: the ordered steps to reproduce a build and its proofs, with the prose that
+says why beside each command. It lies flat inside the repository it builds (Corwin calls that a
+*recumbent recipe*), so it travels with the code, is versioned with it, and can be read top to bottom
+by a person or handed whole to an agent.
+
+It was written for the =recipe= branch of fourSwordsFromThePast, which adds four things to Bryant's
+game and changes nothing about how the shipped game plays (one message changed: a refused join now
+says "Different game version or mods"):
+
+1. *mods chosen when the game is built*: a catalog, a file of your own choices, and stand-ins, so a
+   build carries exactly the mods you want;
+2. *a new mod*, the help key, off unless you switch it on;
+3. *two books*, a player's book and a developer's guide, as Windows help and as web pages;
+4. *the models* the work was planned from, in =CONTEXT-MODELS/=.
+
+The claim the branch was made to show, in Corwin's words: /RECIPE > versioning, AND consistency in
+voice > tone of voice, in clarity to humans/. Read it as two bets. A recipe, which says what each
+part is and checks itself, will explain this branch to a stranger better than its version history
+does. And one consistent voice, adjusted in tone for each reader, will be clearer than texts that
+each find their own voice. How to check it, now and later: the council's reading (in the pull
+request), and the numbers =python3 tools/books.py voice= prints for every text the branch wrote
+(see /The voices/ below). If the books' numbers drift apart where a voice should hold, or the same
+where a tone should differ, the second bet is losing.
+
+** On Windows
+
+The commands here are for a shell. On Windows, Git Bash (which comes with Git for Windows) runs all of
+them; Visual Studio builds the game without any of them, choosing the mods itself (devguide §13).
+
+** How to read it
+
+Each section says what a part is, gives the command, and says what you should see, under =Expect=.
+Blocks marked =:tangle check= are the recipe's own check. Two readers can pull them out, and must
+agree:
+
+#+begin_src sh
+awk -f tools/unfold.awk RECIPE.org > /tmp/recipe-check.sh   # the first reader
+python3 tools/unfold.py RECIPE.org | cmp - /tmp/recipe-check.sh && sh /tmp/recipe-check.sh
+#+end_src
+
+Expect: no output from =cmp=, then the check's own lines, ending =recipe: every check passed=. The
+check stops at its first failure, so that last line means every check before it passed; a planted
+fault shows it (=sh tests/recipe/run.sh --prove-red=).
+
+* Parts
+
+| part | what it is | where |
+|------+------------+-------|
+| the catalog | every mod: what it is, what it needs, its files and tests | =mods/catalog.tsv= |
+| the default | which mods a plain build carries | =mods/default.cfg= |
+| your choice | the mods you want; yours, never committed | =mods.cfg= |
+| the spec | the rules, numbered M1 to M21 | =mods/SPEC.md= |
+| the tool | reads the three, writes the header the build uses | =tools/mods.py= |
+| the stand-ins | what the game gets when a mod is left out | =src/mods_off.c= |
+| the census | measures what each mod exposes | =tools/mods_census.py= |
+| the matrix | every composition built, every test run | =tools/mods_matrix.sh=, =tools/mods_needs.py= |
+| the help key | the new mod | =src/helpbook.c=, =src/helpbook_os.c= |
+| the books | two game books, one Markdown file each | =docs/books/=, =tools/books.py= |
+| the models | first-person models, relations, words | =CONTEXT-MODELS/= |
+| the campaign | a composition written as a C4 change | =mods/CAMPAIGN-example.assy= |
+| the Switch | a build option with its own set of mods (=make switch=) | =src/platform/switch/=, =mods/switch.cfg= |
+
+* The ground: build once, test once
+
+Before changing anything, have a green run to come back to. You need your own ROM as =zelda3.sfc=
+(the README says how) and SDL2.
+
+#+begin_src sh
+make -j
+sh tests/run_coop_tests.sh
+#+end_src
+
+Expect: =zelda3= and =zelda3_assets.dat= built; every test =PASS=, and =SKIP helpbook= (the help key
+is not in the shipped build, so its test is skipped, and says why).
+
+* Choosing the mods
+
+This is the block that decides a build. Edit it in words, then copy it into =mods.cfg= with one
+command. Empty means the shipped composition.
+
+#+begin_src mods
+#+end_src
+
+The words are =+NAME= (on) and =-NAME= (off), several to a line if you like, or =NAME on= and
+=NAME off=. Anything after =#= is a comment. The names are the catalog's; print them:
+
+#+begin_src sh :tangle check
+set -e   # the check stops at its first failure, however it is run
+python3 tools/mods.py check
+python3 tools/mods.py show
+#+end_src
+
+Expect: =mods: the composition is good=, then one line per mod, =on= or =off=, where it came from,
+and what it is; and a last line saying whether this build plays online with the shipped one.
+
+An example, for an agent handed this file with the words /"build me a copy without the 3D view or
+Archipelago"/: the block becomes =-hd3d -archipelago=, and =python3 tools/mods.py check= says the
+composition is good (Archipelago needs the randomizer, which stays on). The words "3D view" and
+"Archipelago" are the catalog's summaries; =python3 tools/mods.py show= prints them beside the names.
+
+To use the block:
+
+#+begin_src sh
+python3 tools/mods.py from-recipe RECIPE.org   # checks the block, then writes mods.cfg
+make -j
+./zelda3 --mods                                # the mods this program carries
+#+end_src
+
+* From C4 to the build: the worked example
+
+In Corwin's lab, C4 is where a change is written before it is made: as a /campaign/, a stream of
+lines each naming one act, with prose allowed anywhere between them, because a line that does not
+resolve is a comment and never an error. =mods/CAMPAIGN-example.assy= is a composition written that
+way, for a laptop at a cabin: no 3D view, no network, no Archipelago, and the help key for two
+cousins who have never played.
+
+The route is five steps, and only the last two change anything in a build:
+
+1. edit the campaign (in C4, or in any editor);
+2. plan it with C4's own reader, which never acts (=sh h/assy.sh plan FILE=, in a C4 tree);
+3. write it into a recipe's =mods= block (=tools/mods.py from-assy FILE --into RECIPE.org=);
+4. hand the recipe to whoever builds, person or agent: they run =from-recipe=;
+5. =make=.
+
+Here it is end to end, on a copy of this recipe so the committed one keeps the shipped
+composition. This block is part of the recipe's check:
+
+#+begin_src sh :tangle check
+t=$(mktemp -d)
+restore() { if [ -f "$t/mods.cfg.keep" ]; then cp "$t/mods.cfg.keep" mods.cfg; else rm -f mods.cfg; fi; rm -rf "$t"; }
+if [ -f mods.cfg ]; then cp mods.cfg "$t/mods.cfg.keep"; fi
+trap restore EXIT
+cp RECIPE.org "$t/RECIPE.org"
+python3 tools/mods.py from-assy mods/CAMPAIGN-example.assy --into "$t/RECIPE.org"
+grep -A1 '^#+begin_src mods' "$t/RECIPE.org" | tail -1 | grep -qx -- '-hd3d -netplay -archipelago +helpbook'
+python3 tools/mods.py from-recipe "$t/RECIPE.org"
+grep -qx -- '-hd3d -netplay -archipelago +helpbook' mods.cfg
+python3 tools/mods.py show | grep -q 'plays only with builds that have the same game-changing mods'
+restore; trap - EXIT
+#+end_src
+
+Expect: no output but the tool's own lines (=the mods block of ... is now: -hd3d -netplay
+-archipelago +helpbook=, =mods.cfg now holds the block=), and your own =mods.cfg= put back as it was.
+
+Why each step is where it is:
+
+- *The campaign keeps prose.* A composition is a decision about a place and the people in it; the
+  reasons belong next to the lines. C4 allows that because its language has no error state.
+- *A typo is said aloud.* C4 keeps a line it cannot resolve as a comment. That is right for prose and
+  wrong for a misspelt mod, which would vanish. So =from-assy= keeps it, as C4 requires, and prints
+  it, so nothing vanishes in silence (=mods/SPEC.md=, M20).
+- *The recipe's block is the hand-off.* An agent handed this file needs one place that says what is
+  wanted, in words it cannot misread, and one command that refuses with a reason (M5 to M8).
+- *Two readers.* When a C4 tree is at hand (=C4_ROOT=), the tool's tests also read the campaign with
+  C4's own tokenizer and check that both see the same acts.
+
+* Proving it
+
+Three layers, each able to fail, and each shown failing.
+
+#+begin_src sh :tangle check
+sh tests/mods/run.sh > /dev/null && echo "recipe: the mods tool's tests pass"
+sh tests/mods/run.sh --prove-red > /dev/null && echo "recipe: and each planted fault turns them red"
+python3 tools/mods.py guard
+#+end_src
+
+Expect: the two =recipe:= lines, and no output from =guard= (every mod's files carry their guard).
+
+The tool is Python and its tests are shell, so a misreading of the spec in one is not copied into
+the other. =--prove-red= plants eight faults, one at a time, in a copy of the tool; each must turn
+the tests red.
+
+The third layer is the matrix: every composition (the shipped one, each mod off alone, all off)
+built, and every game test run in each, skipping nothing. It takes about an hour:
+
+#+begin_src sh
+sh tools/mods_matrix.sh /tmp/matrix
+python3 tools/mods_needs.py /tmp/matrix
+#+end_src
+
+Expect: =/tmp/matrix/builds.tsv= (did it build, how big) and =tests.tsv= (every result); then, from
+=mods_needs=, each test the matrix shows needing a mod, and whether the catalog's =tests= column
+agrees. Believe the matrix over the catalog, and fix the catalog.
+
+* The help key
+
+A mod new on this branch: =Ctrl+H= opens the player's book at the section for the moment you are in
+(the menu, the title screen, online, together, a dungeon, outdoors). It is off in the shipped build.
+
+#+begin_src sh
+echo +helpbook >> mods.cfg && make -j && make books   # adds the help key to your own choices
+./zelda3 --mptest tests/coop/helpbook.txt
+#+end_src
+
+Expect: =MPTEST OK=. Then play, and press Ctrl+H. (Take the =+helpbook= line out of =mods.cfg= again
+when you want the shipped set back.)
+
+The developer's guide walks through how it was made, step by step (§12): it is the worked example of
+making a mod.
+
+* The books
+
+Two game books. Each section ends by sending you somewhere; a program checks that no route goes
+nowhere, every section can be reached, and every page the help key can ask for exists.
+
+#+begin_src sh :tangle check
+python3 tools/books.py check
+sh tests/books/run.sh > /dev/null && sh tests/books/run.sh --prove-red > /dev/null && echo "recipe: the book check's tests pass, and fail when they should"
+#+end_src
+
+Expect: =books: every route goes somewhere, every section can be reached, every help page exists=,
+and the =recipe:= line.
+
+#+begin_src sh
+make books   # help/: two .chm files (Windows help), the pages as HTML, one-page HTML, plain text
+#+end_src
+
+The =.chm= needs =chmcmd= (Free Pascal's =fp-utils=); HTML needs =pandoc=. Without =chmcmd= the rest
+is still built.
+
+* The voices
+
+The two books speak from two seats, chosen once before they were written and not changed after:
+
+- *the player's book* counts routes: how many ways from where you are to where you want to be, and
+  whether two of them are really the same way;
+- *the developer's guide* is organised by the moment you are in, never strands you, and prints its
+  own mistakes beside the fixes.
+
+Each seat is a character sheet from the game books Corwin's workshop keeps (Teodoro Ilunga and
+Delphine Roux-Abara). They are fictional, and the books say so on their first page: the AI that wrote
+every word had the sheet at the desk to decide what a reader needs. Before the pull request, a
+council of readers (two critics with opposite biases, and an editor's seat with a third fictional
+sheet, Henriette Solberg-Maas's) read the books and this recipe, and two fact-checks read every claim
+of the player's book; their findings, and what changed, are summed up in the pull request.
+
+The numbers, for each text:
+
+#+begin_src sh :tangle check
+python3 tools/books.py voice docs/books/manual.md docs/books/devguide.md RECIPE.org > /dev/null && echo "recipe: the voice gauge runs"
+#+end_src
+
+Expect, from =python3 tools/books.py voice FILE...=: for each text its words per sentence, how often
+it says /you/ and /I/, its routes, its lab terms (words a reader of this repository may not know), and
+its em-dashes (always 0).
+
+* The models
+
+=CONTEXT-MODELS/= holds what the work was planned from: each mod in its own first person with its
+numbers, the readers the books were written for, the contributors (whose own words go in their own
+files, written by nobody else), how the parts lean on each other, and the project's words.
+
+#+begin_src sh :tangle check
+awk -F'\t' '!/^#/ && NF!=6 {bad++} END {exit bad>0}' CONTEXT-MODELS/TAXONOMY.tsv && echo "recipe: the taxonomy is well formed"
+#+end_src
+
+* House style
+
+This is Bryant's repository, so his garden's rule holds in everything the branch adds: no em-dashes.
+
+#+begin_src sh :tangle check
+! grep -l "$(printf '\342\200\224')" RECIPE.org mods/*.md docs/books/*.md CONTEXT-MODELS/*.md CONTEXT-MODELS/*/*.md && echo "recipe: no em-dashes"
+echo "recipe: every check passed"
+#+end_src
+
+* Credits
+
+In the order of the lab's ladder (attribute, credit, acknowledge, thank):
+
+- *The game*: Nintendo's /The Legend of Zelda: A Link to the Past/ (1991). Its pictures, music, maps
+  and words come from your own ROM and are never in this repository.
+- *zelda3*, the C rewrite: snesrev, MIT licence. Its picture and sound chips: LakeSnes (elzo-d).
+- *fourSwordsFromThePast*, the co-op and every mod before this branch: Bryant Frankford, with his
+  agent Alfred.
+- *The recipe branch*: Mentat (for Corwin), an AI (Claude), at Corwin Brust's word, with his
+  workshop's methods. The council's editor seat used the sheet of Henriette Solberg-Maas, a fictional
+  editor from the same game books.
+- *Free Pascal's =chmcmd=* compiles the Windows help; *pandoc* makes the pages.

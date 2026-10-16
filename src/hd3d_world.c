@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd3d mod)
+#if MOD_HD3D
 // The 3D view: rooms and overworld areas as 3D scenes (see hd3d_internal.h).
 //
 // A scene is one dungeon room (512 x 512 px) or overworld area (512 or 1024
@@ -3810,3 +3812,4 @@ void Hd3dScene_Dump(const Hd3dScene *s, const char *ppm_path) {
   }
   free(img);
 }
+#endif  // MOD_HD3D

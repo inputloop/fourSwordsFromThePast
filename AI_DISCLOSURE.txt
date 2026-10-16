@@ -1,6 +1,6 @@
 AI USE DISCLOSURE
 fourSwordsFromThePast (Four Swords of the Past)
-Last updated: October 13, 2026
+Last updated: October 16, 2026
 
 SUMMARY
 
@@ -11,9 +11,12 @@ maintainers, who decided what to build, played the game, reported bugs and
 decided what to keep.
 
 Every commit in this repository's history, from the first one on
-October 10, 2026, was made by the AI assistant (author "Claude
-<noreply@anthropic.com>"), and each carries a "Co-Authored-By" line naming
-the AI.
+October 10, 2026, was made by an AI assistant, and each carries a
+"Co-Authored-By" line naming the AI. Most are authored "Claude
+<noreply@anthropic.com>". The commits of the recipe branch (October 16,
+2026) were made by an AI too (Claude, working for Corwin Brust as
+"Mentat"); by Corwin's house rule they are authored under his name, and
+each carries "Co-Authored-By: Mentat (for Corwin; MODEL)", naming the AI.
 
 
 WHAT THE AI WROTE
@@ -38,6 +41,13 @@ WHAT THE AI WROTE
   the Archipelago setup guides.
 - The screenshots in docs/screenshots/. They are not AI-generated images:
   the AI ran the game with a test program and saved what the game drew.
+- On the recipe branch: choosing mods when the game is built
+  (mods/, tools/mods*.py and .sh, src/mods_off.c, src/mods.h and the
+  guards around each mod's files), the help key (src/helpbook*.c), the
+  two books (docs/books/, tools/books.py), the models it was planned from
+  (CONTEXT-MODELS/), RECIPE.org, their tests (tests/mods/, tests/books/,
+  tests/coop/helpbook.txt), and the README sections about them. Corwin
+  Brust asked for it and set how it was checked.
 
 
 WHAT THE AI DID NOT WRITE

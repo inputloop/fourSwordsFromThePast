@@ -48,6 +48,8 @@ static const uint16 kDefaultKbdControls[kKeys_Total] = {
   _(SDLK_F12), C(SDLK_F12),
   // WatchEveryone
   C(SDLK_F11),
+  // Help (the helpbook mod; does nothing in a build without it)
+  C(SDLK_h),
 };
 #undef _
 #undef A
@@ -71,6 +73,7 @@ static const KeyNameId kKeyNameId[] = {
   S(View3d), S(View3dTurnLeft), S(View3dTurnRight), S(View3dTiltUp), S(View3dTiltDown), S(View3dReset),
   S(Screenshot), S(ScreenshotClean),
   S(WatchEveryone),
+  S(Help),
 };
 #undef S
 #undef M

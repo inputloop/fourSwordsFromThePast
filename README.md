@@ -52,6 +52,8 @@ in three places with the team panel.*
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 See **[docs/HOW_THE_MOD_WORKS.md](docs/HOW_THE_MOD_WORKS.md)** for a plain-language guide to how the whole mod works.
 Want to change or extend it? **[docs/MODDING.md](docs/MODDING.md)** is a step-by-step modding guide: building, a map of the code, the rules that keep online play in sync, recipes and testing.
+New to the game? **The player's book** (`docs/books/manual.md`, or the `help` folder in a build) starts with the one thing every way of playing needs, and sends you where you want to go from there.
+Building your own copy, with some mods left out? **The developer's guide** (`docs/books/devguide.md`) and **[RECIPE.org](RECIPE.org)** show how, step by step, with what you should see at each one.
 
 ## Four Swords of the Past
 
@@ -745,6 +747,34 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
   picture without the mod's menus, name tags and arrows (the game's HUD
   stays). Change the keys in `zelda3.ini` (`Screenshot`, `ScreenshotClean`).
 
+## Choosing the mods when you build
+
+Everything above is a mod of the original game, and a build can leave any of them out except
+co-op itself, which is the game now. Write the ones you want changed in a file called `mods.cfg` at
+the top of the tree (it is yours; git ignores it), then build as usual:
+
+```
+-archipelago      # leave Archipelago out
+-hd3d             # and the 3D view
++helpbook         # and put the help key in
+```
+
+`python3 tools/mods.py show` lists every mod, on or off, and what it is; `./zelda3 --mods` says what a
+built program carries. A mod that is left out is not in the program at all, and its menu lines are
+gone. The shipped build carries every mod above and plays online with builds made before this
+existed; two builds whose game-changing mods differ refuse each other with "Different game version or
+mods" instead of drifting apart.
+
+The **help key** is a new mod, off unless you switch it on: **Ctrl+H** opens the player's book at the
+section for what you are doing (the menu, the title screen, online, together, a dungeon, outdoors), as
+a Windows help window or in the browser.
+
+The two **books** are built with `make books` into `help/`: a Windows help file for each, web pages,
+and plain text. The Windows download carries them.
+
+How the whole thing was made, why, and the checks that prove it: [RECIPE.org](RECIPE.org), the
+developer's guide, and [CONTEXT-MODELS/](CONTEXT-MODELS/).
+
 ## Where to mod
 
 - `src/` holds the game logic as C: `player.c` (Link), `sprite_main.c` (enemies/NPCs), `dungeon.c`, `overworld.c`, `ancilla.c` (projectiles/effects), `hud.c`.
@@ -752,7 +782,8 @@ The ROM, `zelda3_assets.dat` and saves are gitignored. **Never commit them.**
 - `src/hd2d.c` (the 2D-HD look), `src/hd3d*.c`, `src/r3d.c` and `src/cam3d.c` (the 3D view).
 - `assets/` holds the extracted resources (overworld/dungeon YAML, images, text). Edit these, then rebuild them with `python3 assets/restool.py` (see BUILDING.md).
 - `zelda3.ini` holds the runtime options. The in-game menu saves its changes to `zelda3.coop.ini`.
-- `tests/run_coop_tests.sh` runs headless co-op and netplay regression tests.
+- `tests/run_coop_tests.sh` runs headless co-op and netplay regression tests. Tests that need a mod your build leaves out say `SKIP`, and why.
+- `mods/catalog.tsv` declares every mod that can be left out of a build; `src/mods_off.c` is what the game gets in its place. To make a new one, the developer's guide (`docs/books/devguide.md`, §6) has the steps.
 - Making videos: `tools/trailer.sh [out.mkv]` plays `tests/screens/trailer.txt` headless and makes a trailer
   from your own ROM (needs ffmpeg). The script's `record <dir>` / `record off` commands capture what the
   game window would show and the game's sound, and `musicoff 1` silences the music but keeps the sound

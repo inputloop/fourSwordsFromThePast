@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the archipelago mod)
+#if MOD_ARCHIPELAGO
 // Archipelago client: the JSON protocol on top of ap_ws, on a thread of its
 // own. The thread owns the connection; the game talks to it through g_ap,
 // which only ever changes under g_ap.mutex, and never waits for the network.
@@ -1510,3 +1512,4 @@ bool ApClient_PollText(char *buf, size_t size, ApTextKind *kind) {
   Unlock();
   return got;
 }
+#endif  // MOD_ARCHIPELAGO

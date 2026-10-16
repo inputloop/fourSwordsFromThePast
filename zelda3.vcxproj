@@ -116,6 +116,13 @@
     <OutDir>$(SolutionDir)bin\$(Platform)-$(Configuration)\</OutDir>
     <IntDir>$(SolutionDir)obj\$(Platform)-$(Configuration)\</IntDir>
   </PropertyGroup>
+  <!-- Which mods this build carries (mods/SPEC.md): src\mods_build.h from mods\default.cfg and your mods.cfg. -->
+  <ItemDefinitionGroup>
+    <PreBuildEvent>
+      <Command>python tools\mods.py write || py -3 tools\mods.py write</Command>
+      <Message>Choosing the mods (tools\mods.py)</Message>
+    </PreBuildEvent>
+  </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions);_CRT_SECURE_NO_WARNINGS</PreprocessorDefinitions>
@@ -258,6 +265,9 @@
     <ClCompile Include="src\mptest.c" />
     <ClCompile Include="src\net.c" />
     <ClCompile Include="src\screenshot.c" />
+    <ClCompile Include="src\helpbook.c" />
+    <ClCompile Include="src\helpbook_os.c" />
+    <ClCompile Include="src\mods_off.c" />
     <ClCompile Include="src\session.c" />
     <ClCompile Include="src\ui.c" />
     <ClCompile Include="src\upnp.c" />
@@ -493,6 +503,8 @@
     <ClInclude Include="src\story.h" />
     <ClInclude Include="src\net.h" />
     <ClInclude Include="src\screenshot.h" />
+    <ClInclude Include="src\helpbook.h" />
+    <ClInclude Include="src\mods.h" />
     <ClInclude Include="src\session.h" />
     <ClInclude Include="src\ui.h" />
     <ClInclude Include="src\upnp.h" />

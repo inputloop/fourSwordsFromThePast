@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the archipelago mod)
+#if MOD_ARCHIPELAGO
 // TLS for the Archipelago connection. Windows: Schannel, from secur32.dll and
 // crypt32.dll. Elsewhere: the system's OpenSSL. Both are loaded at run time,
 // so the game links no TLS library and still starts on systems without one
@@ -835,3 +837,4 @@ void ApTls_Close(ApTls *t) {
   free(t);
 }
 #endif
+#endif  // MOD_ARCHIPELAGO

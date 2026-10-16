@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd3d mod)
+#if MOD_HD3D
 // The 3D view: every Link shows the side the pane's camera sees of him
 // (see hd3d_internal.h).
 //
@@ -198,3 +200,4 @@ void Hd3dLinkPose_Read(Hd3dSpriteFrame *sf, const Cam3d *cam) {
     }
   }
 }
+#endif  // MOD_HD3D

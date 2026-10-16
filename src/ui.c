@@ -21,6 +21,7 @@
 #include "messaging.h"
 #include "select_file.h"
 #include "archipelago.h"
+#include "mods.h"
 
 // ---------------------------------------------------------------------------
 // 5x7 pixel font
@@ -520,11 +521,14 @@ static void ScreenMultiplayer() {
   Item("Players", buf);
   if (Act() == kAct_Select)
     Goto(kScreen_Players);
+#if MOD_ARCHIPELAGO
   Item("Archipelago", st->mode == kSessionClient ? "host's room" : Ap_HostBind() ? "connected" :
        Ap_IsConnecting() ? "connecting" : "off");
   if (Act() == kAct_Select)
     Goto(kScreen_Archipelago);
+#endif  // MOD_ARCHIPELAGO
   if (st->mode == kSessionOffline) {
+#if MOD_NETPLAY
     Item("Host a game", g_ui.use_upnp ? "with UPnP" : "LAN only");
     int a = Act();
     if (a == kAct_Left || a == kAct_Right) {
@@ -541,6 +545,7 @@ static void ScreenMultiplayer() {
       Session_RefreshLan();
       Goto(kScreen_Lan);
     }
+#endif  // MOD_NETPLAY
   } else {
     Item(st->mode == kSessionHost ? "Stop hosting" : st->client_state == 4 ? "Stop reconnecting" : "Leave game", NULL);
     if (Act() == kAct_Select)
@@ -571,6 +576,7 @@ static void ScreenMultiplayer() {
     }
   }
   // Input delay (only changed while not online: the frame timing depends on it)
+#if MOD_NETPLAY
   snprintf(buf, sizeof(buf), "%d frame%s", g_config.mp_input_delay, g_config.mp_input_delay == 1 ? "" : "s");
   Item("Online input delay", buf);
   int ad = Act();
@@ -580,6 +586,7 @@ static void ScreenMultiplayer() {
     Session_SetInputDelay(g_config.mp_input_delay);
     g_ui.dirty_settings = true;
   }
+#endif  // MOD_NETPLAY
   // Local players on this machine
   int next_local = -1;
   for (int i = 1; i < kSessionMaxLocal && next_local < 0; i++)
@@ -1009,6 +1016,7 @@ static void ScreenVideo() {
     if (g_ui.host.apply_display)
       g_ui.host.apply_display();
   }
+#if MOD_HD2D
   Item("2D-HD look (beta)", OnOff(g_config.hd2d));
   if (Act() != kAct_None) {
     g_config.hd2d ^= 1;
@@ -1018,10 +1026,13 @@ static void ScreenVideo() {
   Item("2D-HD settings", ">");
   if (Act() == kAct_Select || Act() == kAct_Right)
     Goto(kScreen_Hd2d);
+#endif  // MOD_HD2D
+#if MOD_HD3D
   Hd3dOnOff("3D view (beta)");
   Item("3D view settings", ">");
   if (Act() == kAct_Select || Act() == kAct_Right)
     Goto(kScreen_Hd3d);
+#endif  // MOD_HD3D
   Item("No sprite flicker", OnOff(g_config.no_sprite_limits));
   if (Act() != kAct_None) {
     g_config.no_sprite_limits ^= 1;
@@ -1190,6 +1201,7 @@ static void ScreenGameplay() {
   snprintf(g_ui.title, sizeof(g_ui.title), "GAMEPLAY OPTIONS");
   bool client = Session_GetStatus()->mode == kSessionClient;
   // The randomizer: Off -> random seed -> the seed of the game being played -> Off
+#if MOD_RANDOMIZER
   // (An Archipelago file's seed is of no use: the multiworld placed its items.)
   bool ap_file = Ap_IsApFile();
   uint32 rando = Session_GetRandomizer(), current = ap_file ? 0 : Rando_CurrentSeed();
@@ -1250,18 +1262,21 @@ static void ScreenGameplay() {
     g_config.tracker_after_map = !g_config.tracker_after_map;
     g_ui.dirty_settings = true;
   }
+#endif  // MOD_RANDOMIZER
   Item("Start new games with all items", OnOff(Session_GetFullInventory()));
   if (Act() != kAct_None && !client) {
     g_config.full_inventory = !g_config.full_inventory;
     Session_SetFullInventory(g_config.full_inventory);
     g_ui.dirty_settings = true;
   }
+#if MOD_STORY
   Item("Four Swords opening story", OnOff(Session_GetStory()));
   if (Act() != kAct_None && !client) {
     g_config.four_swords_story = !g_config.four_swords_story;
     Session_SetStory(g_config.four_swords_story);
     g_ui.dirty_settings = true;
   }
+#endif  // MOD_STORY
   Item("Four Swords title", OnOff(g_config.four_swords_title));
   if (Act() != kAct_None) {
     g_config.four_swords_title = !g_config.four_swords_title;
@@ -1297,11 +1312,18 @@ static void ScreenControls() {
   Label("  A sends a teammate a heart");
   Label("Lift teammate: A, A again throws");
   Label("Heavy rock: both press A to lift it");
+#if MOD_HD3D
   Label("3D view: right stick turns camera");
   Label("  (or hold the right mouse button)");
   Label("Left click or L3: first person");
+#endif  // MOD_HD3D
+#if MOD_SCREENSHOT
   Label("Screenshot: F12 (Ctrl+F12 without");
   Label("  the overlay), into screenshots/");
+#endif  // MOD_SCREENSHOT
+#if MOD_HELPBOOK
+  Label("Help: Ctrl+H opens the manual");
+#endif  // MOD_HELPBOOK
   Item("Back", NULL);
   if (Act() == kAct_Select)
     Goto(kScreen_Main);

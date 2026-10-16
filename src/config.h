@@ -47,6 +47,8 @@ enum {
   kKeys_ScreenshotClean,
   // "Watch everyone": every joined player's world on screen (display only).
   kKeys_WatchEveryone,
+  // The helpbook mod (mods/catalog.tsv): the manual at the page for this moment.
+  kKeys_Help,
   kKeys_Total,
 };
 

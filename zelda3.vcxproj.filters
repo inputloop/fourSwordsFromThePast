@@ -253,6 +253,15 @@
     <ClCompile Include="src\screenshot.c">
       <Filter>Zelda</Filter>
     </ClCompile>
+    <ClCompile Include="src\helpbook.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\helpbook_os.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
+    <ClCompile Include="src\mods_off.c">
+      <Filter>Zelda</Filter>
+    </ClCompile>
     <ClCompile Include="src\session.c">
       <Filter>Zelda</Filter>
     </ClCompile>
@@ -505,6 +514,12 @@
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\screenshot.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\helpbook.h">
+      <Filter>Zelda</Filter>
+    </ClInclude>
+    <ClInclude Include="src\mods.h">
       <Filter>Zelda</Filter>
     </ClInclude>
     <ClInclude Include="src\session.h">

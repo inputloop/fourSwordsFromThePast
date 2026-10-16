@@ -1,3 +1,5 @@
+#include "mods.h"  // (mods/SPEC.md: this file is the hd3d mod)
+#if MOD_HD3D
 // The 3D view: cameras, camera input, the View button, camera-relative
 // movement and panes (see hd3d.h).
 // All of it is display state, kept out of g_ram, g_mp, snapshots, the state
@@ -594,3 +596,4 @@ void Hd3d_ResetForTests(void) {
   g_in.test_ms = 0.0f;
   g_in.quiet = true;
 }
+#endif  // MOD_HD3D

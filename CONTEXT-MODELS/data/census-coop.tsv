@@ -1,0 +1,140 @@
+# made by: python3 tools/mods_census.py GROUPS.tsv   (GROUPS: coop<TAB>mp.o instance.o session.o; every mod on)
+group	symbol	kind	user_objects
+coop	Inst_Count	T	mptest.o
+coop	Inst_Current	T	archipelago.o hd3d.o hd3d_input.o hd3d_sprites.o hd3d_world.o main.o mptest.o
+coop	Inst_ExitBlockedTimer	T	mptest.o
+coop	Inst_GetFriendlyFire	T	ui.o
+coop	Inst_HashState	T	mptest.o
+coop	Inst_HearsCurrent	T	audio.o
+coop	Inst_Init	T	zelda_rtl.o
+coop	Inst_IsActive	T	archipelago.o mptest.o
+coop	Inst_IsJoined	T	main.o mptest.o ui.o
+coop	Inst_Join	T	mptest.o
+coop	Inst_Leave	T	mptest.o
+coop	Inst_LinksFromOtherWorlds	T	mptest.o
+coop	Inst_LoadState	T	mptest.o
+coop	Inst_NumJoined	T	helpbook.o mptest.o ui.o
+coop	Inst_OfPlayer	T	archipelago.o hd3d_input.o mptest.o
+coop	Inst_PlayerCanSendHeart	T	ui.o
+coop	Inst_PlayerCarry	T	main.o
+coop	Inst_PlayerDowned	T	main.o mptest.o ui.o
+coop	Inst_PlayerHealth	T	main.o ui.o
+coop	Inst_PlayerInMenu	T	archipelago.o
+coop	Inst_PlayerItem	T	ui.o
+coop	Inst_PlayerItemIcon	T	ui.o
+coop	Inst_PlayerMagic	T	ui.o
+coop	Inst_PlayerModule	T	main.o
+coop	Inst_PlayerPing	T	mptest.o ui.o
+coop	Inst_PlayerPlace	T	mptest.o ui.o
+coop	Inst_PlayerPos	T	mptest.o
+coop	Inst_PlayerReviveCtr	T	ui.o
+coop	Inst_PlayerViewModule	T	hd3d_input.o ui.o
+coop	Inst_PlayerViewSubmodule	T	hd3d_input.o ui.o
+coop	Inst_PlayerWorldRam	T	mptest.o ui.o
+coop	Inst_RunFrame	T	mptest.o
+coop	Inst_SaveState	T	mptest.o
+coop	Inst_SetAudioPlayer	T	main.o mptest.o
+coop	Inst_SetFriendlyFire	T	mptest.o
+coop	Inst_SetIndependent	T	mptest.o
+coop	Inst_SetSfxPlayers	T	main.o mptest.o
+coop	Inst_SnapshotFree	T	mptest.o
+coop	Inst_SnapshotLoad	T	mptest.o
+coop	Inst_SnapshotNew	T	mptest.o
+coop	Inst_SnapshotSave	T	mptest.o
+coop	Inst_SpectateTarget	T	ui.o
+coop	Inst_Switch	T	archipelago.o hd3d_input.o main.o mptest.o
+coop	Inst_TransientRoomBits	T	dungeon.o
+coop	Inst_ViewOfPlayer	T	hd3d_input.o main.o mptest.o ui.o
+coop	Mp_Active	T	ancilla.o hd3d.o hud.o nmi.o overworld.o sprite.o ui.o
+coop	Mp_AncillaSlotTaken	T	ancilla.o
+coop	Mp_AnyLinkOnSwitch	T	dungeon.o
+coop	Mp_AnyPlayer	T	sprite.o
+coop	Mp_AnyPlayerU8	T	sprite.o
+coop	Mp_BeginFrame	T	zelda_rtl.o
+coop	Mp_BeginLeaderOam	T	player_oam.o
+coop	Mp_CameraCatchUp	T	dungeon.o overworld.o
+coop	Mp_ClearPerFrameSpriteFlags	T	sprite.o
+coop	Mp_DeathLinkFall	T	archipelago.o
+coop	Mp_DrawOtherPlayers	T	player_oam.o
+coop	Mp_EndFrame	T	zelda_rtl.o
+coop	Mp_EndLeaderOam	T	player_oam.o
+coop	Mp_EndObject	T	ancilla.o sprite.o
+coop	Mp_FinishRender	T	zelda_rtl.o
+coop	Mp_ForEachAlivePlayer	T	ancilla.o
+coop	Mp_GloveLevelForLift	T	player.o
+coop	Mp_InStableGameplay	T	archipelago.o mptest.o
+coop	Mp_IsAlive	T	archipelago.o hd2d.o
+coop	Mp_MovesFreely	T	hd3d_linkpose.o
+coop	Mp_NudgeSwitchPresser	T	dungeon.o
+coop	Mp_NumJoined	T	mptest.o
+coop	Mp_OnFatalDamage	T	overworld.o player.o
+coop	Mp_OnStateLoaded	T	zelda_rtl.o
+coop	Mp_OtherLinkBelow	T	hud.o
+coop	Mp_PlayerColorRgb	T	hd3d_sprites.o ui.o
+coop	Mp_PlayerHealth	T	mptest.o
+coop	Mp_PlayerRam	T	archipelago.o hd2d.o hd3d.o hd3d_input.o hd3d_linkpose.o hd3d_sprites.o mptest.o
+coop	Mp_PlayerX	T	hd2d.o hd3d.o hd3d_sprites.o mptest.o
+coop	Mp_PlayerY	T	hd2d.o hd3d.o hd3d_sprites.o mptest.o
+coop	Mp_PostAncilla	T	ancilla.o
+coop	Mp_PreAncilla	T	ancilla.o
+coop	Mp_PreSprite	T	sprite.o
+coop	Mp_PrepareRender	T	zelda_rtl.o
+coop	Mp_ReadJoypads	T	nmi.o
+coop	Mp_Reset	T	zelda_rtl.o
+coop	Mp_ResidentIsThrown	T	tile_detect.o
+coop	Mp_RunOtherPlayers	T	dungeon.o overworld.o
+coop	Mp_RunRouting	T	zelda_rtl.o
+coop	Mp_SaveLoad	T	zelda_rtl.o
+coop	Mp_SetLeader	T	mptest.o
+coop	Mp_SuppressCamera	T	player.o
+coop	Mp_SwapTo	T	archipelago.o hd3d_linkpose.o
+coop	Mp_TakeLead	T	dungeon.o
+coop	Session_AllowsLocalStateChanges	T	main.o
+coop	Session_CanKeepCopy	T	ui.o
+coop	Session_ConfirmedSaveArea	T	archipelago.o mptest.o ui.o
+coop	Session_DecodeRoomCode	T	mptest.o
+coop	Session_Disconnect	T	main.o mptest.o ui.o
+coop	Session_EncodeRoomCode	T	mptest.o
+coop	Session_GetFriendlyFire	T	ui.o
+coop	Session_GetFullInventory	T	mptest.o ui.o
+coop	Session_GetLanGames	T	mptest.o ui.o
+coop	Session_GetName	T	mptest.o
+coop	Session_GetPlayers	T	mptest.o ui.o
+coop	Session_GetRandomizer	T	ui.o
+coop	Session_GetRoomCode	T	ui.o
+coop	Session_GetStatus	T	archipelago.o hd3d_input.o main.o mptest.o ui.o
+coop	Session_GetStory	T	ui.o
+coop	Session_Host	T	mptest.o ui.o
+coop	Session_Init	T	main.o mptest.o
+coop	Session_IsLocalJoined	T	main.o ui.o
+coop	Session_IsNetplay	T	helpbook.o main.o mptest.o ui.o
+coop	Session_Join	T	mptest.o ui.o
+coop	Session_KeepCopy	T	mptest.o ui.o
+coop	Session_Kick	T	mptest.o ui.o
+coop	Session_LastFrameWasReplay	T	main.o
+coop	Session_LocalJoin	T	main.o mptest.o ui.o
+coop	Session_LocalLeave	T	main.o mptest.o ui.o
+coop	Session_PollSharedNotice	T	archipelago.o
+coop	Session_RefreshLan	T	mptest.o ui.o
+coop	Session_ResetCounters	T	mptest.o
+coop	Session_ResyncAll	T	main.o
+coop	Session_SetFriendlyFire	T	main.o ui.o
+coop	Session_SetFullInventory	T	main.o mptest.o ui.o
+coop	Session_SetInputDelay	T	main.o mptest.o ui.o
+coop	Session_SetName	T	mptest.o ui.o
+coop	Session_SetRandomizer	T	main.o ui.o
+coop	Session_SetStory	T	main.o mptest.o ui.o
+coop	Session_ShareNotice	T	archipelago.o
+coop	Session_Tick	T	main.o mptest.o
+coop	g_inst_trace	B	mptest.o
+coop	g_mp	B	ancilla.o archipelago.o hd3d.o hd3d_linkpose.o hd3d_sprites.o mptest.o player_oam.o ui.o zelda_rtl.o
+coop	g_mp_color_scheme	B	main.o ui.o
+coop	g_mp_coop	B	dungeon.o hud.o overworld.o player.o
+coop	g_mp_draw_offset	B	hd3d.o hd3d_linkpose.o hd3d_sprites.o mptest.o
+coop	g_mp_extra_set_link_count	B	hd3d_sprites.o
+coop	g_mp_extra_set_player	B	hd3d_sprites.o
+coop	g_mp_group_camera	D	mptest.o
+coop	g_mp_local_mask	D	main.o mptest.o
+coop	g_mp_render	B	mptest.o
+coop	g_session_dump_every	B	mptest.o
+coop	g_session_frame_hook	B	mptest.o
