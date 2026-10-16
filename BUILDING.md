@@ -45,18 +45,6 @@ Linux, Homebrew's or MacPorts' OpenSSL on macOS. cJSON (third_party/cJSON,
 MIT) is compiled in through src/ap_json.c. To make `fsotp.apworld`, the
 Archipelago world: `python3 archipelago/build_apworld.py`.
 
-## Nintendo Switch
-
-You need [DevKitPro](https://devkitpro.org/wiki/Getting_Started) and [Atmosphere](https://github.com/Atmosphere-NX/Atmosphere) installed.
-
-```sh
-(dkp-)pacman -S git switch-dev switch-sdl2 switch-tools
-cd platform/switch
-make # Add -j$(nproc) to build using all cores ( Optional )
-# You can test the build directly onto the switch ( Optional )
-nxlink -s zelda3.nro
-```
-
 ## More Compilation Help
 
 Look at the wiki at https://github.com/snesrev/zelda3/wiki for more help.

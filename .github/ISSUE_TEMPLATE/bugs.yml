@@ -18,6 +18,5 @@ body:
         - "Windows"
         - "Linux"
         - "Mac"
-        - "Nintendo Switch"
     validations:
       required: true
