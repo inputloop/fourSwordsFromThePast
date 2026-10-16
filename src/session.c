@@ -246,7 +246,7 @@ static void UpdateLocalSlots() {
 static void ApplyEvents(const MpFrameInput *fi) {
   for (int i = 0; i < fi->nevents && i < kSessionMaxEvents; i++) {
     const uint8 *e = fi->events[i];
-    if (e[0] == kSessEv_ApItem || e[0] == kSessEv_ApDeath) {
+    if (e[0] == kSessEv_ApItem || e[0] == kSessEv_ApDeath || e[0] == kSessEv_ApRoom || e[0] == kSessEv_ApRoom2) {
       Ap_ApplyEvent(e);
       continue;
     }
@@ -282,6 +282,7 @@ static void RunFrame(const MpFrameInput *fi, bool deterministic_audio) {
   Rando_SetNewGameSetting(fi->flags & 8 ? fi->rando : kRando_Off);
   FileSelect_SetFullInventory(fi->flags & 0x10);
   Ap_SetNewGameBind(fi->flags & 0x20 ? fi->ap : 0);
+  Ap_SetNewGameWorld(fi->flags & 0x40 ? kApWorld_Alttp : kApWorld_Fsotp);
   g_wanted_zelda_features = fi->features;
   g_apui00_override = deterministic_audio ? (fi->flags >> 1) & 1 : -1;
   Ap_BeforeFrame();
@@ -388,7 +389,7 @@ static void BuildFrame(MpFrameInput *fi, const uint16 *local_inputs, uint32 feat
   fi->rando = g_s.rando;
   fi->ap = Ap_HostBind();
   if (fi->ap)
-    fi->flags |= 0x20;
+    fi->flags |= 0x20 | (Ap_HostWorld() == kApWorld_Alttp ? 0x40 : 0);
   uint8 reserved[kMpMaxPlayers] = { 0 };
   QueueJoinLeave(fi, 0, &g_s.pending_join_mask, &g_s.pending_leave_mask, reserved);
   for (int c = 0; c < kSessionMaxClients; c++) {

@@ -1,5 +1,6 @@
 #include "mp.h"
 #include "sprite.h"
+#include "archipelago.h"
 #include "dungeon.h"
 #include "hud.h"
 #include "load_gfx.h"
@@ -1413,12 +1414,24 @@ void Sprite_HandleAbsorptionByPlayer(int k) {  // 86d13c
     SpriteSfx_QueueSfx2WithPan(k, 0x31);
     link_hearts_filler += 56;
     break;
-  case 12:
+  case 12: {
+    // The keys under the torches of the Desert Palace and Ganon's tower and
+    // in the cage of the Tower of Hera: places of Archipelago's "A Link to
+    // the Past" world (told by the flag the key sets).
+    int loc = Ap_RoomFlagPlace(dungeon_room_index, kAbsorbBigKey[sprite_die_action[k]] << 4);
+    if (loc >= 0) {
+      item_receipt_method = 0;
+      Link_ReceiveItem(Ap_PlaceItem(loc, kApPlaceholderItem), 0);
+      goto after_getkey;
+    }
     link_num_keys += 1;
     goto after_getkey;
-  case 13:
+  }
+  case 13: {
+    int loc = Ap_RoomFlagPlace(dungeon_room_index, kAbsorbBigKey[sprite_die_action[k]] << 4);
     item_receipt_method = 0;
-    Link_ReceiveItem(0x32, 0);
+    Link_ReceiveItem(loc >= 0 ? Ap_PlaceItem(loc, kApPlaceholderItem) : 0x32, 0);
+  }
   after_getkey:
     sprite_N[k] = sprite_subtype[k];
     dung_savegame_state_bits |= kAbsorbBigKey[sprite_die_action[k]] << 8;

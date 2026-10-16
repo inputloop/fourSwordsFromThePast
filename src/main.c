@@ -627,6 +627,7 @@ int main(int argc, char** argv) {
   snprintf(g_ap_settings.slot, sizeof(g_ap_settings.slot), "%s", g_config.ap_slot ? g_config.ap_slot : "");
   snprintf(g_ap_settings.password, sizeof(g_ap_settings.password), "%s", g_config.ap_password ? g_config.ap_password : "");
   g_ap_settings.death_link = g_config.ap_death_link;
+  g_ap_settings.world = g_config.ap_world == 1 ? kApWorld_Fsotp : kApWorld_Alttp;
   static const UiHostFuncs kUiHost = { &ApplyDisplaySettings, &ToggleFullscreen, &ChangeWindowScale, &RequestQuit };
   Ui_Init(&kUiHost);
 

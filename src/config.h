@@ -113,6 +113,7 @@ typedef struct Config {
   const char *ap_slot;
   const char *ap_password;
   int ap_death_link;  // 0: as the room says, 1: on, 2: off
+  int ap_world;       // 1 + ApWorld (archipelago.h); 0: not set (A Link to the Past)
 
   const char *link_graphics;
   char *memory_buffer;

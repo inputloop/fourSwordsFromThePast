@@ -160,9 +160,22 @@ dungeon keys, maps and compasses are left alone.
 
 [Archipelago](https://archipelago.gg) links randomizers of many games into
 one *multiworld*: your chests can hold another player's items (in their own
-game, maybe a different one) and theirs can hold yours. This game has its
-own Archipelago world, **Four Swords of the Past**, and connects to an
-Archipelago server by itself (no extra client program).
+game, maybe a different one) and theirs can hold yours. The game connects to
+an Archipelago server by itself (no extra client program, no SNI), and plays
+one of two Archipelago worlds, chosen in *Multiplayer > Archipelago > World*:
+
+- **A Link to the Past** (the default): Archipelago's own world for this
+  game, the one every Archipelago install already has. Nothing to install;
+  your YAML is a normal *A Link to the Past* YAML, and all of its 247
+  locations (with the default options) are in the game: every chest, the
+  heart pieces, the people who give things, the bosses' heart containers,
+  the keys under pots and from enemies.
+- **Four Swords of the Past**: this game's own world (`fsotp.apworld`),
+  with 106 locations (the chests the built-in randomizer shuffles and a few
+  places) and its own logic. It needs the `.apworld` installed on the
+  computer that generates.
+
+A save file keeps the world it was made with.
 
 <p align="center">
   <img src="docs/screenshots/archipelago-menu.png" width="49%" alt="The Archipelago screen of the in-game menu: connected to the server as Link, with the server, slot name, password and DeathLink settings">
@@ -195,29 +208,38 @@ to the same room with your slot name.
 - This game, set up as described under [Getting the game](#getting-the-game)
   or [Windows](#windows).
 - On the computer that makes the multiworld: [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases)
-  0.6.4 or newer (the Launcher), and `fsotp.apworld`, the Archipelago world
-  for this game. It comes with the game's download (next to `zelda3.ini`), or
-  build it from these sources
-  with `python3 archipelago/build_apworld.py` (only needs Python 3; it writes
-  `archipelago/fsotp.apworld`). Players of other games don't need it.
+  0.6.4 or newer (the Launcher). For the *A Link to the Past* world that is
+  all, apart from what Archipelago itself asks of that world: the Japanese
+  1.0 ROM on the generating computer (only there; the game plays without a
+  patched ROM). For the *Four Swords of the Past* world also `fsotp.apworld`:
+  it comes with the game's download (next to `zelda3.ini`), or build it from
+  these sources with `python3 archipelago/build_apworld.py` (only needs
+  Python 3; it writes `archipelago/fsotp.apworld`). Players of other games
+  don't need it.
 
-**1. Install the world.** Double-click `fsotp.apworld` (the Launcher opens
+**1. The world.** For *A Link to the Past* there is nothing to install. For
+*Four Swords of the Past*: double-click `fsotp.apworld` (the Launcher opens
 and installs it), or use *Install APWorld* in the Launcher, or copy the file
-into the `custom_worlds` folder of your Archipelago install. Restart the
+into the `custom_worlds` folder of your Archipelago install, and restart the
 Launcher.
 
-**2. Make your YAML** (your options). Copy `Four Swords of the Past.yaml`
-(next to `zelda3.ini` in the game's download; in the sources it is
-[`archipelago/Four Swords of the Past.yaml`](archipelago/Four%20Swords%20of%20the%20Past.yaml))
-(or use *Generate Template Options* in the Launcher and take the file from
-`Players/Templates`) and set:
+**2. Make your YAML** (your options).
 
-- `name`: your slot name, at most 16 characters. You type it into the game
-  later, exactly (capitals count).
-- `death_link`: `true` or `false` (see DeathLink below).
-- `goal`: `ganon` (the only goal for now), and if you like the options every
-  Archipelago game has: `progression_balancing`, `accessibility`,
-  `local_items`, `start_inventory`, ...
+*A Link to the Past:* use the template from *Generate Template Options* in
+the Launcher (`Players/Templates/A Link to the Past.yaml`), with `name` your
+slot name (at most 16 characters; you type it into the game later, exactly,
+capitals count). The game plays the world's default options; the ones it
+can't play are listed under *How it plays* below (it says so when you
+connect). `mode: standard` is played as `open`.
+
+*Four Swords of the Past:* copy `Four Swords of the Past.yaml` (next to
+`zelda3.ini` in the game's download; in the sources it is
+[`archipelago/Four Swords of the Past.yaml`](archipelago/Four%20Swords%20of%20the%20Past.yaml))
+(or use *Generate Template Options* and take the file from
+`Players/Templates`) and set `name` as above, `death_link` (`true` or
+`false`, see DeathLink below), `goal: ganon` (the only goal there), and if
+you like the options every Archipelago game has: `progression_balancing`,
+`accessibility`, `local_items`, `start_inventory`, ...
 
 A co-op team is **one** player in the multiworld: one YAML for the whole
 team.
@@ -245,7 +267,8 @@ happens locally (everything else can still be on the website):
 **5. Connect from the game.**
 
 1. Start the game and open the menu: `Esc`, or Back+Start on a controller.
-2. Go to *Multiplayer > Archipelago*.
+2. Go to *Multiplayer > Archipelago*. *World* is the world your YAML is for:
+   *Link to the Past* (the default) or *Four Swords*.
 3. *Server*: the room's address, e.g. `archipelago.gg:38281` (type it, or
    paste it with Ctrl+V; the room page's whole `/connect archipelago.gg:38281`
    line works too). *Slot name*: as in your YAML. *Password*: only if
@@ -272,29 +295,80 @@ and sent when you connect again, and your items arrive then.
 
 - An Archipelago file is randomized by the multiworld, with the open start of
   the [item randomizer](#item-randomizer): Link starts at his house with
-  nothing and can go anywhere. Swords, shields, gloves, mails and boomerangs
-  are progressive.
-- There are 106 locations: the 100 chests that don't hold dungeon keys, maps
-  or compasses, the two items of Link's uncle in the secret passage, the
-  Master Sword pedestal, the smiths, and the fairies of the Pyramid and the
-  Waterfall of Wishing. Each hands out a white crystal, the **Archipelago
-  item**: the server says what it was, and a line at the bottom of the screen
-  tells you ("Sent Hookshot to Alice", "Found your own Lamp"). Lines in
-  purple are items someone needs, blue useful ones, red traps and problems.
+  nothing and can go anywhere.
+- Every location hands out a white crystal, the **Archipelago item**: the
+  server says what it was, and a line at the bottom of the screen tells you
+  ("Sent Hookshot to Alice", "Found your own Lamp"). Lines in purple are
+  items someone needs, blue useful ones, red traps and problems.
 - **Your items** (also the ones found in your own game) come from the server
   and are held up like from a chest, one at a time, as soon as a Link is
   free: standing on the ground, not in a menu, a text box or a transition. A
   swimming Link or a bunny waits until it is on land again in its own shape.
+- The randomizer's **check tracker** works here too: close the map (X) to see
+  your checked locations, what you can reach with the items you have and
+  what is still locked, by area; X again puts it away. (It knows your own
+  game only: what other players can reach isn't on it. In the *A Link to the
+  Past* world it counts the places outside chests, but doesn't know their
+  logic.)
+
+*A Link to the Past* (the default world):
+
+- All 247 locations of the world with its default options: the 160 chests
+  the game has (including the dungeon items' chests), the people who give
+  things (the uncle, Sahasrahla, the sick kid, the hobo, the bottle merchant,
+  the purple chest, the old man, Stumpy, the witch's assistant, the library,
+  the mushroom, the magic bat, the tablets, the catfish, King Zora, the
+  smiths, the pedestal), the heart pieces (on the overworld, in caves, from
+  the digging game and the chest game), the generous guys, the keys under
+  torches and in the cage, the ten bosses' heart containers, the keys enemies
+  drop and under pots (`key_drop_shuffle`, on by default), the dug-up flute,
+  and the two chests in each fairy's cave, which the original game doesn't
+  have: the fairy of the Pyramid hands them out for the first two things you
+  throw in (the Waterfall of Wishing's fairy likewise), and gives everything
+  back as it was.
+- The items are that world's: progressive or by name (`progressive`), the
+  bottles with what is in them, the dungeons' own keys, maps, compasses and
+  big keys (also with keysanity: a key arrives for its dungeon wherever you
+  are), the capacity and magic upgrades, the Triforce pieces. Silver arrows
+  come with the bow. Clocks, bees and the random items of the "easy" pool do
+  nothing.
+- The medallions that open Misery Mire and Turtle Rock are the room's
+  (`misery_mire_medallion`, `turtle_rock_medallion`), and so are
+  `crystals_needed_for_gt` and `open_pyramid`. The pendants and crystals
+  stay in their original dungeons, and the places they open count beaten
+  dungeons instead: Sahasrahla's gift after one, the Pyramid fairy after two,
+  the Master Sword pedestal after three, Ganon's tower after
+  `crystals_needed_for_gt`. (The world shuffles the prizes in a way only a
+  patched ROM would know, so the game is never stricter than the world's
+  logic; it can be easier.)
+- **Goals:** `ganon`, `crystals`, `bosses` (every dungeon's prize, Agahnim
+  twice), `pedestal` (the Triforce from the pedestal), `ganon_pedestal`, the
+  Triforce hunts (`triforce_hunt`, `local_triforce_hunt`: the goal is done
+  when you have the pieces, no need to hand them over; the hunts that end
+  with Ganon only need Ganon).
+- **Not played:** `mode: inverted`, entrance shuffle, `swordless`, the retro
+  options, shop shuffles, boss, enemy and pot shuffles, universal keys. The
+  game tells you when it connects to such a room. `mode: standard` is played
+  as `open`. The glitches options and the enemy and item difficulty are
+  ignored (the game plays as the original); `shuffle_prizes` is cosmetic.
+  Rooms made for a race (no slot data) play with the original medallions and
+  7 crystals.
+- DeathLink: that world doesn't tell the game whether it is on, so choose it
+  in the game's Archipelago screen (*DeathLink: ON*).
+
+*Four Swords of the Past:*
+
+- 106 locations: the 100 chests that don't hold dungeon keys, maps or
+  compasses, the two items of Link's uncle in the secret passage, the Master
+  Sword pedestal, the smiths, and the fairies of the Pyramid and the
+  Waterfall of Wishing. Swords, shields, gloves, mails and boomerangs are
+  progressive.
 - Small keys, big keys, maps and compasses stay in their dungeons, and
   everything that isn't in a chest or one of the places above stays where it
   always is: the Boots, Book, Flippers, Mirror, shovel, Flute, medallions,
   pendants and crystals, but also free heart pieces, boss heart containers
   and what people give you. The logic is the item randomizer's, without
   glitches.
-- The randomizer's **check tracker** works here too: close the map (X) to see
-  your checked locations, what you can reach with the items you have and
-  what is still locked, by area; X again puts it away. (It knows your own
-  game only: what other players can reach isn't on it.)
 - **Goal:** beat Ganon. Reaching the Triforce room tells the server you are
   done.
 
@@ -339,9 +413,10 @@ write `ws://` yourself) can't be reached.
 servers).
 
 **Settings file.** When you connect or close the menu, the game saves the
-server, the slot name and the DeathLink choice in the `[Archipelago]` section
-of `zelda3.coop.ini` (`Server`, `Slot`, `DeathLink = auto|on|off`; an empty
-server or slot name isn't written). That file is read after `zelda3.ini` and
+server, the slot name, the DeathLink choice and the world in the
+`[Archipelago]` section of `zelda3.coop.ini` (`Server`, `Slot`,
+`DeathLink = auto|on|off`, `World = alttp|fsotp`; an empty server or slot
+name isn't written). That file is read after `zelda3.ini` and
 wins, so once it has them change these in the menu or in that file, not in
 `zelda3.ini`. The password is never saved: to have it
 remembered, add `Password = ...` to the `[Archipelago]` section of
@@ -354,9 +429,13 @@ remembered, add `Password = ...` to the `[Archipelago]` section of
   Launcher wasn't restarted.
 - "This room has no slot named ...": check the slot name letter for letter
   (capitals count; the menu shows capitals only, so retype it if unsure).
-  "Slot ... doesn't play Four Swords of the Past": that slot belongs to
-  another game. "Wrong password" / "This room needs a password": fill in
+  "Slot ... doesn't play A Link to the Past" (or "... Four Swords of the
+  Past"): that slot's YAML is for the other world, or another game: change
+  *World*. "Wrong password" / "This room needs a password": fill in
   *Password*. After fixing it, choose *Connect* again.
+- "This room plays the inverted world, which this game can't" (or shuffles
+  entrances, shops, ...): the *A Link to the Past* YAML uses an option the
+  game can't play (see *How it plays*). Generate again without it.
 - "The server needs a newer client version": update the game.
 - "This Archipelago room needs a newer version of the game" or "...was made
   with an older fsotp.apworld": the world that generated the multiworld and
@@ -371,19 +450,29 @@ remembered, add `Password = ...` to the `[Archipelago]` section of
   boxes and get out of the water. They are never lost; the save counts what
   it has received.
 
-**For developers.** `archipelago/fsotp` is the world (its logic in `rules.py`
-is a port of `src/randomizer.c`, checked against it by
-`tests/coop/archipelago_logic.txt`), `archipelago/build_apworld.py` packs it,
-and `archipelago/tools/gen_locations.py` regenerates the location table from
-the ROM and Archipelago's A Link to the Past location names. In the game,
+**For developers.** `archipelago/fsotp` is the Four Swords of the Past
+world (its logic in `rules.py` is a port of `src/randomizer.c`, checked
+against it by `tests/coop/archipelago_logic.txt`),
+`archipelago/build_apworld.py` packs it, and
+`archipelago/tools/gen_locations.py` regenerates its location table from the
+ROM and Archipelago's A Link to the Past location names.
+`archipelago/tools/gen_alttp_table.py` writes `src/ap_alttp_data.h`, the A
+Link to the Past world's location ids for the game's chests and places
+(from the ROM's chest table and Archipelago's `worlds/alttp`). In the game,
 `src/archipelago.c` is the game side (save data, item delivery, checks,
-DeathLink) and `src/ap_client.c` the connection. IDs: item = `0x46530000` +
-the game's item code; location = `0x46530000` + chest number, special places
-`0x46530100` + 0..5. `tests/coop/archipelago*.txt` test the game side with a
-pretend room; `archipelago/tests/run_client_tests.sh` tests the connection
-against a mock server. With an Archipelago source tree,
-`AP_ROOT=<it> archipelago/tests/e2e.sh` plays a generated multiworld with the
-real server (connect, open a chest, get the item back, send the goal). The
+DeathLink, the places and gates of the A Link to the Past world) and
+`src/ap_client.c` the connection. IDs of the Four Swords world: item =
+`0x46530000` + the game's item code; location = `0x46530000` + chest number,
+special places `0x46530100` + 0..5; the A Link to the Past world's are its
+own (an item's code, a chest's table address).
+`tests/coop/archipelago*.txt` test the game side with a pretend room
+(`archipelago_alttp.txt` the A Link to the Past world);
+`archipelago/tests/run_client_tests.sh` tests the connection against a mock
+server. With an Archipelago source tree, `AP_ROOT=<it>
+archipelago/tests/e2e.sh` plays a generated Four Swords multiworld with the
+real server (connect, open a chest, get the item back, send the goal), and
+`archipelago/tests/e2e_alttp.sh` does the same with an A Link to the Past
+multiworld (generated without a ROM, see `gen_alttp_norom.py`). The
 world's own tests: copy or link `archipelago/fsotp` to `worlds/fsotp` in an
 Archipelago source tree and run
 `AP_TEST_WORLDS=fsotp python -m pytest worlds/fsotp test/general -m "world or not world"`.

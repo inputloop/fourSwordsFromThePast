@@ -809,8 +809,30 @@ static int OnConnected(Conn *c, const cJSON *cmd) {
   room.slot_data_version = (int)GetNum(slot_data, "version", -1);
   room.slot_data_death_link = (int)GetNum(slot_data, "death_link", -1);
   room.slot_data_goal = (int)GetNum(slot_data, "goal", -1);
+  bool alttp = !strcmp(g_ap.game, AP_ALTTP_GAME_NAME);
+  room.world = alttp ? 1 : 0;  // kApWorld_Alttp / kApWorld_Fsotp
+  // "A Link to the Past": the options this game looks at (the order of kApAlttp_*).
+  static const char *const kAlttpKeys[] = {
+    "crystals_needed_for_gt", "crystals_needed_for_ganon", "open_pyramid", "small_key_shuffle",
+    "progressive", "swordless", "retro_bow", "retro_caves", "shop_item_slots",
+    "boss_shuffle", "pot_shuffle", "enemy_shuffle", "key_drop_shuffle",
+    "randomize_shop_inventories", "shuffle_shop_inventories", "entrance_shuffle", "goal", "mode",
+    "triforce_pieces_required",
+  };
+  for (int i = 0; i < kApAlttp_Count; i++)
+    room.alttp[i] = -1;
+  if (alttp) {
+    for (int i = 0; i < (int)countof(kAlttpKeys); i++)
+      room.alttp[i] = (int)GetNum(slot_data, kAlttpKeys[i], -1);
+    static const char *const kMedallionKeys[2] = { "mm_medalion", "tr_medalion" };
+    for (int i = 0; i < 2; i++) {
+      const char *m = GetStr(slot_data, kMedallionKeys[i]);
+      room.alttp[kApAlttp_MmMedallion + i] = !m ? -1 : !strcmp(m, "Bombos") ? 0 : !strcmp(m, "Ether") ? 1 :
+                                            !strcmp(m, "Quake") ? 2 : -1;
+    }
+  }
   char key[128];
-  snprintf(key, sizeof(key), "%s/%d/%d", c->seed_name, c->slot, kItemsHandling);
+  snprintf(key, sizeof(key), "%s/%d/%d%s", c->seed_name, c->slot, kItemsHandling, alttp ? "/alttp" : "");
   room.bind_hash = Fnv1a(key);
   if (!room.bind_hash)
     room.bind_hash = 1;

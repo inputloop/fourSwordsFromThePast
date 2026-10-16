@@ -18,7 +18,6 @@
 //   pram <p> <hexaddr> <hexval>  change a byte of player p's own Link state
 //   poke <hexaddr> <hexval>  change a RAM byte (shared progress spreads to every world)
 //   peek <hexaddr> [n]  print RAM bytes
-//   poke <hexaddr> <hexval>  change a byte of the viewed world's RAM
 //   receive <hexitem>   the viewed player gets an item, as from a chest
 //   enter <hexroom>     go into a room through the game's first entrance to it
 //   special <hexroom>   into a special overworld area (182: Zora's domain) as from its screen
@@ -70,17 +69,23 @@
 //   randocheck <seed> <count> [v]  every seed gives a beatable placement (v: print spoilers)
 //   storycheck          every rewritten story message fits the text box
 // Archipelago (a pretend room; no server):
-//   aproom <hexbind|off> [deathlink 0|1]  new files are Archipelago files of that room
-//   apitem <hexcode>    the room sends an item (item id = base + code; ff: one the game doesn't know)
+//   aproom <hexbind|off> [deathlink 0|1] [alttp]  new files are Archipelago files of that room (of
+//                       Archipelago's A Link to the Past world with "alttp", else of this game's)
+//   apoption <n> <value>  option n (kApAlttp_* in ap_client.h) of the pretend A Link to the Past room
+//   expect_applace <heart_in|heart_out|flag|boss|fairy> <hexa> <hexb> <loc>  that world's place for it (-1 none)
+//   apitem <hexcode>    the room sends an item (item id = base + code, or the code itself in a room of
+//                       A Link to the Past; ff: one the game doesn't know)
 //   apdeathlink         someone else in the room died
 //   srun <n>            run n frames the way the game does (session frames: Archipelago events, then Ap_Tick;
 //                       first the 3D view's cameras, View buttons and camera-turned d-pad, as tick)
 //   expect_apcount <n>  the file has received n of the room's items
 //   expect_apsent <n>   the game has sent n checked locations
-//   expect_apchecked <hexloc> <0|1>  location base+hexloc (chest number, or 100+n for special place n) was sent
+//   expect_apchecked <hexloc> <0|1>  location base+hexloc (chest number, or 100+n for special place n;
+//                       1000 and up: an id of A Link to the Past as it is) was sent
 //   expect_apgoal <0|1> / expect_apdeaths <n>  the goal / so many DeathLinks were sent
 //   aplogic <file>      the APWorld's logic (archipelago/tools/logic_vectors.py) agrees with the randomizer's
 // Archipelago with a real server (archipelago/tests/e2e.sh):
+//   apworld <alttp|fsotp>  the world to connect as (the menu's World; the harness starts as fsotp)
 //   apconnect <server> <slot> [password]  connect from the Archipelago screen
 //   apwait <connected|items n> [seconds]  run in real time until connected / n items received (default 20 s)
 //   apnotices           print the lines the game would show
@@ -206,7 +211,7 @@
 //   menu                toggle the overlay menu (navigate with hold + tick)
 //   key <up|down|left|right|enter|back> [times]  a button press in the menu
 //   type <text>         typing on the keyboard (in a menu's text field)
-//   expect_apsettings <server> <slot> <auto|on|off>  the Archipelago screen's settings ("-": empty)
+//   expect_apsettings <server> <slot> <auto|on|off> [alttp|fsotp]  the Archipelago screen's settings ("-": empty)
 // Debug only (not for tests): trace <0|1>, chestdump, dumprender <p>, dumpworldmap <file> <dark>,
 //   findtile <p> <hexattr>, findroomtag <hextag>, spoiler <hexseed> <file>, upnp (asks the router for a port mapping),
 //   stun <server:port> (asks a STUN server for our public address).
@@ -1915,9 +1920,28 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       bool ok = Upnp_StunPublicIp(arg1, ip, sizeof(ip));
       printf("stun %s: %s\n", arg1, ok ? ip : "no answer");
     } else if (!strcmp(cmd, "aproom")) {
-      Ap_TestRoom(strcmp(arg1, "off") ? strtoul(arg1, NULL, 16) : 0, atoi(arg2) != 0);
+      Ap_TestRoom(strcmp(arg1, "off") ? strtoul(arg1, NULL, 16) : 0, atoi(arg2) != 0,
+                  !strcmp(arg3, "alttp") ? kApWorld_Alttp : kApWorld_Fsotp);
+    } else if (!strcmp(cmd, "apoption")) {
+      // apoption <n> <value>: option n (kApAlttp_*) of the pretend A Link to the Past room
+      Ap_TestSetOption(atoi(arg1), atoi(arg2));
+    } else if (!strcmp(cmd, "expect_applace")) {
+      // expect_applace <heart_in|heart_out|flag|boss|fairy> <hexa> <hexb> <loc>: the place the
+      // A Link to the Past world has for it (kApLoc_*, -1 none), in the file in RAM
+      int a = strtol(arg2, NULL, 16), b = strtol(arg3, NULL, 16);
+      int loc = !strcmp(arg1, "heart_in") ? Ap_HeartPiecePlace(true, a, b) :
+                !strcmp(arg1, "heart_out") ? Ap_HeartPiecePlace(false, a, b) :
+                !strcmp(arg1, "flag") ? Ap_RoomFlagPlace(a, b) :
+                !strcmp(arg1, "boss") ? Ap_BossPlace(a) : Ap_FairyPlace(a != 0);
+      if (loc != atoi(arg4)) {
+        printf("FAIL: place %s %x %x is %d, expected %s at frame %d\n", arg1, a, b, loc, arg4, frame);
+        g_failures++;
+      }
     } else if (!strcmp(cmd, "apitem")) {
-      Ap_TestGiveItem(strtol(arg1, NULL, 16) == 0xff ? kApIdBase + 0x99 : kApIdBase + strtol(arg1, NULL, 16));
+      // (A Link to the Past's item ids are its codes; ff: one the game doesn't know)
+      int64 code = strtol(arg1, NULL, 16);
+      bool alttp = Ap_IsAlttpFile();
+      Ap_TestGiveItem(code == 0xff ? (alttp ? 0x5a : kApIdBase + 0x99) : alttp ? code : kApIdBase + code);
     } else if (!strcmp(cmd, "apdeathlink")) {
       Ap_TestDeathLink();
     } else if (!strcmp(cmd, "srun")) {
@@ -1931,6 +1955,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ap_Tick();
         RecordFrame(pixels, width, height, render_flags, view);
       }
+    } else if (!strcmp(cmd, "apworld")) {
+      // apworld <alttp|fsotp>: the Archipelago world to connect as (Multiplayer > Archipelago > World)
+      g_ap_settings.world = !strcmp(arg1, "fsotp") ? kApWorld_Fsotp : kApWorld_Alttp;
     } else if (!strcmp(cmd, "apconnect")) {
       snprintf(g_ap_settings.server, sizeof(g_ap_settings.server), "%s", arg1);
       snprintf(g_ap_settings.slot, sizeof(g_ap_settings.slot), "%s", arg2);
@@ -1973,8 +2000,9 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         g_failures++;
       }
     } else if (!strcmp(cmd, "expect_apchecked")) {
+      // (A Link to the Past's location ids are large: from 0x1000 up they are taken as they are)
       int x = strtol(arg1, NULL, 16);
-      int64 id = x >= 0x100 ? kApSpecialLocationBase + x - 0x100 : kApIdBase + x;
+      int64 id = x >= 0x1000 ? x : x >= 0x100 ? kApSpecialLocationBase + x - 0x100 : kApIdBase + x;
       bool sent = false;
       for (int i = 0; i < Ap_TestSent()->checks; i++)
         sent |= Ap_TestSent()->check[i] == id;
@@ -2319,9 +2347,6 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
         Ui_HandleKey(key, true);
     } else if (!strcmp(cmd, "type")) {
       Ui_HandleText(arg1);
-    } else if (!strcmp(cmd, "poke")) {
-      // poke <hexaddr> <hexval>: change a byte of the viewed world's RAM
-      g_ram[strtol(arg1, NULL, 16)] = strtol(arg2, NULL, 16);
     } else if (!strcmp(cmd, "arrive")) {
       // arrive <hexroom>: out onto the overworld through that room's exit
       // (ffff: where Zora's domain lets out, at the top of its river)
@@ -2363,9 +2388,11 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       static const char *const kDl[3] = { "auto", "on", "off" };
       const char *server = g_ap_settings.server[0] ? g_ap_settings.server : "-";
       const char *slot = g_ap_settings.slot[0] ? g_ap_settings.slot : "-";
-      if (strcmp(server, arg1) || strcmp(slot, arg2) || strcmp(kDl[g_ap_settings.death_link % 3], arg3)) {
-        printf("FAIL: Archipelago settings %s %s %s, expected %s %s %s\n", server, slot,
-               kDl[g_ap_settings.death_link % 3], arg1, arg2, arg3);
+      const char *world = g_ap_settings.world == kApWorld_Fsotp ? "fsotp" : "alttp";
+      if (strcmp(server, arg1) || strcmp(slot, arg2) || strcmp(kDl[g_ap_settings.death_link % 3], arg3) ||
+          (arg4[0] && strcmp(world, arg4))) {
+        printf("FAIL: Archipelago settings %s %s %s %s, expected %s %s %s %s\n", server, slot,
+               kDl[g_ap_settings.death_link % 3], world, arg1, arg2, arg3, arg4);
         g_failures++;
       }
     } else if (!strcmp(cmd, "corrupt")) {

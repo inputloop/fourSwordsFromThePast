@@ -561,6 +561,14 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
       else
         return false;
       return true;
+    } else if (StringEqualsNoCase(key, "World")) {
+      if (StringEqualsNoCase(value, "alttp") || StringEqualsNoCase(value, "A Link to the Past"))
+        g_config.ap_world = 2;
+      else if (StringEqualsNoCase(value, "fsotp") || StringEqualsNoCase(value, "Four Swords of the Past"))
+        g_config.ap_world = 1;
+      else
+        return false;
+      return true;
     }
   } else if (section == 6) {
     if (StringEqualsNoCase(key, "FriendlyFire")) {

@@ -36,14 +36,14 @@ typedef struct MpFrameInput {
   uint8 flags;  // bit0: friendly fire, bit1: music playing (apui00),
                 // bit2: Four Swords story, bit3: randomizer setting follows,
                 // bit4: new games start with a full inventory,
-                // bit5: Archipelago room follows, bit7: hash valid
+                // bit5: Archipelago room follows (bit6: of the A Link to the Past world), bit7: hash valid
   uint8 nevents;
   uint32 features;
   uint32 hash;  // hash of the state after this frame, if flags bit7
   uint32 rando;  // randomizer setting for new games, if flags bit3 (see randomizer.h)
   uint32 ap;     // new games are Archipelago files of this room, if flags bit5 (archipelago.h)
   // Join/leave: type, slot, owner client id, owner local index.
-  // Archipelago (kSessEv_ApItem, kSessEv_ApDeath): see archipelago.h.
+  // Archipelago (kSessEv_ApItem, kSessEv_ApDeath, kSessEv_ApRoom, kSessEv_ApRoom2): see archipelago.h.
   uint8 events[kSessionMaxEvents][4];
 } MpFrameInput;
 

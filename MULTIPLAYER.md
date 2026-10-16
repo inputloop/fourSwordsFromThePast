@@ -59,7 +59,8 @@ Players can drop in and drop out at any time.
   all items*, the Four Swords story): the host's are used.
 - **Archipelago** (a multiworld randomizer, see the README): the team is one
   slot, and only the host connects to the Archipelago room, in *Multiplayer >
-  Archipelago*. Items from the room reach every computer in the same frame
+  Archipelago* (as Archipelago's own *A Link to the Past* world, or this
+  game's *Four Swords of the Past*). Items from the room reach every computer in the same frame
   (each goes to the first player who is free to hold it up), and the chests
   any Link opens are checked for the team. The others see the room's
   messages ("Received Bow from Alice (Link's House)") on their screens too.

@@ -1,0 +1,140 @@
+# Archipelago's own "A Link to the Past" world. The room tells the file its medallions, crystal counts,
+# goal and pyramid; every chest is a location with that world's id; its item
+# codes are given straight, with the ones the game's receipt has no code for
+# (dungeon items of other dungeons, upgrades, the Triforce) done by hand.
+aproom 12345679 0 alttp
+apoption 19 0
+apoption 20 1
+apoption 0 3
+apoption 1 5
+apoption 16 0
+apoption 2 1
+apoption 18 20
+srun 2
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_ram f407 41
+expect_ram f414 01
+srun 4
+expect_ram f415 10
+expect_ram f416 03
+expect_ram f417 05
+expect_ram f440 10
+expect_ram f441 14
+expect_ram f2db 20
+expect_apcount 0
+# The chest in Link's house: the placeholder, sent as that world's location
+# (the chest table address 0xe9bc).
+pos 1 2500 8650
+hold 1 U
+run 20
+hold 1 A
+run 2
+hold 1 -
+run 200
+expect_ram f429 02
+expect_ram f34a 0
+srun 2
+expect_apsent 1
+expect_apchecked e9bc 1
+# A progressive sword, a small key and the map of the Eastern Palace (Link
+# is in his house: counted for that dungeon), half magic, "Nothing"
+# (skipped), 20 rupees.
+apitem 5e
+apitem a2
+apitem 7d
+apitem 4e
+apitem 5a
+apitem 36
+srun 200
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+hold 1 A
+srun 4
+hold 1 -
+srun 60
+expect_apcount 6
+expect_ram f359 01
+expect_ram f37e 01
+expect_ram f36f ff
+expect_ram f369 20
+expect_ram f37b 01
+expect_ram f360 14
+expect_module 7
+expect_playing 1
+# The places outside chests, by what tells them apart: heart pieces by
+# screen or by room and flag, torch keys and the generous guys by room and
+# flag, bosses by dungeon, the fairies by their two places in turn.
+expect_applace heart_out 35 40 24
+expect_applace heart_out 2b 40 -1
+expect_applace heart_in 11b 400 34
+expect_applace heart_in 11b 200 35
+expect_applace heart_in 104 400 -1
+expect_applace flag 73 400 42
+expect_applace flag 123 400 40
+expect_applace flag 73 200 -1
+expect_applace boss 2 0 45
+expect_applace boss 1 0 -1
+expect_applace fairy 1 0 55
+expect_applace fairy 0 0 57
+# The heart piece of Cave 45 (room 0x11b, the one on the upper floor): the
+# placeholder, no piece counted, and its place sent.
+enter 11b
+run 300
+pos 1 5712 9080
+hold 1 U
+run 40
+hold 1 -
+run 200
+expect_ram f36b 00
+srun 2
+expect_apchecked 180003 1
+expect_applace fairy 1 0 55
+# The check tracker counts every place of that world (247).
+expect_tracker 1 0 2 23 128
+# Ganon beaten: the goal (the room's goal is Ganon).
+expect_apgoal 0
+poke 10 19
+poke 11 0
+poke b0 0
+run 2
+srun 2
+expect_apgoal 1

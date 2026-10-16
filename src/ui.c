@@ -868,6 +868,14 @@ static void ScreenArchipelago() {
     g_ap_settings.death_link = (g_ap_settings.death_link + (a == kAct_Left ? 2 : 1)) % 3;
     g_ui.dirty_settings = true;
   }
+  // Which Archipelago world: Archipelago's own A Link to the Past (the
+  // default, nothing to install) or this game's Four Swords of the Past.
+  Item("World", g_ap_settings.world == kApWorld_Fsotp ? "Four Swords" : "Link to the Past");
+  a = Act();
+  if (a != kAct_None && !busy) {
+    g_ap_settings.world = g_ap_settings.world == kApWorld_Fsotp ? kApWorld_Alttp : kApWorld_Fsotp;
+    g_ui.dirty_settings = true;
+  }
   if (!busy) {
     Item("Connect", NULL);
     if (Act() == kAct_Select) {
@@ -2868,6 +2876,7 @@ void Ui_SaveSettings() {
   if (g_ap_settings.slot[0])
     fprintf(f, "Slot = %s\n", g_ap_settings.slot);
   fprintf(f, "DeathLink = %s\n", g_ap_settings.death_link == 1 ? "on" : g_ap_settings.death_link == 2 ? "off" : "auto");
+  fprintf(f, "World = %s\n", g_ap_settings.world == kApWorld_Fsotp ? "fsotp" : "alttp");
   fclose(f);
   g_ui.dirty_settings = false;
 }

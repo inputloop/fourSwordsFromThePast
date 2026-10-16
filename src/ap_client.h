@@ -11,6 +11,7 @@
 #include <stddef.h>
 
 #define AP_GAME_NAME "Four Swords of the Past"
+#define AP_ALTTP_GAME_NAME "A Link to the Past"  // Archipelago's own world for this game
 
 enum {
   kApIdBase = 0x46530000,  // item id = base + item code; location id = base + chest number
@@ -47,15 +48,29 @@ void ApClient_Stop(void);
 // "Connected to archipelago.gg:38281 (wss) as Link" or the reason it failed.
 ApStatus ApClient_GetStatus(char *text, size_t size);
 
+// The slot_data of "A Link to the Past" rooms this game looks at (its
+// option values; -1 if missing).
+enum {
+  kApAlttp_CrystalsGt, kApAlttp_CrystalsGanon, kApAlttp_OpenPyramid, kApAlttp_SmallKeyShuffle,
+  kApAlttp_Progressive, kApAlttp_Swordless, kApAlttp_RetroBow, kApAlttp_RetroCaves, kApAlttp_ShopItemSlots,
+  kApAlttp_BossShuffle, kApAlttp_PotShuffle, kApAlttp_EnemyShuffle, kApAlttp_KeyDropShuffle,
+  kApAlttp_RandomizeShops, kApAlttp_ShuffleShops, kApAlttp_EntranceShuffle, kApAlttp_Goal, kApAlttp_Mode,
+  kApAlttp_PiecesRequired, kApAlttp_MmMedallion, kApAlttp_TrMedallion,  // (medallions: 0 Bombos, 1 Ether, 2 Quake)
+  kApAlttp_Count,
+};
+
 typedef struct ApRoom {
   char seed_name[64];
   char slot_name[64];
   int slot, team;
+  int world;              // ApWorld (archipelago.h): the game connected as
   int slot_data_version;  // slot_data "version", -1 if missing
   int slot_data_death_link;  // slot_data "death_link": 0 or 1, -1 if missing
   int slot_data_goal;     // slot_data "goal", -1 if missing
+  int alttp[kApAlttp_Count];  // "A Link to the Past": its options
   // FNV-1a (32 bit) of seed_name + "/" + slot number in decimal + "/7"
-  // (7 = the items_handling we connect with). Never 0.
+  // (7 = the items_handling we connect with), and "/alttp" after it for
+  // that world. Never 0.
   uint32 bind_hash;
 } ApRoom;
 // False before the first Connected after ApClient_Start; afterwards true,

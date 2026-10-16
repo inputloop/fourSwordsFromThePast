@@ -1,5 +1,6 @@
 #include "mp.h"
 #include "ancilla.h"
+#include "archipelago.h"
 #include "variables.h"
 #include "sprite.h"
 #include "hud.h"
@@ -2356,6 +2357,22 @@ void Ancilla32_BlastWallFireball(int k) {  // 88aa35
   Ancilla_SetOam(GetOamCurPtr(), pt.x, pt.y, kBlastWallFireball_Char[blastwall_var12[k] & 8 ? 0 : blastwall_var12[k] & 4 ? 1 : 2], 0x22, 0);
 }
 
+// A medallion (0 Bombos, 1 Ether, 2 Quake) was cast: does it open Misery
+// Mire (screen 0x70) or Turtle Rock (0x47), where Link stands? In the
+// original game Ether opens the mire and Quake the rock; Archipelago's
+// "A Link to the Past" world picks them.
+static void Medallion_CheckEntrances(int medallion) {
+  int screen = BYTE(overworld_screen_index);
+  if (screen != 0x70 && screen != 0x47)
+    return;
+  if (!Ap_MedallionOpens(medallion, screen) || (save_ow_event_info[screen] & 0x20) ||
+      !Ancilla_CheckForEntranceTrigger(screen == 0x70 ? 2 : 3))
+    return;
+  trigger_special_entrance = screen == 0x70 ? 3 : 4;
+  subsubmodule_index = 0;
+  BYTE(R16) = 0;
+}
+
 void Ancilla18_EtherSpell(int k) {  // 88aaa0
   if (submodule_index)
     return;
@@ -2497,11 +2514,7 @@ void EtherSpell_HandleRadialSpin(int k) {  // 88abef
   link_cant_change_direction = 0;
   flag_unk1 = 0;
 
-  if (BYTE(overworld_screen_index) == 0x70 && !(save_ow_event_info[0x70] & 0x20) && Ancilla_CheckForEntranceTrigger(2)) {
-    trigger_special_entrance = 3;
-    subsubmodule_index = 0;
-    BYTE(R16) = 0;
-  }
+  Medallion_CheckEntrances(1);
 
   if (link_player_handler_state != kPlayerState_ReceivingEther) {
     link_player_handler_state = kPlayerState_Ground;
@@ -2805,6 +2818,7 @@ void BombosSpell_ControlBlasting(int kk) {  // 88b40d
   step_counter_for_spin_attack = 0;
   link_cant_change_direction = 0;
   flag_unk1 = 0;
+  Medallion_CheckEntrances(0);
   if (link_player_handler_state != kPlayerState_ReceivingBombos) {
     link_player_handler_state = kPlayerState_Ground;
     link_delay_timer_spin_attack = 0;
@@ -2882,11 +2896,7 @@ void Ancilla1C_QuakeSpell(int k) {  // 88b66a
   flag_unk1 = 0;
   bg1_x_offset = 0;
   bg1_y_offset = 0;
-  if (BYTE(overworld_screen_index) == 0x47 && !(save_ow_event_info[0x47] & 0x20) && Ancilla_CheckForEntranceTrigger(3)) {
-    trigger_special_entrance = 4;
-    subsubmodule_index = 0;
-    BYTE(R16) = 0;
-  }
+  Medallion_CheckEntrances(2);
   button_mask_b_y = button_b_frames ? (joypad1H_last & 0x80) : 0;
   link_speed_setting = 0;
   byte_7E0325 = 0;
@@ -3794,7 +3804,9 @@ void Ancilla29_MilestoneItemReceipt(int k) {  // 88ca8c
         link_player_handler_state = 0;
       }
       item_receipt_method = 3;
-      Link_ReceiveItem(ancilla_item_to_link[k], 0);
+      uint8 item = ancilla_item_to_link[k];  // (Ether and Bombos from their tablets: places of the multiworld)
+      Link_ReceiveItem(item == 0x10 ? Ap_PlaceItem(kApLoc_EtherTablet, item) :
+                       item == 0x0f ? Ap_PlaceItem(kApLoc_BombosTablet, item) : item, 0);
       return;
     }
 
@@ -4042,7 +4054,7 @@ void Ancilla36_Flute(int k) {  // 88cfaa
       if (Ancilla_CheckLinkCollision(k, 2, &coll_out) && !related_to_hookshot && link_auxiliary_state == 0) {
         ancilla_type[k] = 0;
         item_receipt_method = 0;
-        Link_ReceiveItem(0x14, 0);
+        Link_ReceiveItem(Ap_PlaceItem(kApLoc_FluteSpot, 0x14), 0);
         return;
       }
     }
@@ -6724,7 +6736,7 @@ void AncillaAdd_WaterfallSplash() {  // 899b68
 
 void AncillaAdd_GTCutscene() {  // 899b83
   if (link_state_bits & 0x80 | link_auxiliary_state ||
-     (link_has_crystals & 0x7f) != 0x7f ||
+     !Ap_PrizeGate(kApGate_GanonsTower, (link_has_crystals & 0x7f) == 0x7f) ||
       save_ow_event_info[0x43] & 0x20)
     return;
 

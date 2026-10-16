@@ -42,8 +42,11 @@ uint8 Rando_ChestItem(int idx, uint8 vanilla_item);
 // location)? Dungeon items stay, and some table entries have no chest.
 bool Rando_IsApLocation(int idx);
 // Applied to every item Link receives: swords, shields, gloves and mails are
-// progressive (the next level of what Link has).
+// progressive (the next level of what Link has). (Not in a file of
+// Archipelago's "A Link to the Past" world: its codes are final.)
 uint8 Rando_AdjustReceivedItem(uint8 item);
+// Link's sword level (0-4), also while the smiths have it.
+int Rando_SwordLevel();
 
 // Places outside chests that give swords and shields.
 enum {

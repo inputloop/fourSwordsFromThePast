@@ -106,7 +106,10 @@ void Rando_OnFileLoaded() {
 
 void Rando_UncleGivesItems() {
   // First item now, the second one as soon as Link has put the first away.
-  g_ram[0xF000 + kRandoPendingOffs] |= 2;
+  // (One item in a file of Archipelago's "A Link to the Past" world, which
+  // has one place with the uncle.)
+  if (!Ap_IsAlttpFile())
+    g_ram[0xF000 + kRandoPendingOffs] |= 2;
   sram_progress_flags |= 1;  // the uncle is gone next time
   Link_ReceiveItem(Rando_SpecialItem(kRando_StartSword, kSpecialLocations[kRando_StartSword].vanilla), 0);
 }
@@ -516,6 +519,10 @@ static uint8 SwordLevel() {
   return link_sword_type == 0xff ? g_ram[0xF000 + kRandoSmithSwordOffs] : link_sword_type;
 }
 
+int Rando_SwordLevel() {
+  return SwordLevel();
+}
+
 void Rando_OnSmithsTakeSword() {
   if (Rando_CurrentSeed() != 0)
     g_ram[0xF000 + kRandoSmithSwordOffs] = link_sword_type;
@@ -543,7 +550,7 @@ void Rando_GiveStartItems() {
 }
 
 uint8 Rando_AdjustReceivedItem(uint8 item) {
-  if (Rando_CurrentSeed() == 0)
+  if (Rando_CurrentSeed() == 0 || Ap_IsAlttpFile())
     return item;
   // Swords and shields are progressive: each one found is the next level.
   if (IsSword(item)) {
@@ -790,8 +797,8 @@ static int LocationStatus(int room, bool found, const Ev *e) {
   return a < 0 ? kLoc_Filler : a ? kLoc_Reachable : kLoc_Locked;
 }
 
-static void TrackerAdd(RandoTracker *t, int room, int st) {
-  RandoTrackerArea *a = &t->area[TrackerAreaOf(room)];
+static void TrackerAddArea(RandoTracker *t, int area, int st) {
+  RandoTrackerArea *a = &t->area[area];
   a->total++, t->total++;
   if (st == kLoc_Found)
     a->found++, t->found++;
@@ -799,6 +806,20 @@ static void TrackerAdd(RandoTracker *t, int room, int st) {
     a->reachable++, t->reachable++;
   else if (st == kLoc_Locked)
     a->locked++, t->locked++;
+}
+
+static void TrackerAdd(RandoTracker *t, int room, int st) {
+  TrackerAddArea(t, TrackerAreaOf(room), st);
+}
+
+// The tracker's area of one of the "A Link to the Past" world's places
+// outside chests (its area, or by room; a boss: by its dungeon).
+static int TrackerAreaOfPlace(const ApAlttpSpecial *sp) {
+  // The game's dungeon numbers to kDungeons.
+  static const uint8 kDungeonArea[14] = { 0, 0, 2, 3, 1, 6, 5, 10, 7, 9, 4, 8, 11, 12 };
+  if (sp->kind == kApLocKind_Boss)
+    return kArea_FirstDungeon + kDungeonArea[sp->a < 14 ? sp->a : 0];
+  return sp->area < 3 ? (int)sp->area : TrackerAreaOf(sp->kind == kApLocKind_UwFlag ? sp->a : sp->b);
 }
 
 // Which of its room's chests table entry k is. (Worked out once: the page
@@ -823,9 +844,12 @@ static int TrackerCount(const uint8 *save, const State *s, RandoTracker *t) {
   Ev e;
   Evaluate(s, &e);
   bool ap = save[kApSave_Marker] == kApMarker;
+  // (A file of Archipelago's "A Link to the Past" world: every chest of that
+  // world, and its places outside chests, found by their bits.)
+  bool alttp = ap && save[kApSave_World] == kApWorld_Alttp;
   int open = 0;
   for (int k = 0; 3 * k + 2 < (int)kDungeonRoomChests_SIZE; k++) {
-    if (!Rando_IsApLocation(k))
+    if (alttp ? k >= kAlttpNumChests || !kAlttpChestIds[k] : !Rando_IsApLocation(k))
       continue;
     int room = WORD(kDungeonRoomChests[3 * k]) & 0x7fff;
     // A room's chests are its entries of the table, in order; an opened one
@@ -839,11 +863,25 @@ static int TrackerCount(const uint8 *save, const State *s, RandoTracker *t) {
       TrackerAdd(t, room, st);
   }
   for (int i = 0; i < kRando_NumSpecial; i++) {
+    if (alttp && !kAlttpSpecials[i].id)
+      continue;
     int room = kSpecialLocations[i].room;
     int st = LocationStatus(room, (save[kRandoDoneOffs] >> i) & 1, &e);
     open += st == kLoc_Found || st == kLoc_Reachable;
     if (t)
       TrackerAdd(t, room, st);
+  }
+  for (int i = kRando_NumSpecial; alttp && i < kApNumSpecials; i++) {
+    const ApAlttpSpecial *sp = &kAlttpSpecials[i];
+    if (!sp->id)
+      continue;
+    int bit = kApSpecialBit + i;
+    bool found = (save[kApSave_Checked + bit / 8] >> (bit & 7)) & 1;
+    // (The logic doesn't know these places: never "locked".)
+    int st = found ? kLoc_Found : kLoc_Filler;
+    open += found;
+    if (t)
+      TrackerAddArea(t, TrackerAreaOfPlace(sp), st);
   }
   return open;
 }

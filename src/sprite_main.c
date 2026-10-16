@@ -1,4 +1,5 @@
 #include "randomizer.h"
+#include "archipelago.h"
 #include "sprite_main.h"
 #include "sprite.h"
 #include "tagalong.h"
@@ -9,6 +10,13 @@
 #include "dungeon.h"
 #include "player.h"
 #include "misc.h"
+
+// The 300 rupees of the generous guys (the caves near the Moldorms and the
+// Hype cave): places of Archipelago's "A Link to the Past" world.
+static uint8 GenerousGuyItem() {
+  int loc = Ap_RoomFlagPlace(dungeon_room_index, 0x400);
+  return loc >= 0 ? Ap_PlaceItem(loc, 0x46) : 0x46;
+}
 
 #define byte_7FFE01 (*(uint8*)(g_ram+0x1FE01))
 static const int8 kSpriteKeese_Tab2[16] = {0, 8, 11, 14, 16, 14, 11, 8, 0, -8, -11, -14, -16, -14, -11, -8};
@@ -1211,7 +1219,20 @@ void Sprite_WishPond3(int k) {
     sprite_ai_state[k] = 7;
     // Randomized: any shield thrown into the waterfall and any sword thrown
     // to the pyramid fairy is taken (and given back with a random item).
-    if (Rando_CurrentSeed()) {
+    if (Ap_IsAlttpFile()) {
+      // Archipelago's "A Link to the Past" world: each fairy has two places
+      // (the randomizer's chests in her cave). Anything she would take is
+      // taken for them, and given back as it was; afterwards she changes
+      // nothing (its boomerangs, shields and swords are items of the pool).
+      uint8 t = sprite_graphics[k];
+      bool takes = t == 22 || (!savegame_is_darkworld ? t == 12 || t == 42 || t == 4 || t == 5 || t == 6 :
+                               t == 58 || t == 59 || t == 0x49 || t == 1 || t == 2 || t == 3);
+      if (takes) {
+        sprite_graphics[k] = Ap_FairyPlace(savegame_is_darkworld) >= 0 ? 0xfd : 0xfe;
+        Sprite_ShowMessageUnconditional(0x8c);
+        break;
+      }
+    } else if (Rando_CurrentSeed()) {
       uint8 t = sprite_graphics[k];
       bool shield = (t == 4 || t == 5 || t == 6), sword = (t == 0x49 || t == 1 || t == 2 || t == 3);
       if (!savegame_is_darkworld && shield)
@@ -1277,7 +1298,11 @@ void Sprite_WishPond3(int k) {
     PaletteFilter_RestoreSP5F();
     Palette_RevertTranslucencySwap();
     item_receipt_method = 2;
-    if (Rando_CurrentSeed() && (sprite_graphics[k] == 5 || sprite_graphics[k] == 3)) {
+    if (sprite_graphics[k] == 0xfd) {
+      (&link_item_bow)[sprite_C[k]] = sprite_D[k];  // what was thrown in comes back as it was
+      int loc = Ap_FairyPlace(savegame_is_darkworld);
+      Link_ReceiveItem(loc >= 0 ? Ap_PlaceItem(loc, kApPlaceholderItem) : kApPlaceholderItem, 0);
+    } else if (Rando_CurrentSeed() && !Ap_IsAlttpFile() && (sprite_graphics[k] == 5 || sprite_graphics[k] == 3)) {
       (&link_item_bow)[sprite_C[k]] = sprite_D[k];  // the thrown sword or shield comes back
       Link_ReceiveItem(Rando_SpecialItem(sprite_graphics[k] == 5 ? kRando_WaterfallFairy : kRando_PyramidFairy,
                                          sprite_graphics[k]), 0);
@@ -2110,7 +2135,7 @@ void MasterSword_Main(int k) {  // 8588d6
   switch (sprite_ai_state[k]) {
   case 0:  // waiting
     if (Sprite_CheckIfLinkIsBusy() || !Sprite_CheckDamageToLink_same_layer(k) || link_direction_facing != 2 ||
-      !(filtered_joypad_L & 0x80) || (link_which_pendants & 7) != 7)
+      !(filtered_joypad_L & 0x80) || !Ap_PrizeGate(kApGate_Pedestal, (link_which_pendants & 7) == 7))
       return;
 
     music_control = 10;
@@ -6225,7 +6250,7 @@ void Sprite_BottleVendor(int k) {  // 85ea79
     break;
   case 2:  // giving
     item_receipt_method = 0;
-    Link_ReceiveItem(0x16, 0);
+    Link_ReceiveItem(Ap_PlaceItem(kApLoc_BottleMerchant, 0x16), 0);
     sram_progress_indicator_3 |= 2;
     link_rupees_goal -= 100;
     sprite_ai_state[k] = 0;
@@ -6417,7 +6442,7 @@ void Sprite_E7_Mushroom(int k) {  // 85ee78
   if (Sprite_CheckDamageToLink_same_layer(k)) {
     sprite_state[k] = 0;
     item_receipt_method = 0;
-    Link_ReceiveItem(0x29, 0);
+    Link_ReceiveItem(Ap_PlaceItem(kApLoc_Mushroom, 0x29), 0);
   } else if ((frame_counter & 0x1f) == 0) {
     sprite_oam_flags[k] ^= 0x40;
   }
@@ -6481,7 +6506,8 @@ void Sprite_HeartContainer(int k) {  // 85ef47
   sprite_state[k] = 0;
   if (sprite_A[k]) {
     item_receipt_method = 2;
-    Link_ReceiveItem(0x3e, 0);
+    int loc = Ap_BossPlace(BYTE(cur_palace_index_x2) >> 1);
+    Link_ReceiveItem(loc >= 0 ? Ap_PlaceItem(loc, 0x3e) : 0x3e, 0);
     dung_savegame_state_bits |= 0x8000;
     return;
   }
@@ -6523,6 +6549,17 @@ void Sprite_HeartPiece(int k) {  // 85f020
   if (sprite_delay_aux4[k] || !Sprite_CheckDamageToLink_same_layer(k))
     return;
 
+  // Archipelago's "A Link to the Past" world: a place of the multiworld.
+  int loc = Ap_HeartPiecePlace(player_is_indoors, player_is_indoors ? dungeon_room_index : BYTE(overworld_screen_index),
+                               (sprite_x_hi[k] & 1) ? 0x200 : 0x400);
+  if (loc >= 0) {
+    Link_CancelDash();
+    item_receipt_method = 0;
+    Link_ReceiveItem(Ap_PlaceItem(loc, 0x17), 0);
+    sprite_state[k] = 0;
+    HeartUpgrade_SetObtainedFlag(k);
+    return;
+  }
   link_heart_pieces = link_heart_pieces + 1 & 3;
   if (link_heart_pieces == 0) {
     Link_CancelDash();
@@ -6576,7 +6613,7 @@ void Sprite_Sahasrahla(int k) {  // 85f14d
     break;
   case 2:  // grant boots
     item_receipt_method = 0;
-    Link_ReceiveItem(0x4b, 0);
+    Link_ReceiveItem(Ap_PlaceItem(kApLoc_Sahasrahla, 0x4b), 0);
     sprite_ai_state[k] = 3;
     savegame_map_icons_indicator = 3;
     break;
@@ -6588,7 +6625,7 @@ void Sprite_Sahasrahla(int k) {  // 85f14d
 }
 
 void Sasha_Idle(int k) {  // 85f160
-  if (!(link_which_pendants & 4)) {
+  if (!Ap_PrizeGate(kApGate_Sahasrahla, (link_which_pendants & 4) != 0)) {
     if (Sprite_ShowSolicitedMessage(k, 0x32) & 0x100)
       sprite_ai_state[k] = 1;
   } else if (!link_item_boots) {
@@ -6823,7 +6860,7 @@ void Sprite_BagOfPowder(int k) {  // 85f644
     return;
   Link_CancelDash();
   item_receipt_method = 0;
-  Link_ReceiveItem(0xd, 0);
+  Link_ReceiveItem(Ap_PlaceItem(kApLoc_PotionShop, 0xd), 0);
   sprite_state[k] = 0;
 }
 
@@ -7083,7 +7120,7 @@ void Sprite_BookOfMudora(int k) {  // 85fc9e
   case 3:  // give to player
     Link_CancelDash();
     item_receipt_method = 0;
-    Link_ReceiveItem(0x1d, 0);
+    Link_ReceiveItem(Ap_PlaceItem(kApLoc_Library, 0x1d), 0);
     sprite_state[k] = 0;
     break;
   }
@@ -7466,7 +7503,7 @@ void SpritePrep_BombShoppe(int k) {  // 8689df
     sprite_subtype2[j] = 1;
     sprite_ignore_projectile[j] = 1;
   }
-  if ((link_has_crystals & 5) == 5 && sram_progress_indicator_3 & 32) {
+  if (Ap_PrizeGate(kApGate_PyramidFairy, (link_has_crystals & 5) == 5) && sram_progress_indicator_3 & 32) {
     int j = Sprite_SpawnDynamically(k, 0xb5, &info);
     if (j >= 0) {
       Sprite_SetX(j, info.r0_x - 56);
@@ -9952,7 +9989,7 @@ void Sprite_FluteKid_Stumpy(int k) {  // 86b040
     break;
   case 2:  // grant shovel
     item_receipt_method = 0;
-    Link_ReceiveItem(0x13, 0);
+    Link_ReceiveItem(Ap_PlaceItem(kApLoc_Stumpy, 0x13), 0);
     sprite_ai_state[k] = 0;
     break;
   case 3:  // wait for music
@@ -10469,7 +10506,7 @@ void Sprite_1F_SickKid(int k) {  // 86b94c
     break;
   case 2:  // grant
     item_receipt_method = 0;
-    Link_ReceiveItem(0x21, 0);
+    Link_ReceiveItem(Ap_PlaceItem(kApLoc_SickKid, 0x21), 0);
     flag_is_link_immobilized = 0;
     sprite_ai_state[k] = 3;
     break;
@@ -10681,7 +10718,7 @@ void Sprite_39_Locksmith(int k) {  // 86bcac
         sprite_ai_state[k] = 2;
       } else {
         item_receipt_method = 0;
-        Link_ReceiveItem(0x16, 0);
+        Link_ReceiveItem(Ap_PlaceItem(kApLoc_PurpleChest, 0x16), 0);
         sram_progress_indicator_3 |= 0x10;
         sprite_ai_state[k] = 4;
         follower_indicator = 0;
@@ -10771,7 +10808,7 @@ void Sprite_Hobo_Bum(int k) {  // 86bdd0
     sprite_graphics[k] = 1;
     save_ow_event_info[BYTE(overworld_screen_index)] |= 0x20;
     item_receipt_method = 0;
-    Link_ReceiveItem(0x16, 0);
+    Link_ReceiveItem(Ap_PlaceItem(kApLoc_Hobo, 0x16), 0);
     sram_progress_indicator_3 |= 1;
     break;
   case 3:  // back to sleep
@@ -11143,7 +11180,12 @@ void Sprite_3A_MagicBat(int k) {  // 86c044
       Palette_Restore_BG_And_HUD();
       flag_update_cgram_in_nmi++;
       sprite_ai_state[k]++;
-      link_magic_consumption = 1;
+      if (Ap_IsAlttpFile()) {  // (a place of the multiworld instead of the upgrade)
+        item_receipt_method = 0;
+        Link_ReceiveItem(Ap_PlaceItem(kApLoc_MagicBat, kApPlaceholderItem), 0);
+      } else {
+        link_magic_consumption = 1;
+      }
       Hud_RefreshIcon();
     } else if (sprite_delay_aux1[k] == 0x10) {
       intro_times_pal_flash = 0x10;
@@ -18225,7 +18267,9 @@ void Sprite_Catfish_QuakeMedallion(int k) {  // 9ddf54
     if (!submodule_index && Sprite_CheckDamageToLink_same_layer(k)) {
       sprite_state[k] = 0;
       item_receipt_method = 0;
-      Link_ReceiveItem(sprite_A[k], 0);
+      uint8 item = sprite_A[k];  // the catfish's Quake, or King Zora's flippers
+      Link_ReceiveItem(item == 0x11 ? Ap_PlaceItem(kApLoc_Catfish, item) :
+                       item == 0x1e ? Ap_PlaceItem(kApLoc_KingZora, item) : item, 0);
     }
   }
   if (sprite_delay_aux3[k])
@@ -23344,11 +23388,11 @@ void CrystalMaiden_RunCutscene(int k) {  // 9ece39
     int j = BYTE(cur_palace_index_x2) - 10;
     if (j == 2 && savegame_map_icons_indicator < 7)
       savegame_map_icons_indicator = 7;
-    if (j == 14 && (link_has_crystals & 0x7f) != 0x7f)
+    if (j == 14 && !Ap_PrizeGate(kApGate_GanonsTower, (link_has_crystals & 0x7f) == 0x7f))
       j = 16;
     Sprite_ShowMessageUnconditional(kCrystalMaiden_Msgs[j >> 1]);
     sprite_ai_state[k]++;
-    if ((link_has_crystals & 0x7f) == 0x7f)
+    if (Ap_PrizeGate(kApGate_GanonsTower, (link_has_crystals & 0x7f) == 0x7f))
       savegame_map_icons_indicator = 8;
     break;
   }
@@ -24288,7 +24332,7 @@ void Sprite_BombShop_Clerk(int k) {  // 9ee134
       SpriteSfx_QueueSfx3WithPan(k, 0x12);
     }
   }
-  bool flag = ((link_has_crystals & 5) == 5 && sram_progress_indicator_3 & 32);
+  bool flag = (Ap_PrizeGate(kApGate_PyramidFairy, (link_has_crystals & 5) == 5) && sram_progress_indicator_3 & 32);
   Sprite_ShowSolicitedMessage(k, flag ? 0x118 : 0x117);
   Sprite_BehaveAsBarrier(k);
 }
@@ -24715,7 +24759,7 @@ void Sprite_AD_OldMan(int k) {  // 9ee992
     case 0:  // grant mirror
       sprite_ai_state[k]++;
       item_receipt_method = 0;
-      Link_ReceiveItem(0x1a, 0);
+      Link_ReceiveItem(Ap_PlaceItem(kApLoc_OldMan, 0x1a), 0);
       which_starting_point = 1;
       OldMan_EnableCutscene();
       sprite_delay_main[k] = 48;
@@ -25104,7 +25148,7 @@ void NiceThiefWithGift(int k) {  // 9ef038
     if (!(dung_savegame_state_bits & 0x4000)) {
       dung_savegame_state_bits |= 0x4000;
       sprite_ai_state[k] = 2;
-      ShopItem_HandleReceipt(k, 0x46);
+      ShopItem_HandleReceipt(k, GenerousGuyItem());
     } else {
       sprite_ai_state[k] = 0;
     }

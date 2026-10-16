@@ -6009,14 +6009,18 @@ uint8 OpenMiniGameChest(int *chest_position) {  // 81edab
     if (t >= 2 && t == r16) {
       t = (t + 1) & 7;
     }
+    bool prize = false;
     if (t == 7) {
       if (dung_savegame_state_bits & 0x4000) {
         t = 0;
       } else {
         dung_savegame_state_bits |= 0x4000;
+        prize = true;
       }
     }
     rv = kDungeon_MinigameChestPrizes1[t];
+    if (prize)  // (the heart piece: a place of Archipelago's "A Link to the Past" world)
+      rv = Ap_PlaceItem(kApLoc_ChestGame, rv);
   }
   some_menu_ctr = t;
   nmi_load_bg_from_vram = 1;

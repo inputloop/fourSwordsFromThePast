@@ -16,4 +16,11 @@ type Link
 key enter
 key down 3
 key right
-expect_apsettings localhost:38281 Link on
+expect_apsettings localhost:38281 Link on fsotp
+# The world: the harness starts as this game's own; one press makes it
+# Archipelago's A Link to the Past, another this game's again.
+key down
+key right
+expect_apsettings localhost:38281 Link on alttp
+key left
+expect_apsettings localhost:38281 Link on fsotp
