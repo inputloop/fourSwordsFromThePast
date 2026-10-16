@@ -37,9 +37,18 @@ def main(argv):
         return off
     shipped = res.get('shipped', {})
     print('test\tmod\tfinding\tevidence')
+    default_off = set()
+    for line in open(os.path.join(ROOT, 'mods', 'default.cfg'), encoding='utf-8'):
+        w = line.split('#', 1)[0].split()
+        if len(w) == 2 and w[1] == 'off':
+            default_off.add(w[0])
     for t, r in sorted(shipped.items()):
         if r != 'PASS':
-            print(f'{t}\t-\tSHIPPED-FAILS\tshipped:{r}')
+            by = [m for m in sorted(default_off) if any(fnmatch.fnmatch(t, g) for g in tags.get(m, []))]
+            if by:
+                print(f'{t}\t{",".join(by)}\tTAGGED-NEEDED\tshipped:{r} (off in the shipped set)')
+            else:
+                print(f'{t}\t-\tSHIPPED-FAILS\tshipped:{r}')
     for comp, tests in sorted(res.items()):
         if not comp.startswith('no-'):
             continue
