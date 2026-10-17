@@ -1,0 +1,11 @@
+# made by: sh tools/mods_matrix.sh (run 2, final: on 39d79cc, upstream 8464ead + the recipe branch; every test in every composition, nothing skipped; idle machine). The commits after it (fe506e1, 1426a4f, 693ec85) change no game code a test runs. Replaces run 1 (git history keeps it).
+composition	built	bytes	seconds	mods_on
+shipped	yes	2438280	27	story screenshot hd2d hd3d randomizer archipelago netplay
+no-story	yes	2405144	27	screenshot hd2d hd3d randomizer archipelago netplay
+no-screenshot	yes	2401976	29	story hd2d hd3d randomizer archipelago netplay
+no-hd2d	yes	2261312	23	story screenshot randomizer archipelago netplay
+no-hd3d	yes	2279384	24	story screenshot hd2d randomizer archipelago netplay
+no-randomizer	yes	2326272	42	story screenshot hd2d hd3d netplay
+no-archipelago	yes	2347944	44	story screenshot hd2d hd3d randomizer netplay
+no-netplay	yes	2425088	46	story screenshot hd2d hd3d randomizer archipelago
+all-off	yes	2074224	20	
