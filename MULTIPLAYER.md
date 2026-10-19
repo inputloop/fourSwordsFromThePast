@@ -41,7 +41,8 @@ Players can drop in and drop out at any time.
 - **Players**: *Multiplayer > Players* lists everyone: name, where they are
   (a dungeon, part of the overworld, indoors), their ping, and whether they
   are down or reconnecting. The host can remove a player there (select them
-  twice); a removed player can't come back on their own.
+  twice); a removed player is kept out by their name and address, so one who
+  comes back under a new name is let in again: removing is a nudge, not a lock.
 - **Lost connection? Your seat waits.** If a player's connection drops, their
   Link stands still and their seat is kept for two minutes. Their game says
   "reconnecting" and keeps knocking; once through, it downloads the game again
@@ -453,6 +454,39 @@ never committed (the ROM's graphics can't be shared), so these checks run on
 your computer, not on GitHub. After an intended change to how things look,
 run `tests/update_baselines.sh`. A mismatch leaves the new screenshot and a
 diff with the changed pixels in red in `tests/out/`.
+
+## What leaves your computer, and what arrives
+
+Written down so nobody has to guess. The game has no account, no telemetry and
+no update check; it contacts only the places below, only when you do these things.
+
+- **Hosting** asks your router to open UDP 47474 (UPnP, on your LAN). If the
+  router does not answer, the game asks a STUN server for your public address;
+  the default is Google's (`stun.l.google.com:19302`, the `StunServer` line in
+  `zelda3.ini`; set it to another server or leave it empty to skip this).
+- **The room code is your public address and port**, written short with a
+  check against typos. Anyone you give it to, or who sees it on a stream, has
+  your address. Treat it like your address, not like a password. While you
+  host, anyone who knows the port can ask for the game's name and player count.
+- **Joining sends the host your player name**, and the host passes names and
+  pings to the other players. Nothing else about you travels.
+- **Joining downloads the host's game**: its whole save file, all three slots,
+  not only the one in play. The host should know that before inviting
+  strangers.
+- **Netplay traffic is not encrypted or signed.** Someone on the same network
+  path can read it or pretend to be the host or a player. Play with people you
+  know; do not host on a network you do not trust.
+- **Archipelago**: the slot name, the room password if you set one, and the
+  game's messages go to the Archipelago server you name. With `wss://` they are
+  encrypted; with `ws://`, or with no scheme on a server other than
+  archipelago.gg (where `ws://` is tried first), they travel in the clear. Type
+  `wss://` when the room offers it. The password is never written to disk by
+  the game.
+- **On your disk**: `zelda3.coop.ini` keeps your player name, the last address
+  or room code you joined, and your Archipelago server and slot (not the
+  password). F12 screenshots capture whatever is on screen, including the
+  Multiplayer menu with your room code. On Windows a crash writes
+  `zelda3_crash.txt` with the crashing module's name and an offset, nothing else.
 
 ## Known limitations
 

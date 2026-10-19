@@ -1562,7 +1562,8 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
   } else if (type == kPkt_SnapInfo && (g_s.st.client_state == 2 || g_s.st.client_state == 3)) {
     uint8 id = Rd8(r);
     uint32 size = Rd32(r);
-    if (r->err || size > 4 << 20)
+    // A snapshot is at least its frame number plus one byte; 4 MB is more than any world.
+    if (r->err || size < 8 || size > 4 << 20)
       return;
     if (!g_s.snap_known || id != g_s.snap_id) {
       g_s.want_resync = false;  // the host heard us: stop asking
@@ -1570,6 +1571,13 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
       free(g_s.snap_chunk_have);
       g_s.snap = (uint8 *)malloc(size);
       g_s.snap_chunk_have = (uint8 *)calloc(size / kChunkSize + 1, 1);
+      if (!g_s.snap || !g_s.snap_chunk_have) {
+        free(g_s.snap);
+        free(g_s.snap_chunk_have);
+        g_s.snap = g_s.snap_chunk_have = NULL;
+        g_s.snap_known = false;
+        return;
+      }
       g_s.snap_size = size;
       g_s.snap_have = 0;
       g_s.snap_id = id;
@@ -1583,7 +1591,8 @@ static void ClientHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     uint8 id = Rd8(r);
     uint32 off = Rd32(r);
     uint16 n = Rd16(r);
-    if (r->err || id != g_s.snap_id || off % kChunkSize || off + n > g_s.snap_size || r->end - r->p < n)
+    // The sum is taken in 64 bits: off near 2^32 must not wrap past the check.
+    if (r->err || id != g_s.snap_id || off % kChunkSize || (uint64)off + n > g_s.snap_size || r->end - r->p < n)
       return;
     memcpy(g_s.snap + off, r->p, n);
     g_s.snap_chunk_have[off / kChunkSize] = 1;

@@ -31,6 +31,11 @@ __pycache__
 /sprites-gfx
 /glsl-shaders
 /token.txt
+# written by the game
+/saves/sram.dat.bak
+/zelda3_crash.txt
+/spoiler_*.txt
+/screenshots/
 
 # Never commit Nintendo-copyrighted data or build output
 *.sfc
