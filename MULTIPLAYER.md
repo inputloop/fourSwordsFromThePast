@@ -41,8 +41,11 @@ Players can drop in and drop out at any time.
 - **Players**: *Multiplayer > Players* lists everyone: name, where they are
   (a dungeon, part of the overworld, indoors), their ping, and whether they
   are down or reconnecting. The host can remove a player there (select them
-  twice); a removed player is kept out by their name and address, so one who
-  comes back under a new name is let in again: removing is a nudge, not a lock.
+  twice). A removed player is kept out by their install id (a random number
+  each copy of the game makes on first run and sends when joining; see
+  `InstallId` and `BanByInstallId` in `zelda3.ini`), by their address and by
+  their name. A host that turns `BanByInstallId` off falls back to name and
+  address, which a new name gets around: then removing is a nudge, not a lock.
 - **Lost connection? Your seat waits.** If a player's connection drops, their
   Link stands still and their seat is kept for two minutes. Their game says
   "reconnecting" and keeps knocking; once through, it downloads the game again
@@ -468,8 +471,10 @@ no update check; it contacts only the places below, only when you do these thing
   check against typos. Anyone you give it to, or who sees it on a stream, has
   your address. Treat it like your address, not like a password. While you
   host, anyone who knows the port can ask for the game's name and player count.
-- **Joining sends the host your player name**, and the host passes names and
-  pings to the other players. Nothing else about you travels.
+- **Joining sends the host your player name and your install id** (sixteen
+  random digits made on first run, kept in `zelda3.coop.ini`; `InstallId = off`
+  sends none), and the host passes names and pings to the other players.
+  Nothing else about you travels.
 - **Joining downloads the host's game**: its whole save file, all three slots,
   not only the one in play. The host should know that before inviting
   strangers.

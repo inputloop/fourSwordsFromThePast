@@ -49,7 +49,7 @@ int main(int argc, char **argv) {
   if (!strcmp(t, "amp")) {             // T3: one Hello from an arbitrary source address, then 6 s of host ticks
     memset(&g_s, 0, sizeof g_s); g_s.st.mode = kSessionHost; g_s.conf = g_s.frame = 100;
     for (int i = 0; i < kRingSize; i++) g_s.ring_frame[i] = 0;
-    WBegin(&W, kPkt_Hello); Wr16(&W, kWireVersion); char nm[24] = "x"; WData(&W, nm, 24); Wr32(&W, 0); Wr8(&W, 0);
+    WBegin(&W, kPkt_Hello); Wr16(&W, kWireVersion); char nm[24] = "x"; WData(&W, nm, 24); Wr32(&W, 0); Wr8(&W, 0); Wr64(&W, 0x1111);
     int hello_len = W.pos; NetAddr victim = { 0x08080808, 9999 };
     Reader r = { W.buf + 3, W.buf + W.pos, false }; HostHandlePacket(&victim, &r, kPkt_Hello);
     int snap_size = g_s.clients[0].snap_size;
@@ -69,7 +69,10 @@ int main(int argc, char **argv) {
     memset(&g_s, 0, sizeof g_s); g_s.st.mode = kSessionHost; g_s.conf = g_s.frame = 100;
     memset(g_s.slot_owner, 0xff, 4); g_s.slot_owner[0] = 0;
     NetAddr a1 = { 0x0A000001, 5000 }, a2 = { 0x0A000002, 6000 };
-    #define HELLO(nm, tok, rej, from) do { WBegin(&W, kPkt_Hello); Wr16(&W, kWireVersion); char n_[24] = {0}; strcpy(n_, nm); WData(&W, n_, 24); Wr32(&W, tok); Wr8(&W, rej); \
+    // (The host bans by install id, the default; Alice's install is 0xA11CE.)
+    g_s.ban_by_iid = true;
+    #define HELLO(nm, tok, rej, from) HELLO_I(nm, tok, rej, from, 0xA11CE)
+    #define HELLO_I(nm, tok, rej, from, iid) do { WBegin(&W, kPkt_Hello); Wr16(&W, kWireVersion); char n_[24] = {0}; strcpy(n_, nm); WData(&W, n_, 24); Wr32(&W, tok); Wr8(&W, rej); Wr64(&W, iid); \
       memset(g_pk, 0, sizeof g_pk); Reader r_ = { W.buf + 3, W.buf + W.pos, false }; HostHandlePacket(from, &r_, kPkt_Hello); } while (0)
     HELLO("Alice", 0, 0, &a1);
     HostClient *hc = &g_s.clients[0]; hc->ever_loaded = true; hc->loading = false; g_s.slot_owner[1] = hc->id; g_s.slot_local[1] = 0;
@@ -77,7 +80,11 @@ int main(int argc, char **argv) {
     if (!strcmp(t, "kick")) {
       printf("Session_Kick(1) -> %d\n", Session_Kick(1));
       HELLO("Alice", 0, 0, &a1); printf("same name/addr, no token: Reject=%d Welcome=%d\n", g_pk[kPkt_Reject], g_pk[kPkt_Welcome]);
-      HELLO("Alice2", 0, 0, &a1); printf("new name, same addr, no token: Reject=%d Welcome=%d\n", g_pk[kPkt_Reject], g_pk[kPkt_Welcome]);
+      HELLO("Alice2", 0, 0, &a1); printf("new name, same addr, same install id: Reject=%d Welcome=%d\n", g_pk[kPkt_Reject], g_pk[kPkt_Welcome]);
+      HELLO_I("Alice3", 0, 0, &a2, 0xA11CE); printf("new name, other addr, same install id: Reject=%d Welcome=%d\n", g_pk[kPkt_Reject], g_pk[kPkt_Welcome]);
+      HELLO_I("Alice4", 0, 0, &a2, 0); printf("new name, other addr, no install id: Reject=%d Welcome=%d\n", g_pk[kPkt_Reject], g_pk[kPkt_Welcome]);
+      g_s.ban_by_iid = false;
+      HELLO_I("Alice5", 0, 0, &a2, 0xA11CE); printf("host with BanByInstallId=0, new name, other addr: Reject=%d Welcome=%d (the known gap, by choice)\n", g_pk[kPkt_Reject], g_pk[kPkt_Welcome]);
     } else {
       g_s.clients[0].last_recv = g_clock; g_clock += 7000; HostSend(); // silence for 7 s -> parked
       printf("after 7 s silence: parked=%d\n", g_s.clients[0].parked);

@@ -17,7 +17,7 @@
 #include "select_file.h"
 
 enum {
-  kProtoVersion = 21,
+  kProtoVersion = 22,  // 22: Hello carries the install id (HARDEN H-019)
   // What goes on the wire: the protocol version, and, for a build whose
   // game-changing mods differ from the shipped ones, a tag for which mods it
   // has (mods/SPEC.md, M17). The shipped build sends kProtoVersion alone.
@@ -64,6 +64,7 @@ typedef struct Writer {
 static void Wr8(Writer *w, uint8 v) { w->buf[w->pos++] = v; }
 static void Wr16(Writer *w, uint16 v) { Wr8(w, v); Wr8(w, v >> 8); }
 static void Wr32(Writer *w, uint32 v) { Wr16(w, v); Wr16(w, v >> 16); }
+static void Wr64(Writer *w, uint64 v) { Wr32(w, (uint32)v); Wr32(w, (uint32)(v >> 32)); }
 static void WData(Writer *w, const void *d, int n) { memcpy(w->buf + w->pos, d, n); w->pos += n; }
 static void WBegin(Writer *w, uint8 type) { w->pos = 0; Wr8(w, 'Z'); Wr8(w, '3'); Wr8(w, type); }
 
@@ -75,6 +76,7 @@ typedef struct Reader {
 static uint8 Rd8(Reader *r) { if (r->p >= r->end) { r->err = true; return 0; } return *r->p++; }
 static uint16 Rd16(Reader *r) { uint16 a = Rd8(r); return a | Rd8(r) << 8; }
 static uint32 Rd32(Reader *r) { uint32 a = Rd16(r); return a | (uint32)Rd16(r) << 16; }
+static uint64 Rd64(Reader *r) { uint64 a = Rd32(r); return a | (uint64)Rd32(r) << 32; }
 static void RData(Reader *r, void *d, int n) {
   if (r->end - r->p < n) { r->err = true; memset(d, 0, n); return; }
   memcpy(d, r->p, n);
@@ -87,6 +89,7 @@ typedef struct HostClient {
   uint8 id;
   char name[24];
   uint32 token;       // lets it back into its seat after losing the connection
+  uint64 iid;         // the client's install id (0: it sends none)
   bool parked;        // connection lost: its players stand still, the seat waits
   uint32 parked_at;
   bool ever_loaded;   // got into the game at least once (only then is a seat kept)
@@ -169,7 +172,9 @@ static struct {
   uint32 last_roster;               // host: when the clients last got the list
   bool in_host_world;               // clients: the game here is the host's
   // host: players removed from this game, so they can't knock their way back
-  struct { uint32 token, ip; char name[24]; } kicked[8];
+  struct { uint32 token, ip; uint64 iid; char name[24]; } kicked[8];
+  uint64 iid;               // this computer's install id, sent in Hello (0: none)
+  bool ban_by_iid;          // as a host: a kicked install id stays out, and a Hello without one is refused
   int nkicked;
   // Archipelago lines: the host's latest (sent with the roster) and, on a
   // client, the ones received but not shown yet.
@@ -482,8 +487,20 @@ static void ReadFrame(Reader *r, MpFrameInput *fi) {
 
 // --- common ---
 
+// The install id layer (HARDEN H-019): id is what this computer sends in Hello (0: nothing);
+// ban_by_id is the host's side, a removed install stays out and an id-less Hello is refused.
+// Either side may switch its half off; a client sending none can only join hosts that don't ban by it.
+void Session_SetInstallId(uint64 id, bool ban_by_id) {
+  g_s.iid = id;
+  g_s.ban_by_iid = ban_by_id;
+}
+
 void Session_Init(const char *player_name) {
+  uint64 iid = g_s.iid;
+  bool ban = g_s.ban_by_iid;
   memset(&g_s, 0, sizeof(g_s));
+  g_s.iid = iid;
+  g_s.ban_by_iid = ban;
   snprintf(g_s.name, sizeof(g_s.name), "%s", player_name && player_name[0] ? player_name : "Link");
   g_s.st.mode = kSessionOffline;
   ResetSlots();
@@ -740,10 +757,12 @@ static HostClient *HostFindReturning(uint32 token, const char *name, const NetAd
   return n == 1 ? found : NULL;
 }
 
-// Removed by the host: by token, or by name from the same address.
-static bool HostWasKicked(uint32 token, const char *name, const NetAddr *from) {
+// Removed by the host: by token, by install id (when the host bans by it), or by name from
+// the same address. A new name from the same install is still the same install.
+static bool HostWasKicked(uint32 token, const char *name, const NetAddr *from, uint64 iid) {
   for (int i = 0; i < g_s.nkicked; i++)
-    if ((token && g_s.kicked[i].token == token) || (g_s.kicked[i].ip == from->ip && !strcmp(g_s.kicked[i].name, name)))
+    if ((token && g_s.kicked[i].token == token) || (g_s.ban_by_iid && iid && g_s.kicked[i].iid == iid) ||
+        (g_s.kicked[i].ip == from->ip && !strcmp(g_s.kicked[i].name, name)))
       return true;
   return false;
 }
@@ -811,6 +830,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     name[23] = 0;
     uint32 token = Rd32(r);
     uint8 rejoin = Rd8(r);
+    uint64 iid = Rd64(r);
     if (ver != kWireVersion) {
       WBegin(&w, kPkt_Reject);
       WData(&w, "Different game version or mods", 31);
@@ -819,8 +839,16 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
     }
     if (r->err)
       return;
-    if (HostWasKicked(token, name, from)) {
+    if (HostWasKicked(token, name, from, iid)) {
       static const char kWhy[] = "The host removed you from the game";
+      WBegin(&w, kPkt_Reject);
+      WData(&w, kWhy, sizeof(kWhy));
+      Net_Send(g_s.sock, from, w.buf, w.pos);
+      return;
+    }
+    if (g_s.ban_by_iid && !iid) {
+      // This host keeps removed players out by install id, so it needs one from everybody.
+      static const char kWhy[] = "This game needs an install id (InstallId in zelda3.ini)";
       WBegin(&w, kPkt_Reject);
       WData(&w, kWhy, sizeof(kWhy));
       Net_Send(g_s.sock, from, w.buf, w.pos);
@@ -873,6 +901,7 @@ static void HostHandlePacket(const NetAddr *from, Reader *r, uint8 type) {
           hc->id = c + 1;
           memcpy(hc->name, name, 24);
           hc->token = NewToken();
+          hc->iid = iid;
           hc->join_mask = 1;
           hc->margin_report = -128;  // nothing to report yet
           HostStartSnapshot(hc);
@@ -1646,6 +1675,7 @@ static void ClientSendInput(const uint16 *local_inputs) {
       WData(&w, g_s.name, 24);
       Wr32(&w, g_s.token);
       Wr8(&w, g_s.st.client_state == 4);
+      Wr64(&w, g_s.iid);
       Net_Send(g_s.sock, &g_s.host, w.buf, w.pos);
     }
     return;
@@ -1972,6 +2002,7 @@ bool Session_Kick(int slot) {
   int k = g_s.nkicked < (int)countof(g_s.kicked) ? g_s.nkicked++ : (int)countof(g_s.kicked) - 1;
   g_s.kicked[k].token = hc->token;
   g_s.kicked[k].ip = hc->addr.ip;
+  g_s.kicked[k].iid = hc->iid;
   memcpy(g_s.kicked[k].name, hc->name, sizeof(g_s.kicked[k].name));
   HostDropClient(hc, "was removed from the game");
   return true;

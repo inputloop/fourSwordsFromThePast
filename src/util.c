@@ -1,5 +1,10 @@
+#ifdef _WIN32
+#define _CRT_RAND_S
+#endif
 #include "util.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <string.h>
 #include <stdarg.h>
 
@@ -296,4 +301,24 @@ uint8 *ApplyBps(const uint8 *src, size_t src_size_in,
 bad:
   free(dst);
   return NULL;
+}
+// 64 random bits from the operating system (rand_s on Windows, /dev/urandom elsewhere), for ids that
+// must differ between installs; falls back to a time mix, and is never 0 (0 means "none").
+uint64 RandomId64(void) {
+  uint64 v = 0;
+#ifdef _WIN32
+  unsigned a = 0, b = 0;
+  if (rand_s(&a) == 0 && rand_s(&b) == 0)
+    v = (uint64)a << 32 | b;
+#else
+  FILE *f = fopen("/dev/urandom", "rb");
+  if (f) {
+    if (fread(&v, sizeof(v), 1, f) != 1)
+      v = 0;
+    fclose(f);
+  }
+#endif
+  if (!v)
+    v = (uint64)time(NULL) * 6364136223846793005ull ^ (uint64)(uintptr_t)&v;
+  return v ? v : 1;
 }
