@@ -51,6 +51,7 @@ in three places with the team panel.*
 
 See **[MULTIPLAYER.md](MULTIPLAYER.md)** for how co-op and netplay work.
 See **[docs/HOW_THE_MOD_WORKS.md](docs/HOW_THE_MOD_WORKS.md)** for a plain-language guide to how the whole mod works.
+Starting a project of your own? **[docs/LESSONS_LEARNED.md](docs/LESSONS_LEARNED.md)** is what this one learned, written to be handed on.
 Want to change or extend it? **[docs/MODDING.md](docs/MODDING.md)** is a step-by-step modding guide: building, a map of the code, the rules that keep online play in sync, recipes and testing.
 New to the game? **The player's book** (`docs/books/manual.md`, or the `help` folder in a build) starts with the one thing every way of playing needs, and sends you where you want to go from there.
 Building your own copy, with some mods left out? **The developer's guide** (`docs/books/devguide.md`) and **[RECIPE.org](RECIPE.org)** show how, step by step, with what you should see at each one.
