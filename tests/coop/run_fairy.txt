@@ -1,0 +1,22 @@
+# Legend of Links: a fairy in a bottle saves the team, so it is not a wipe and costs no life.
+rando 40
+runfile 1
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+expect_ram f44a 03
+# One bottle holding a fairy (6), nothing else.
+poke f35c 6
+hp 1 2
+spawn 41 1 0
+run 600
+# (The fairy was used: its bottle is empty now, so the fall really happened.)
+expect_ram f35c 02
+expect_ram f44a 03
+expect_ram f45a 00
+expect_ram f467 00

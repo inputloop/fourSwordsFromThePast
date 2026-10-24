@@ -13,3 +13,4 @@ randomizer	yes	-	randomizer.c	randomizer randomizer_master_sword randomizer_olds
 archipelago	yes	randomizer	archipelago.c ap_client.c ap_json.c ap_tls.c ap_ws.c	archipelago* net_ap* tracker object_slot_owner	Archipelago multiworld: items shared with other games online.
 netplay	yes	-	net.c upnp.c	net_* room_code	Playing over a LAN or the internet: hosting, joining, rollback.
 helpbook	no	-	helpbook.c helpbook_os.c	helpbook*	Ctrl+H opens the player's manual at the page for what you are doing.
+roguelite	yes	randomizer	run.c	run_*	Legend of Links: runs with shared team lives and a run-over end.

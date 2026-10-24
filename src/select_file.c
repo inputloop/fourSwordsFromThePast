@@ -1,4 +1,5 @@
 #include "randomizer.h"
+#include "run.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "load_gfx.h"
@@ -939,6 +940,7 @@ void FileSelect_InitNewSave(uint8 *sram) {
   };
   memcpy(sram + 0x340, kSramInit_Normal, 60);
   Rando_OnNewFile(sram);
+  Run_OnNewFile(sram);
   sram[kFullInvMarkerOffs] = 0;
   if (g_new_game_full_inventory)
     GiveFullInventory(sram);

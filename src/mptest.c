@@ -10,6 +10,9 @@
 //   spoke <hexoff> <hexval>  change a byte of save slot 1 (fixing its checksum)
 //   rando <off|random|hexseed>  randomizer setting for new save files
 //   fullinv <0|1>       new save files start with every item
+//   runfile <0|1>       new save files are Legend of Links runs (team lives; the run header is at f444, see run.h)
+//   runlives <n>        set the team lives of the loaded run (the whole game, every world)
+//   runspend <p>        player p's world spends one team life (to test that worlds add up changes)
 //   join <p> / leave <p>
 //   hold <p> <keys>     keys held by player p (B Y s=select S=start U D L R A X l r, P=ping, "-" for none)
 //   run <frames>        (with the 3D view on, held keys turn with local p's camera first: see remap3d)
@@ -230,6 +233,7 @@
 #include "player.h"
 #include "util.h"
 #include "randomizer.h"
+#include "run.h"
 #include "archipelago.h"
 #include "ap_client.h"
 #include "hd2d.h"
@@ -1405,6 +1409,23 @@ int RunMpTest(const char *script, int width, int height, uint32 render_flags) {
       // rando <off|random|hexseed>: randomizer setting for new save files
       Rando_SetNewGameSetting(!strcmp(arg1, "off") ? kRando_Off : !strcmp(arg1, "random") ? kRando_RandomSeed :
                               (uint32)strtoul(arg1, NULL, 16));
+    } else if (!strcmp(cmd, "runfile")) {
+      // runfile <0|1>: new save files are Legend of Links runs
+      Run_SetNewGameSetting(atoi(arg1));
+    } else if (!strcmp(cmd, "runlives")) {
+      // runlives <n>: the team's lives of the loaded run, in every world (the save area is synced)
+      for (int i = 0; i < kInstMax; i++) {
+        if (!Inst_IsActive(i))
+          continue;
+        Inst_Switch(i);
+        g_ram[0xF000 + kRunSave_Lives] = atoi(arg1);
+      }
+    } else if (!strcmp(cmd, "runspend")) {
+      // runspend <p>: only player p's world spends a life, as a wipe there would
+      int p = PlayerArg(arg1);
+      SwitchToPlayer(p);
+      if (g_ram[0xF000 + kRunSave_Lives])
+        g_ram[0xF000 + kRunSave_Lives]--;
     } else if (!strcmp(cmd, "fullinv")) {
       FileSelect_SetFullInventory(atoi(arg1));
       Session_SetFullInventory(atoi(arg1));

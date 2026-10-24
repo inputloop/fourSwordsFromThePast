@@ -1,6 +1,7 @@
 #include "instance.h"
 #include "mp.h"
 #include "archipelago.h"
+#include "run.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "audio.h"
@@ -871,7 +872,7 @@ static void MergeAndCleanUp() {
 
 static bool IsCounter(int addr) {
   return addr == 0xF343 || addr == 0xF377 ||
-         (addr >= kKeySlots && addr < kKeySlots + 16);
+         (addr >= kKeySlots && addr < kKeySlots + 16) || Run_IsCounterAddr(addr);
 }
 
 // Bits that are only ever set, like the room and overworld flags: merged

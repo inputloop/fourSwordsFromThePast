@@ -10,6 +10,7 @@
 #include "instance.h"
 #include "snes/ppu.h"
 #include "randomizer.h"
+#include "run.h"
 #include "hd2d.h"
 #include "hd3d.h"
 #include "audio.h"
@@ -2329,6 +2330,22 @@ static void DrawSeedNotice() {
   }
 }
 
+// A run (Legend of Links): the team's lives, bottom middle. Read from the save area the
+// worlds agreed on, so it is the same whichever world this screen shows.
+static void DrawRunHud() {
+  const uint8 *area = Inst_SaveArea();
+  if (!area || main_module_index < 6 || !Run_AreaIsRunFile(area))
+    return;
+  char buf[32];
+  if (Run_AreaIsOver(area))
+    snprintf(buf, sizeof(buf), "RUN OVER");
+  else
+    snprintf(buf, sizeof(buf), "LIVES %d", Run_AreaLives(area));
+  int w = TextWidth(buf) + 8, x = (g_cv.width - w) / 2, y = g_cv.height - 14;
+  ShadeRect(x, y, w, 12);
+  DrawText(x + 4, y + 3, buf, Run_AreaIsOver(area) ? 0xff6060 : Run_AreaLives(area) <= 1 ? 0xffc040 : 0xffe080);
+}
+
 // Each player's selected item, as the HUD's item box would show it for them
 // in their own world (worked out again when it changes, and twice a second
 // for counts).
@@ -2804,6 +2821,7 @@ void Ui_Draw(uint8 *pixels, int pitch, int width, int height, int scale) {
   if (g_nviews == 3)
     DrawTeamPanel(g_views[0].w, g_views[0].h, g_views[0].w, g_views[0].h);
   DrawCornerHud();
+  DrawRunHud();
   DrawTrackers();
   DrawNotifications();
   DrawApNotices();

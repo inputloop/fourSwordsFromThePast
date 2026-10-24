@@ -1,0 +1,26 @@
+# Legend of Links: worlds add up what they spend. P2 walks away into a world of its own;
+# each world then spends a team life in the same frame, and the team has lost two, not one
+# (without the counter rule, the last writer would win and one spend would be lost).
+load 2
+# Make the loaded file a run file with 3 team lives.
+poke f444 55
+poke f445 01
+poke f44a 03
+poke f44b 03
+run 30
+join 2
+hold 2 U
+run 200
+hold 2 -
+run 20
+expect_instances 2
+expect_apart 1 2
+runspend 1
+runspend 2
+run 2
+view 1
+expect_ram f44a 01
+view 2
+expect_ram f44a 01
+# Both worlds also agree on the run being on.
+expect_ram f444 55

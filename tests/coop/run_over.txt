@@ -1,0 +1,20 @@
+# Legend of Links: with one life left, a wipe ends the run (state bit 1 at f467, lives 0).
+rando 40
+runfile 1
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+runlives 1
+poke f35c 2
+hp 1 2
+spawn 41 1 0
+run 200
+expect_module 18
+expect_ram f44a 00
+expect_ram f45a 01
+expect_ram f467 01
