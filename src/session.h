@@ -122,6 +122,7 @@ bool Session_Host(uint16 port, bool use_upnp);
 // address: a room code, "host", "host:port" or "a.b.c.d:port".
 bool Session_Join(const char *address);
 void Session_SetName(const char *player_name);
+void Session_SetInstallId(uint64 id, bool ban_by_id);  // 0: send none; see zelda3.ini InstallId
 const char *Session_GetName(void);
 // The four seats: who is in them, how far away and whether they are back.
 void Session_GetPlayers(SessionPlayer out[kMpMaxPlayers]);

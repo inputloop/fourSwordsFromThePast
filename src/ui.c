@@ -14,6 +14,7 @@
 #include "hd3d.h"
 #include "audio.h"
 #include "session.h"
+#include "util.h"
 #include "zelda_rtl.h"
 #include "variables.h"
 #include "bindings.h"
@@ -244,6 +245,7 @@ static struct {
   int repeat_ctr;
   char join_addr[64];
   char name[24];                // this computer's player name (g_config.mp_player_name points here)
+  char install_id[17];          // 16 hex digits, or "off" (g_config.mp_install_id points here)
   char name_edit[kNameMax + 1];  // the one being typed or picked
   uint32 seed_edit;     // the seed being typed in
   char seed_note[64];   // the result of writing a spoiler log
@@ -1456,6 +1458,23 @@ void Ui_Init(const UiHostFuncs *host) {
   snprintf(g_ui.name, sizeof(g_ui.name), "%s", g_config.mp_player_name && g_config.mp_player_name[0] ?
            g_config.mp_player_name : "Link");
   g_config.mp_player_name = g_ui.name;
+  // The install id: kept in zelda3.coop.ini once made, so a removed player stays removed across
+  // restarts and new names. "off" sends none (and hosts that ban by it will not admit us).
+  uint64 iid = 0;
+  const char *s = g_config.mp_install_id;
+  if (s && StringEqualsNoCase(s, "off")) {
+    snprintf(g_ui.install_id, sizeof(g_ui.install_id), "off");
+  } else {
+    if (s)
+      iid = strtoull(s, NULL, 16);
+    if (!iid) {
+      iid = RandomId64();
+      g_ui.dirty_settings = true;
+    }
+    snprintf(g_ui.install_id, sizeof(g_ui.install_id), "%016llx", (unsigned long long)iid);
+  }
+  g_config.mp_install_id = g_ui.install_id;
+  Session_SetInstallId(iid, g_config.mp_ban_by_install_id);
   BuildFont();
 }
 
@@ -2890,6 +2909,7 @@ void Ui_SaveSettings() {
   if (g_config.mp_player_name)
     fprintf(f, "PlayerName = %s\n", g_config.mp_player_name);
   fprintf(f, "LastJoinAddress = %s\n", g_ui.join_addr);
+  fprintf(f, "InstallId = %s\n", g_ui.install_id);
   // (Not the password: it would sit in a plain text file.)
   // (Empty ones aren't written: they would hide what zelda3.ini says.)
   fprintf(f, "[Archipelago]\n");

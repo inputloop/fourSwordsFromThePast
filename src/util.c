@@ -1,5 +1,10 @@
+#ifdef _WIN32
+#define _CRT_RAND_S
+#endif
 #include "util.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 #include <string.h>
 #include <stdarg.h>
 
@@ -222,6 +227,9 @@ static uint32 crc32(const void *data, size_t length) {
 
 uint8 *ApplyBps(const uint8 *src, size_t src_size_in,
   const uint8 *bps, size_t bps_size, size_t *length_out) {
+  // A patch is "BPS1", three varints (one byte each at least), and three CRCs.
+  if (bps_size < 4 + 3 + 12)
+    return NULL;
   const uint8 *bps_end = bps + bps_size - 12;
 
   if (memcmp(bps, "BPS1", 4))
@@ -244,37 +252,73 @@ uint8 *ApplyBps(const uint8 *src, size_t src_size_in,
   uint8 *dst = malloc(dst_size);
   if (!dst)
     return NULL;
+  // The CRCs say the bytes are the patch's own; they do not say the patch stays inside its
+  // buffers. Every copy is checked against dst_size, src_size and the patch itself first.
   while (bps < bps_end) {
     uint32 cmd = BpsDecodeInt(&bps);
     uint32 length = (cmd >> 2) + 1;
+    if ((uint64)outputOffset + length > dst_size)
+      goto bad;
     switch (cmd & 3) {
     case 0:
+      if ((uint64)outputOffset + length > src_size)
+        goto bad;
       while(length--) {
         dst[outputOffset] = src[outputOffset];
         outputOffset++;
       }
       break;
     case 1:
+      if ((size_t)(bps_end - bps) < length)
+        goto bad;
       while (length--)
         dst[outputOffset++] = *bps++;
       break;
     case 2:
       cmd = BpsDecodeInt(&bps);
       sourceRelativeOffset += (cmd & 1 ? -1 : +1) * (cmd >> 1);
+      if ((uint64)sourceRelativeOffset + length > src_size)
+        goto bad;
       while (length--)
         dst[outputOffset++] = src[sourceRelativeOffset++];
       break;
     default:
       cmd = BpsDecodeInt(&bps);
       targetRelativeOffset += (cmd & 1 ? -1 : +1) * (cmd >> 1);
+      // A target copy may overlap its own output, but only bytes already written.
+      if (targetRelativeOffset >= outputOffset)
+        goto bad;
       while(length--)
         dst[outputOffset++] = dst[targetRelativeOffset++];
       break;
     }
   }
   if (dst_size != outputOffset)
-    return NULL;
+    goto bad;
   if (crc32(dst, dst_size) != *(uint32 *)(bps_end + 4))
-    return NULL;
+    goto bad;
   return dst;
+bad:
+  free(dst);
+  return NULL;
+}
+// 64 random bits from the operating system (rand_s on Windows, /dev/urandom elsewhere), for ids that
+// must differ between installs; falls back to a time mix, and is never 0 (0 means "none").
+uint64 RandomId64(void) {
+  uint64 v = 0;
+#ifdef _WIN32
+  unsigned a = 0, b = 0;
+  if (rand_s(&a) == 0 && rand_s(&b) == 0)
+    v = (uint64)a << 32 | b;
+#else
+  FILE *f = fopen("/dev/urandom", "rb");
+  if (f) {
+    if (fread(&v, sizeof(v), 1, f) != 1)
+      v = 0;
+    fclose(f);
+  }
+#endif
+  if (!v)
+    v = (uint64)time(NULL) * 6364136223846793005ull ^ (uint64)(uintptr_t)&v;
+  return v ? v : 1;
 }

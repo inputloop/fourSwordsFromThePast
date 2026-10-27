@@ -14,8 +14,18 @@ static LONG WINAPI CrashFilter(EXCEPTION_POINTERS *info) {
     char name[MAX_PATH] = "?";
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)addr, &module);
-    if (module)
-      GetModuleFileNameA(module, name, sizeof(name));
+    if (module) {
+      // Only the file's own name: the full path names the player's account folder, and the
+      // player is asked to send this file.
+      char path[MAX_PATH];
+      if (GetModuleFileNameA(module, path, sizeof(path))) {
+        const char *base = path, *p;
+        for (p = path; *p; p++)
+          if (*p == '\\' || *p == '/')
+            base = p + 1;
+        snprintf(name, sizeof(name), "%s", base);
+      }
+    }
     time_t t = time(NULL);
     fprintf(f, "Crash at %s", ctime(&t));
     fprintf(f, "  exception 0x%08lx at %p (%s + 0x%llx)\n", (unsigned long)info->ExceptionRecord->ExceptionCode,

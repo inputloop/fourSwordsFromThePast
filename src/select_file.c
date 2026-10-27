@@ -102,7 +102,11 @@ void SelectFile_Func17(int k) {
     dst[21] = t + 0x10;
     dst++;
   }
+  // A save file is data from outside (a host's game copied in): a health byte under 8 would
+  // never end the loop below, and above 20 hearts it would draw past the row.
   int health = sram[kSrmOffs_Health] >> 3;
+  if (health < 1) health = 1;
+  if (health > 20) health = 20;
   dst = vram_upload_data + kSelectFile_DrawName_HealthVramOffs[k] / 2;
   uint16 *dst_org = dst;
   int row = 10;

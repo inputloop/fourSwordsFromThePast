@@ -109,6 +109,8 @@ typedef struct Config {
   const char *mp_player_name;
   const char *mp_last_join;
   const char *mp_stun_server;  // asked for our public address when UPnP fails ("" = never)
+  const char *mp_install_id;   // 16 hex digits sent in Hello so a removed player stays removed; "off" sends none; empty: made on first run
+  bool mp_ban_by_install_id;   // as a host: keep removed install ids out, refuse a Hello without one
 
   // [Archipelago]
   const char *ap_server;

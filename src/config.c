@@ -604,6 +604,11 @@ static bool HandleIniConfig(int section, const char *key, char *value) {
     } else if (StringEqualsNoCase(key, "StunServer")) {
       g_config.mp_stun_server = value;
       return true;
+    } else if (StringEqualsNoCase(key, "InstallId")) {
+      g_config.mp_install_id = value;
+      return true;
+    } else if (StringEqualsNoCase(key, "BanByInstallId")) {
+      return ParseBool(value, &g_config.mp_ban_by_install_id);
     }
   } else if (section == 4) {
     if (StringEqualsNoCase(key, "ItemSwitchLR")) {
@@ -705,6 +710,7 @@ void ParseConfigFile(const char *filename) {
   g_config.mp_use_upnp = true;
   g_config.mp_port = 47474;
   g_config.mp_stun_server = "stun.l.google.com:19302";
+  g_config.mp_ban_by_install_id = true;
   g_config.mp_input_delay = 2;
   g_config.mp_coop_sound_effects = true;
   g_config.four_swords_story = true;
