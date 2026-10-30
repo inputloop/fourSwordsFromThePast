@@ -10,6 +10,7 @@
 #define MOD_ARCHIPELAGO 1
 #define MOD_NETPLAY 1
 #define MOD_HELPBOOK 0
+#define MOD_ROGUELITE 0
 #define MODS_COMPOSITION "story screenshot hd2d hd3d randomizer archipelago netplay"
 #define MODS_SIM_TAG 0
 #endif

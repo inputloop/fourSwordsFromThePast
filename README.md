@@ -760,6 +760,11 @@ the top of the tree (it is yours; git ignores it), then build as usual:
 +helpbook         # and put the help key in
 ```
 
+`+roguelite` (off in the shipped build) adds **Legend of Links** runs: a save file made as a run has shared team
+lives, a team wipe costs one, and the run is over when they are gone (the lives show at the bottom of the screen).
+It is a first milestone: new files become runs only from the headless test commands (`runfile 1` in `--mptest`
+scripts) until a setup screen exists; see `src/run.h` for the run header and the design in the mixlab repository.
+
 `python3 tools/mods.py show` lists every mod, on or off, and what it is; `./zelda3 --mods` says what a
 built program carries. A mod that is left out is not in the program at all, and its menu lines are
 gone. The shipped build carries every mod above and plays online with builds made before this

@@ -1,0 +1,41 @@
+# Legend of Links: every choice on the game over menu saves first. "Continue" (the third
+# one) plays on without saving, so quitting afterwards would reload the older copy in the
+# save slot and give the spent life back. In a run it is the same as "Save and Continue".
+rando 40
+runfile 1
+run 200
+newgame
+run 400
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+poke f35c 2
+hp 1 2
+spawn 41 1 0
+run 200
+expect_module 18
+expect_ram f44a 02
+# Let the letters come up, move down to the third choice and take it.
+run 900
+hold 1 D
+run 3
+hold 1 -
+run 20
+hold 1 D
+run 3
+hold 1 -
+run 20
+hold 1 A
+run 3
+hold 1 -
+run 900
+# The team plays on with two lives ...
+expect_ram f44a 02
+# ... and the save slot says so too: loading it again (as after quitting) keeps the life spent.
+loadslot
+run 10
+expect_ram f444 55
+expect_ram f44a 02
+expect_ram f45a 01

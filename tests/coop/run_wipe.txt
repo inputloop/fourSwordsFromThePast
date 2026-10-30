@@ -1,0 +1,27 @@
+# Legend of Links: a team wipe costs the team one life, and the run goes on.
+# A file made with "runfile 1" is a run file (marker 55 at f444) with 3 team lives.
+rando 40
+runfile 1
+run 200
+newgame
+run 400
+expect_ram f444 55
+expect_ram f445 01
+expect_ram f44a 03
+expect_ram f44b 03
+expect_ram f45a 00
+expect_ram f467 00
+# Start from Link's house, then fall in battle (no fairy in a bottle: nothing prevents the wipe).
+hold 1 A
+run 4
+hold 1 -
+run 300
+expect_module 7
+poke f35c 2
+hp 1 2
+spawn 41 1 0
+run 200
+expect_module 18
+expect_ram f44a 02
+expect_ram f45a 01
+expect_ram f467 00

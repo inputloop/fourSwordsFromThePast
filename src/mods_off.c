@@ -10,6 +10,24 @@
 #include "types.h"
 #include <string.h>
 
+#if !MOD_ROGUELITE
+#include "run.h"
+// Off: no file is a run; a game over is the original's.
+void Run_SetNewGameSetting(bool on) { (void)on; }
+bool Run_GetNewGameSetting() { return false; }
+void Run_OnNewFile(uint8 *sram_slot) { (void)sram_slot; }
+bool Run_IsRunFile() { return false; }
+int Run_Lives() { return 0; }
+int Run_Wipes() { return 0; }
+bool Run_IsOver() { return false; }
+bool Run_AreaIsRunFile(const uint8 *save_area) { (void)save_area; return false; }
+int Run_AreaLives(const uint8 *save_area) { (void)save_area; return 0; }
+bool Run_AreaIsOver(const uint8 *save_area) { (void)save_area; return false; }
+void Run_OnGameOver() {}
+void Run_FilterDeathChoice() {}
+bool Run_IsCounterAddr(int addr) { (void)addr; return false; }
+#endif
+
 #if !MOD_STORY
 #include "story.h"
 // Off: the original opening text plays. Story_GetMessage leaves the message alone.

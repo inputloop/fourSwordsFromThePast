@@ -1,4 +1,5 @@
 #include "randomizer.h"
+#include "run.h"
 #include "story.h"
 #include "messaging.h"
 #include "zelda_rtl.h"
@@ -620,6 +621,7 @@ void GameOver_AdvanceImmediately() {  // 89f2a2
 }
 
 void Death_Func1() {  // 89f2a4
+  Run_OnGameOver();
   music_unk1_death = music_unk1;
   sound_effect_ambient_last_death = sound_effect_ambient_last;
   music_control = 241;
@@ -783,6 +785,7 @@ do_inc:
   if (!((filtered_joypad_L & 0xc0 | filtered_joypad_H) & 0xd0))
     return;
   sound_effect_1 = 44;
+  Run_FilterDeathChoice();
   // Only death with save/continue or save/quit counts as a death
   Death_Func15(subsubmodule_index != 2);
 }
