@@ -888,12 +888,21 @@ Additionally, the following commands are available:
 | Ctrl+1-9 | Run a dungeons playthrough in turbo mode |
 
 
-## License
+## Credits
 
-This project is licensed under the MIT license. See 'LICENSE.txt' for details.
+fourSwordsFromThePast is [Bryant Frankford](https://github.com/takushieternal)'s. It is kept at
+[inputloop](https://github.com/inputloop), the shop Bryant and Corwin keep together. Corwin Brust
+added the `recipe` branch (the mods chosen at build time, the two books, the build matrix and
+RECIPE.org) and the hardening round. The game engine is
+[snesrev/zelda3](https://github.com/snesrev/zelda3) by snesrev and elzo_d (MIT), vendored at
+`45a149d8`. Ideas or complaints: Bryant and Corwin, BryantAndCorwin@inputloop.com.
 
 ## AI use
 
 This project was made with an AI coding assistant. See
 [AI_DISCLOSURE.txt](AI_DISCLOSURE.txt) for what was written with AI, what
 wasn't, and how the work was checked.
+
+## License
+
+This project is licensed under the MIT license. See 'LICENSE.txt' for details.
